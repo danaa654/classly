@@ -1,5 +1,6 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import { Link } from '@inertiajs/vue3'
 
 defineProps({
     users: Array,
@@ -14,9 +15,12 @@ defineProps({
         Users
     </h1>
 
-    <button class="bg-green-500 text-white px-4 py-2 rounded">
-        Add User
-    </button>
+    <Link
+    href="/users/create"
+    class="bg-green-500 text-white px-4 py-2 rounded"
+>
+    Add User
+</Link>
 </div>
 
 <table class="w-full bg-white rounded shadow">

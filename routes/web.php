@@ -8,6 +8,6 @@ Route::get('/', function () {
     return Inertia::render('Dashboard/Index');
 });
 
-Route::get('/users', [UserController::class, 'index']);
+Route::resource('users', UserController::class);
 
 require __DIR__.'/auth.php';
