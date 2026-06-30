@@ -29,7 +29,7 @@ import { Link } from '@inertiajs/vue3'
                 href="/departments"
                 class="block px-5 py-3 hover:bg-slate-700"
             >
-                Departments
+                Colleges
             </Link>
 
             <Link

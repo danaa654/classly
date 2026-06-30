@@ -10,19 +10,27 @@ return new class extends Migration
      * Run the migrations.
      */
     public function up(): void
-{
-    Schema::create('departments', function (Blueprint $table) {
-        $table->id();
+    {
+        Schema::create('departments', function (Blueprint $table) {
 
-        $table->string('code')->unique();
-        $table->string('name');
-        $table->string('short_name')->nullable();
+            $table->id();
 
-        $table->boolean('active')->default(true);
+            // College Name
+            $table->string('name');
 
-        $table->timestamps();
-    });
-}
+            // Example: CCS, CRIM, CTE
+            $table->string('abbreviation')->unique();
+
+            // Optional description
+            $table->text('description')->nullable();
+
+            // Active / Inactive
+            $table->boolean('active')->default(true);
+
+            $table->timestamps();
+
+        });
+    }
 
     /**
      * Reverse the migrations.

@@ -4,16 +4,18 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 use App\Http\Controllers\UserController;
-
-Route::get('/', function () {
-    return Inertia::render('Dashboard/Index');
-});
+use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\FacultyController;
 
 /*
 |--------------------------------------------------------------------------
 | Dashboard
 |--------------------------------------------------------------------------
 */
+
+Route::get('/', function () {
+    return Inertia::render('Dashboard/Index');
+});
 
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard/Index');
@@ -29,7 +31,23 @@ Route::resource('users', UserController::class);
 
 /*
 |--------------------------------------------------------------------------
-| Authentication Routes
+| College Management
+|--------------------------------------------------------------------------
+*/
+
+Route::resource('departments', DepartmentController::class);
+
+/*
+|--------------------------------------------------------------------------
+| Faculty Management
+|--------------------------------------------------------------------------
+*/
+
+Route::resource('faculty', FacultyController::class);
+
+/*
+|--------------------------------------------------------------------------
+| Authentication
 |--------------------------------------------------------------------------
 */
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Department;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class DepartmentController extends Controller
 {
@@ -12,7 +13,9 @@ class DepartmentController extends Controller
      */
     public function index()
     {
-        //
+        return Inertia::render('Departments/Index', [
+            'departments' => Department::orderBy('abbreviation')->get(),
+        ]);
     }
 
     /**
@@ -20,7 +23,7 @@ class DepartmentController extends Controller
      */
     public function create()
     {
-        //
+        return Inertia::render('Departments/Create');
     }
 
     /**
@@ -28,7 +31,29 @@ class DepartmentController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+
+            'abbreviation' => 'required|string|max:20|unique:departments,abbreviation',
+
+            'description' => 'nullable|string|max:500',
+
+            'active' => 'required|boolean',
+        ]);
+
+        Department::create([
+            'name' => $validated['name'],
+
+            'abbreviation' => strtoupper($validated['abbreviation']),
+
+            'description' => $validated['description'],
+
+            'active' => $validated['active'],
+        ]);
+
+        return redirect()
+            ->route('departments.index')
+            ->with('success', 'College created successfully.');
     }
 
     /**
@@ -44,7 +69,9 @@ class DepartmentController extends Controller
      */
     public function edit(Department $department)
     {
-        //
+        return Inertia::render('Departments/Edit', [
+            'department' => $department,
+        ]);
     }
 
     /**
@@ -52,7 +79,29 @@ class DepartmentController extends Controller
      */
     public function update(Request $request, Department $department)
     {
-        //
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+
+            'abbreviation' => 'required|string|max:20|unique:departments,abbreviation,' . $department->id,
+
+            'description' => 'nullable|string|max:500',
+
+            'active' => 'required|boolean',
+        ]);
+
+        $department->update([
+            'name' => $validated['name'],
+
+            'abbreviation' => strtoupper($validated['abbreviation']),
+
+            'description' => $validated['description'],
+
+            'active' => $validated['active'],
+        ]);
+
+        return redirect()
+            ->route('departments.index')
+            ->with('success', 'College updated successfully.');
     }
 
     /**
@@ -60,6 +109,10 @@ class DepartmentController extends Controller
      */
     public function destroy(Department $department)
     {
-        //
+        $department->delete();
+
+        return redirect()
+            ->route('departments.index')
+            ->with('success', 'College deleted successfully.');
     }
 }

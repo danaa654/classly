@@ -6,21 +6,32 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
+
+            // User's assigned college (optional)
             $table->foreignId('department_id')
-                  ->nullable()
-                  ->constrained()
-                  ->nullOnDelete();
+                ->nullable()
+                ->after('id')
+                ->constrained('departments')
+                ->nullOnDelete();
+
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropForeign(['department_id']);
-            $table->dropColumn('department_id');
+
+            $table->dropConstrainedForeignId('department_id');
+
         });
     }
 };
