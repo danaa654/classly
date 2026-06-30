@@ -91,24 +91,65 @@ class UserController extends Controller
     /**
      * Show the edit form.
      */
-    public function edit(string $id)
-    {
-        //
-    }
+    public function edit(User $user)
+{
+    $user->load('roles');
+
+    return Inertia::render('Users/Edit', [
+        'user' => $user,
+        'roles' => Role::all(),
+        'departments' => Department::all(),
+    ]);
+}
 
     /**
      * Update the user.
      */
-    public function update(Request $request, string $id)
-    {
-        //
+    public function update(Request $request, User $user)
+{
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'required|email|unique:users,email,' . $user->id,
+        'password' => 'nullable|min:6',
+        'role' => 'required|exists:roles,name',
+        'department_id' => 'nullable|exists:departments,id',
+    ]);
+
+    // Roles that don't need a department
+    if (in_array($validated['role'], ['Admin', 'Registrar', 'Assistant Dean'])) {
+        $validated['department_id'] = null;
     }
 
+    $user->name = $validated['name'];
+    $user->email = $validated['email'];
+    $user->department_id = $validated['department_id'];
+
+    if (!empty($validated['password'])) {
+        $user->password = bcrypt($validated['password']);
+    }
+
+    $user->save();
+
+    // Update role
+    $user->syncRoles([$validated['role']]);
+
+    return redirect()->route('users.index')
+        ->with('success', 'User updated successfully.');
+}
     /**
      * Delete the user.
      */
-    public function destroy(string $id)
-    {
-        //
+    public function destroy(User $user)
+{
+    // Prevent deleting yourself
+    if (auth()->id() === $user->id) {
+        return redirect()->back()
+            ->with('error', 'You cannot delete your own account.');
     }
+
+    $user->delete();
+
+    return redirect()->route('users.index')
+        ->with('success', 'User deleted successfully.');
+}
 }

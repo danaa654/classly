@@ -1,63 +1,102 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
-import { Link } from '@inertiajs/vue3'
+import { Link, router } from '@inertiajs/vue3'
 
 defineProps({
     users: Array,
 })
+
+function destroy(id) {
+    if (confirm('Are you sure you want to delete this user?')) {
+        router.delete(`/users/${id}`)
+    }
+}
 </script>
 
 <template>
-<DashboardLayout>
+    <DashboardLayout>
 
-<div class="flex justify-between mb-6">
-    <h1 class="text-3xl font-bold">
-        Users
-    </h1>
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold">
+                Users
+            </h1>
 
-    <Link
-    href="/users/create"
-    class="bg-green-500 text-white px-4 py-2 rounded"
->
-    Add User
-</Link>
-</div>
+            <Link
+                href="/users/create"
+                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+            >
+                Add User
+            </Link>
+        </div>
 
-<table class="w-full bg-white rounded shadow">
+        <div class="bg-white rounded-lg shadow overflow-hidden">
 
-<thead class="bg-gray-100">
-<tr>
-    <th class="p-3 text-left">Name</th>
-    <th class="p-3 text-left">Email</th>
-    <th class="p-3 text-left">Role</th>
-    <th class="p-3 text-left">Department</th>
-</tr>
-</thead>
+            <table class="w-full">
 
-<tbody>
+                <thead class="bg-gray-100">
 
-<tr
-v-for="user in users"
-:key="user.id"
->
+                    <tr>
+                        <th class="text-left p-4">Name</th>
+                        <th class="text-left p-4">Email</th>
+                        <th class="text-left p-4">Role</th>
+                        <th class="text-left p-4">Department</th>
+                        <th class="text-center p-4">Actions</th>
+                    </tr>
 
-<td class="p-3">{{ user.name }}</td>
+                </thead>
 
-<td class="p-3">{{ user.email }}</td>
+                <tbody>
 
-<td class="p-3">
-{{ user.roles[0]?.name }}
-</td>
+                    <tr
+                        v-for="user in users"
+                        :key="user.id"
+                        class="border-t"
+                    >
+                        <td class="p-4">
+                            {{ user.name }}
+                        </td>
 
-<td class="p-3">
-{{ user.department_name }}
-</td>
+                        <td class="p-4">
+                            {{ user.email }}
+                        </td>
 
-</tr>
+                        <td class="p-4">
+                            {{ user.roles[0]?.name }}
+                        </td>
 
-</tbody>
+                        <td class="p-4">
+                            {{ user.department?.short_name ?? 'All Departments' }}
+                        </td>
 
-</table>
+                        <td class="p-4">
 
-</DashboardLayout>
+                            <div class="flex justify-center gap-2">
+
+                                <Link
+                                    :href="`/users/${user.id}/edit`"
+                                    class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                                >
+                                    Edit
+                                </Link>
+
+                                <button
+                                    @click="destroy(user.id)"
+                                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                                >
+                                    Delete
+                                </button>
+
+                            </div>
+
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </DashboardLayout>
 </template>
