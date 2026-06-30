@@ -7,6 +7,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FacultyController;
 use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\SpecializationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -53,6 +54,14 @@ Route::resource('faculty', FacultyController::class);
 */
 
 Route::resource('programs', ProgramController::class);
+
+/*
+|--------------------------------------------------------------------------
+| Specialization Management
+|--------------------------------------------------------------------------
+*/
+
+Route::resource('specializations', SpecializationController::class);
 
 /*
 |--------------------------------------------------------------------------

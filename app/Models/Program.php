@@ -25,4 +25,10 @@ class Program extends Model
     {
         return $this->belongsTo(Department::class);
     }
+
+    public function specializations()
+    {
+        return $this->hasMany(Specialization::class);
+    }
+
 }

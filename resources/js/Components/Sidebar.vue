@@ -40,6 +40,13 @@ import { Link } from '@inertiajs/vue3'
             </Link>
 
             <Link
+                href="/specializations"
+                class="block px-5 py-3 hover:bg-slate-700"
+            >
+                Specializations
+            </Link>
+
+            <Link
                 href="/faculty"
                 class="block px-5 py-3 hover:bg-slate-700"
             >
