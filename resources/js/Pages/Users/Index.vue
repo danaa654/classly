@@ -34,7 +34,6 @@ function destroy(id) {
             <table class="w-full">
 
                 <thead class="bg-gray-100">
-
                     <tr>
                         <th class="text-left p-4">Name</th>
                         <th class="text-left p-4">Email</th>
@@ -42,7 +41,6 @@ function destroy(id) {
                         <th class="text-left p-4">Department</th>
                         <th class="text-center p-4">Actions</th>
                     </tr>
-
                 </thead>
 
                 <tbody>
@@ -50,9 +48,9 @@ function destroy(id) {
                     <tr
                         v-for="user in users"
                         :key="user.id"
-                        class="border-t"
+                        class="border-t hover:bg-gray-50"
                     >
-                        <td class="p-4">
+                        <td class="p-4 font-medium">
                             {{ user.name }}
                         </td>
 
@@ -61,15 +59,14 @@ function destroy(id) {
                         </td>
 
                         <td class="p-4">
-                            {{ user.roles[0]?.name }}
+                            {{ user.roles[0]?.name ?? '-' }}
                         </td>
 
                         <td class="p-4">
-                            {{ user.department?.short_name ?? 'All Departments' }}
+                            {{ user.department_name }}
                         </td>
 
                         <td class="p-4">
-
                             <div class="flex justify-center gap-2">
 
                                 <Link
@@ -87,9 +84,16 @@ function destroy(id) {
                                 </button>
 
                             </div>
-
                         </td>
+                    </tr>
 
+                    <tr v-if="users.length === 0">
+                        <td
+                            colspan="5"
+                            class="text-center p-8 text-gray-500"
+                        >
+                            No users found.
+                        </td>
                     </tr>
 
                 </tbody>

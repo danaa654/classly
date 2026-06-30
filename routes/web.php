@@ -8,6 +8,7 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FacultyController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\SpecializationController;
+use App\Http\Controllers\CurriculumController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,14 +42,6 @@ Route::resource('departments', DepartmentController::class);
 
 /*
 |--------------------------------------------------------------------------
-| Faculty Management
-|--------------------------------------------------------------------------
-*/
-
-Route::resource('faculty', FacultyController::class);
-
-/*
-|--------------------------------------------------------------------------
 | Program Management
 |--------------------------------------------------------------------------
 */
@@ -62,6 +55,23 @@ Route::resource('programs', ProgramController::class);
 */
 
 Route::resource('specializations', SpecializationController::class);
+
+/*
+|--------------------------------------------------------------------------
+| Curriculum Management
+|--------------------------------------------------------------------------
+*/
+
+Route::resource('curriculums', CurriculumController::class);
+
+/*
+|--------------------------------------------------------------------------
+| Faculty Management
+|--------------------------------------------------------------------------
+*/
+
+Route::resource('faculty', FacultyController::class);
+
 
 /*
 |--------------------------------------------------------------------------

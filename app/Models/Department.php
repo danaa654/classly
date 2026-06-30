@@ -19,13 +19,16 @@ class Department extends Model
     |--------------------------------------------------------------------------
     */
 
-    // Faculty members under this college
+    public function programs()
+    {
+        return $this->hasMany(Program::class);
+    }
+
     public function faculties()
     {
         return $this->hasMany(Faculty::class);
     }
 
-    // System users assigned to this college
     public function users()
     {
         return $this->hasMany(User::class);

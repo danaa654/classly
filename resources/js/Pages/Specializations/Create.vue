@@ -54,7 +54,7 @@ function submit() {
                             :key="program.id"
                             :value="program.id"
                         >
-                            {{ program.department.short_name }} - {{ program.code }} - {{ program.name }}
+                            {{ program.department.abbreviation }} - {{ program.code }} - {{ program.name }}
                         </option>
 
                     </select>

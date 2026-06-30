@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\User;
 use App\Models\Department;
-use Spatie\Permission\Models\Role;
+use App\Models\User;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
@@ -14,48 +14,57 @@ class UserController extends Controller
      * Display a listing of users.
      */
     public function index()
-{
-    $users = User::with('roles', 'department')->get();
-
-    $users->each(function ($user) {
-
-        if ($user->hasRole(['Admin', 'Registrar', 'Assistant Dean'])) {
-            $user->department_name = 'All Departments';
-        } else {
-            $user->department_name = optional($user->department)->short_name;
-        }
-
-    });
-
-    return Inertia::render('Users/Index', [
-        'users' => $users,
-    ]);
-}
-    /**
-     * Show the create user page.
-     */
-    public function create()
     {
-        return Inertia::render('Users/Create', [
-            'roles' => Role::all(),
-            'departments' => Department::all(),
+        $users = User::with(['roles', 'department'])
+            ->orderBy('name')
+            ->get();
+
+        $users->each(function ($user) {
+
+            $user->department_name = $user->hasRole([
+                'Admin',
+                'Registrar',
+                'Assistant Dean',
+            ])
+                ? 'All Departments'
+                : optional($user->department)->abbreviation;
+
+        });
+
+        return Inertia::render('Users/Index', [
+            'users' => $users,
         ]);
     }
 
     /**
-     * Store a new user.
+     * Show the create form.
+     */
+    public function create()
+    {
+        return Inertia::render('Users/Create', [
+
+            'roles' => Role::orderBy('name')->get(),
+
+            'departments' => Department::where('active', true)
+                ->orderBy('abbreviation')
+                ->get(),
+
+        ]);
+    }
+
+    /**
+     * Store a newly created user.
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:users,email'],
-            'password' => ['required', 'min:6'],
-            'role' => ['required', 'exists:roles,name'],
+            'name'          => ['required', 'string', 'max:255'],
+            'email'         => ['required', 'email', 'unique:users,email'],
+            'password'      => ['required', 'min:6'],
+            'role'          => ['required', 'exists:roles,name'],
             'department_id' => ['nullable', 'exists:departments,id'],
         ]);
 
-        // Roles that don't need a department
         $rolesWithoutDepartment = [
             'Admin',
             'Registrar',
@@ -67,9 +76,9 @@ class UserController extends Controller
         }
 
         $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => bcrypt($validated['password']),
+            'name'          => $validated['name'],
+            'email'         => $validated['email'],
+            'password'      => bcrypt($validated['password']),
             'department_id' => $validated['department_id'],
         ]);
 
@@ -81,75 +90,79 @@ class UserController extends Controller
     }
 
     /**
-     * Display the specified user.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
      * Show the edit form.
      */
     public function edit(User $user)
-{
-    $user->load('roles');
+    {
+        $user->load('roles');
 
-    return Inertia::render('Users/Edit', [
-        'user' => $user,
-        'roles' => Role::all(),
-        'departments' => Department::all(),
-    ]);
-}
+        return Inertia::render('Users/Edit', [
+
+            'user' => $user,
+
+            'roles' => Role::orderBy('name')->get(),
+
+            'departments' => Department::where('active', true)
+                ->orderBy('abbreviation')
+                ->get(),
+
+        ]);
+    }
 
     /**
      * Update the user.
      */
     public function update(Request $request, User $user)
-{
-    $validated = $request->validate([
-        'name' => 'required|string|max:255',
-        'email' => 'required|email|unique:users,email,' . $user->id,
-        'password' => 'nullable|min:6',
-        'role' => 'required|exists:roles,name',
-        'department_id' => 'nullable|exists:departments,id',
-    ]);
+    {
+        $validated = $request->validate([
+            'name'          => 'required|string|max:255',
+            'email'         => 'required|email|unique:users,email,' . $user->id,
+            'password'      => 'nullable|min:6',
+            'role'          => 'required|exists:roles,name',
+            'department_id' => 'nullable|exists:departments,id',
+        ]);
 
-    // Roles that don't need a department
-    if (in_array($validated['role'], ['Admin', 'Registrar', 'Assistant Dean'])) {
-        $validated['department_id'] = null;
+        if (in_array($validated['role'], [
+            'Admin',
+            'Registrar',
+            'Assistant Dean',
+        ])) {
+            $validated['department_id'] = null;
+        }
+
+        $user->name = $validated['name'];
+        $user->email = $validated['email'];
+        $user->department_id = $validated['department_id'];
+
+        if (!empty($validated['password'])) {
+            $user->password = bcrypt($validated['password']);
+        }
+
+        $user->save();
+
+        $user->syncRoles([$validated['role']]);
+
+        return redirect()
+            ->route('users.index')
+            ->with('success', 'User updated successfully.');
     }
 
-    $user->name = $validated['name'];
-    $user->email = $validated['email'];
-    $user->department_id = $validated['department_id'];
-
-    if (!empty($validated['password'])) {
-        $user->password = bcrypt($validated['password']);
-    }
-
-    $user->save();
-
-    // Update role
-    $user->syncRoles([$validated['role']]);
-
-    return redirect()->route('users.index')
-        ->with('success', 'User updated successfully.');
-}
     /**
      * Delete the user.
      */
     public function destroy(User $user)
-{
-    // Prevent deleting yourself
-    if (auth()->id() === $user->id) {
-        return redirect()->back()
-            ->with('error', 'You cannot delete your own account.');
+    {
+        if (auth()->id() === $user->id) {
+            return back()->with(
+                'error',
+                'You cannot delete your own account.'
+            );
+        }
+
+        $user->delete();
+
+        return redirect()
+            ->route('users.index')
+            ->with('success', 'User deleted successfully.');
     }
-
-    $user->delete();
-
-    return redirect()->route('users.index')
-        ->with('success', 'User deleted successfully.');
-}
 }

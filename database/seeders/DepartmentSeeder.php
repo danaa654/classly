@@ -13,22 +13,22 @@ class DepartmentSeeder extends Seeder
             [
                 'code' => 'CCS',
                 'name' => 'College of Computer Studies',
-                'short_name' => 'CCS',
+                'abbreviation' => 'CCS',
             ],
             [
                 'code' => 'CRIM',
                 'name' => 'College of Criminal Justice',
-                'short_name' => 'CRIM',
+                'abbreviation' => 'CRIM',
             ],
             [
                 'code' => 'CTE',
                 'name' => 'College of Teacher Education',
-                'short_name' => 'CTE',
+                'abbreviation' => 'CTE',
             ],
             [
                 'code' => 'SHTM',
                 'name' => 'School of Hospitality and Tourism Management',
-                'short_name' => 'SHTM',
+                'abbreviation' => 'SHTM',
             ],
         ]);
     }
