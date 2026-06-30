@@ -50,7 +50,7 @@ v-for="user in users"
 </td>
 
 <td class="p-3">
-{{ user.department?.short_name }}
+{{ user.department_name }}
 </td>
 
 </tr>
