@@ -6,6 +6,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FacultyController;
+use App\Http\Controllers\ProgramController;
 
 /*
 |--------------------------------------------------------------------------
@@ -44,6 +45,14 @@ Route::resource('departments', DepartmentController::class);
 */
 
 Route::resource('faculty', FacultyController::class);
+
+/*
+|--------------------------------------------------------------------------
+| Program Management
+|--------------------------------------------------------------------------
+*/
+
+Route::resource('programs', ProgramController::class);
 
 /*
 |--------------------------------------------------------------------------

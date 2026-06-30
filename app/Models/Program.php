@@ -6,5 +6,23 @@ use Illuminate\Database\Eloquent\Model;
 
 class Program extends Model
 {
-    //
+    protected $fillable = [
+        'department_id',
+        'code',
+        'name',
+        'years',
+        'active',
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
+
+    // Program belongs to one College
+    public function department()
+    {
+        return $this->belongsTo(Department::class);
+    }
 }

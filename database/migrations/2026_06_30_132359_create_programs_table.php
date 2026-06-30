@@ -12,8 +12,29 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('programs', function (Blueprint $table) {
+
             $table->id();
+
+            // Home College
+            $table->foreignId('department_id')
+                ->constrained()
+                ->cascadeOnDelete();
+
+            // Example: BSIT
+            $table->string('code')->unique();
+
+            // Example:
+            // Bachelor of Science in Information Technology
+            $table->string('name');
+
+            // Number of years
+            $table->unsignedTinyInteger('years')->default(4);
+
+            // Active / Inactive
+            $table->boolean('active')->default(true);
+
             $table->timestamps();
+
         });
     }
 
