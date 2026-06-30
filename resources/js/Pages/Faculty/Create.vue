@@ -1,6 +1,6 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
-import { useForm } from '@inertiajs/vue3'
+import { useForm, Link } from '@inertiajs/vue3'
 import { watch } from 'vue'
 
 const props = defineProps({
@@ -8,7 +8,6 @@ const props = defineProps({
 })
 
 const form = useForm({
-
     first_name: '',
     middle_name: '',
     last_name: '',
@@ -28,306 +27,352 @@ const form = useForm({
     teaching_qualification: 'Major',
 
     status: true,
-
 })
 
-watch(() => form.employment_type, (value) => {
-
-    if (value === 'Full-Time') {
-        form.max_units = 24
+watch(
+    () => form.employment_type,
+    (value) => {
+        if (value === 'Full-Time') {
+            form.max_units = 24
+        }
     }
+)
 
-})
+function submit() {
+    form.post(route('faculty.store'))
+}
 </script>
 
 <template>
+    <DashboardLayout>
+
+        <div class="max-w-5xl">
+
+            <h1 class="text-3xl font-bold mb-6">
+                Add Faculty Member
+            </h1>
+
+            <form
+                @submit.prevent="submit"
+                class="bg-white rounded-lg shadow p-6 space-y-6"
+            >
+
+                <!-- PERSONAL INFORMATION -->
+
+                <div>
+
+                    <h2 class="text-lg font-semibold mb-4">
+                        Personal Information
+                    </h2>
 
-<DashboardLayout>
+                    <div class="grid grid-cols-2 gap-4">
+
+                        <div>
+                            <label class="block mb-2">First Name</label>
+
+                            <input
+                                v-model="form.first_name"
+                                type="text"
+                                class="w-full border rounded p-2"
+                            >
 
-<div class="max-w-5xl">
+                            <p
+                                v-if="form.errors.first_name"
+                                class="text-red-500 text-sm mt-1"
+                            >
+                                {{ form.errors.first_name }}
+                            </p>
+                        </div>
 
-<h1 class="text-3xl font-bold mb-6">
-Add Faculty
-</h1>
+                        <div>
+                            <label class="block mb-2">Middle Name</label>
+
+                            <input
+                                v-model="form.middle_name"
+                                type="text"
+                                class="w-full border rounded p-2"
+                            >
+                        </div>
 
-<form
-    @submit.prevent="form.post(route('faculty.store'))"
-    class="bg-white rounded-lg shadow p-6 space-y-6"
->
+                        <div>
+                            <label class="block mb-2">Last Name</label>
 
-<!-- PERSONAL -->
+                            <input
+                                v-model="form.last_name"
+                                type="text"
+                                class="w-full border rounded p-2"
+                            >
+
+                            <p
+                                v-if="form.errors.last_name"
+                                class="text-red-500 text-sm mt-1"
+                            >
+                                {{ form.errors.last_name }}
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block mb-2">Suffix</label>
+
+                            <input
+                                v-model="form.suffix"
+                                type="text"
+                                class="w-full border rounded p-2"
+                                placeholder="Jr., Sr., III"
+                            >
+                        </div>
 
-<div class="grid grid-cols-2 gap-4">
+                    </div>
 
-<div>
+                </div>
 
-<label class="block mb-2">First Name</label>
+                <!-- GENDER -->
 
-<input
-v-model="form.first_name"
-class="w-full border rounded p-2"
-/>
+                <div>
 
-<p class="text-red-500 text-sm">
-{{ form.errors.first_name }}
-</p>
+                    <label class="block mb-2">
+                        Gender
+                    </label>
 
-</div>
+                    <select
+                        v-model="form.gender"
+                        class="w-full border rounded p-2"
+                    >
+                        <option disabled value="">
+                            Select Gender
+                        </option>
 
-<div>
+                        <option value="Male">
+                            Male
+                        </option>
 
-<label class="block mb-2">Middle Name</label>
+                        <option value="Female">
+                            Female
+                        </option>
+                    </select>
 
-<input
-v-model="form.middle_name"
-class="w-full border rounded p-2"
-/>
+                    <p
+                        v-if="form.errors.gender"
+                        class="text-red-500 text-sm mt-1"
+                    >
+                        {{ form.errors.gender }}
+                    </p>
 
-</div>
+                </div>
 
-<div>
+                <!-- CONTACT -->
 
-<label class="block mb-2">Last Name</label>
+                <div>
 
-<input
-v-model="form.last_name"
-class="w-full border rounded p-2"
-/>
+                    <h2 class="text-lg font-semibold mb-4">
+                        Contact Information
+                    </h2>
 
-<p class="text-red-500 text-sm">
-{{ form.errors.last_name }}
-</p>
+                    <div class="grid grid-cols-2 gap-4">
 
-</div>
+                        <div>
 
-<div>
+                            <label class="block mb-2">
+                                Email
+                            </label>
 
-<label class="block mb-2">Suffix</label>
+                            <input
+                                v-model="form.email"
+                                type="email"
+                                class="w-full border rounded p-2"
+                            >
 
-<input
-v-model="form.suffix"
-class="w-full border rounded p-2"
-/>
+                            <p
+                                v-if="form.errors.email"
+                                class="text-red-500 text-sm mt-1"
+                            >
+                                {{ form.errors.email }}
+                            </p>
 
-</div>
+                        </div>
 
-</div>
+                        <div>
 
-<!-- GENDER -->
+                            <label class="block mb-2">
+                                Contact Number
+                            </label>
 
-<div>
+                            <input
+                                v-model="form.contact_number"
+                                type="text"
+                                class="w-full border rounded p-2"
+                            >
 
-<label class="block mb-2">
-Gender
-</label>
+                            <p
+                                v-if="form.errors.contact_number"
+                                class="text-red-500 text-sm mt-1"
+                            >
+                                {{ form.errors.contact_number }}
+                            </p>
 
-<select
-v-model="form.gender"
-class="w-full border rounded p-2"
->
+                        </div>
 
-<option value="">
-Select Gender
-</option>
+                    </div>
 
-<option value="Male">
-Male
-</option>
+                </div>
 
-<option value="Female">
-Female
-</option>
+                <!-- DEPARTMENT -->
 
-</select>
+                <div>
 
-</div>
+                    <label class="block mb-2">
+                        Department
+                    </label>
 
-<!-- CONTACT -->
+                    <select
+                        v-model="form.department_id"
+                        class="w-full border rounded p-2"
+                    >
 
-<div class="grid grid-cols-2 gap-4">
+                        <option value="">
+                            General Education Faculty
+                        </option>
 
-<div>
+                        <option
+                            v-for="department in departments"
+                            :key="department.id"
+                            :value="department.id"
+                        >
+                            {{ department.abbreviation }} - {{ department.name }}
+                        </option>
 
-<label class="block mb-2">
-Email
-</label>
+                    </select>
 
-<input
-v-model="form.email"
-type="email"
-class="w-full border rounded p-2"
-/>
+                    <p
+                        v-if="form.errors.department_id"
+                        class="text-red-500 text-sm mt-1"
+                    >
+                        {{ form.errors.department_id }}
+                    </p>
 
-<p class="text-red-500 text-sm">
-{{ form.errors.email }}
-</p>
+                </div>
 
-</div>
+                <!-- EMPLOYMENT -->
 
-<div>
+                <div class="grid grid-cols-2 gap-4">
 
-<label class="block mb-2">
-Contact Number
-</label>
+                    <div>
 
-<input
-v-model="form.contact_number"
-class="w-full border rounded p-2"
-/>
+                        <label class="block mb-2">
+                            Employment Type
+                        </label>
 
-</div>
+                        <select
+                            v-model="form.employment_type"
+                            class="w-full border rounded p-2"
+                        >
+                            <option value="Full-Time">
+                                Full-Time
+                            </option>
 
-</div>
+                            <option value="Part-Time">
+                                Part-Time
+                            </option>
 
-<!-- HOME COLLEGE -->
+                        </select>
 
-<div>
+                    </div>
 
-<label class="block mb-2">
-Home College
-</label>
+                    <div>
 
-<select
-v-model="form.department_id"
-class="w-full border rounded p-2"
->
+                        <label class="block mb-2">
+                            Maximum Units
+                        </label>
 
-<option value="">
-General Education Faculty
-</option>
+                        <input
+                            v-model="form.max_units"
+                            type="number"
+                            min="1"
+                            max="24"
+                            :readonly="form.employment_type === 'Full-Time'"
+                            class="w-full border rounded p-2 bg-gray-50"
+                        >
 
-<option
-v-for="department in departments"
-:key="department.id"
-:value="department.id"
->
+                    </div>
 
-{{ department.name }}
+                </div>
 
-</option>
+                <!-- QUALIFICATION -->
 
-</select>
+                <div>
 
-</div>
+                    <label class="block mb-2">
+                        Teaching Qualification
+                    </label>
 
-<!-- EMPLOYMENT -->
+                    <select
+                        v-model="form.teaching_qualification"
+                        class="w-full border rounded p-2"
+                    >
+                        <option value="Major">
+                            Major
+                        </option>
 
-<div class="grid grid-cols-2 gap-4">
+                        <option value="Minor">
+                            Minor
+                        </option>
 
-<div>
+                        <option value="Both">
+                            Both
+                        </option>
 
-<label class="block mb-2">
-Employment Type
-</label>
+                    </select>
 
-<select
-v-model="form.employment_type"
-class="w-full border rounded p-2"
->
+                </div>
 
-<option value="Full-Time">
-Full-Time
-</option>
+                <!-- STATUS -->
 
-<option value="Part-Time">
-Part-Time
-</option>
+                <div>
 
-</select>
+                    <label class="block mb-2">
+                        Status
+                    </label>
 
-</div>
+                    <select
+                        v-model="form.status"
+                        class="w-full border rounded p-2"
+                    >
+                        <option :value="true">
+                            Active
+                        </option>
 
-<div>
+                        <option :value="false">
+                            Inactive
+                        </option>
 
-<label class="block mb-2">
-Maximum Units
-</label>
+                    </select>
 
-<input
-v-model="form.max_units"
-type="number"
-min="1"
-max="24"
-:readonly="form.employment_type==='Full-Time'"
-class="w-full border rounded p-2 bg-gray-50"
-/>
+                </div>
 
-</div>
+                <!-- BUTTONS -->
 
-</div>
+                <div class="flex gap-3">
 
-<!-- QUALIFICATION -->
+                    <button
+                        type="submit"
+                        :disabled="form.processing"
+                        class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded"
+                    >
+                        {{ form.processing ? 'Saving...' : 'Save Faculty' }}
+                    </button>
 
-<div>
+                    <Link
+                        :href="route('faculty.index')"
+                        class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded"
+                    >
+                        Cancel
+                    </Link>
 
-<label class="block mb-2">
-Teaching Qualification
-</label>
+                </div>
 
-<select
-v-model="form.teaching_qualification"
-class="w-full border rounded p-2"
->
+            </form>
 
-<option value="Major">
-Major
-</option>
+        </div>
 
-<option value="Minor">
-Minor
-</option>
-
-<option value="Both">
-Both
-</option>
-
-</select>
-
-</div>
-
-<!-- STATUS -->
-
-<div>
-
-<label class="block mb-2">
-Status
-</label>
-
-<select
-v-model="form.status"
-class="w-full border rounded p-2"
->
-
-<option :value="true">
-Active
-</option>
-
-<option :value="false">
-Inactive
-</option>
-
-</select>
-
-</div>
-
-<div class="flex gap-3">
-
-<button
-type="submit"
-:disabled="form.processing"
-class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded"
->
-
-Save Faculty
-
-</button>
-
-</div>
-
-</form>
-
-</div>
-
-</DashboardLayout>
-
+    </DashboardLayout>
 </template>

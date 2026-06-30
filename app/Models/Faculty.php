@@ -14,18 +14,18 @@ class Faculty extends Model
         'middle_name',
         'last_name',
         'suffix',
-
         'gender',
         'contact_number',
         'email',
-
         'department_id',
-
         'employment_type',
         'max_units',
         'teaching_qualification',
-
         'status',
+    ];
+
+    protected $appends = [
+        'full_name',
     ];
 
     public function department()
@@ -35,11 +35,11 @@ class Faculty extends Model
 
     public function getFullNameAttribute()
     {
-        return trim(
-            $this->first_name . ' ' .
-            ($this->middle_name ? $this->middle_name . ' ' : '') .
-            $this->last_name . ' ' .
-            ($this->suffix ?? '')
-        );
+        return collect([
+            $this->first_name,
+            $this->middle_name,
+            $this->last_name,
+            $this->suffix,
+        ])->filter()->implode(' ');
     }
 }

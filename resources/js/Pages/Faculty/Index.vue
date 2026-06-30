@@ -17,6 +17,7 @@ function destroy(id) {
     <DashboardLayout>
 
         <div class="flex justify-between items-center mb-6">
+
             <h1 class="text-3xl font-bold">
                 Faculty Members
             </h1>
@@ -27,24 +28,29 @@ function destroy(id) {
             >
                 Add Faculty
             </Link>
+
         </div>
 
         <div class="bg-white rounded-lg shadow overflow-hidden">
 
-            <table class="min-w-full">
+            <table class="w-full">
 
                 <thead class="bg-gray-100">
+
                     <tr>
                         <th class="p-4 text-left w-12">#</th>
                         <th class="p-4 text-left">Faculty Name</th>
                         <th class="p-4 text-left">Email</th>
-                        <th class="p-4 text-left">Home College</th>
+                        <th class="p-4 text-left">Department</th>
                         <th class="p-4 text-left">Employment</th>
                         <th class="p-4 text-left">Max Units</th>
                         <th class="p-4 text-left">Qualification</th>
                         <th class="p-4 text-left">Status</th>
-                        <th class="p-4 text-center w-48">Actions</th>
+                        <th class="p-4 text-center whitespace-nowrap">
+                            Actions
+                        </th>
                     </tr>
+
                 </thead>
 
                 <tbody>
@@ -60,24 +66,15 @@ function destroy(id) {
                         </td>
 
                         <td class="p-4 font-medium">
-                            {{
-                                faculty.full_name ??
-                                (
-                                    faculty.first_name +
-                                    ' ' +
-                                    (faculty.middle_name ? faculty.middle_name + ' ' : '') +
-                                    faculty.last_name +
-                                    (faculty.suffix ? ' ' + faculty.suffix : '')
-                                )
-                            }}
+                            {{ faculty.full_name }}
                         </td>
 
                         <td class="p-4">
-                            {{ faculty.email ?? '-' }}
+                            {{ faculty.email || '-' }}
                         </td>
 
                         <td class="p-4">
-                            {{ faculty.department?.name ?? 'General Education' }}
+                            {{ faculty.department?.abbreviation ?? 'N/A' }}
                         </td>
 
                         <td class="p-4">
@@ -145,7 +142,7 @@ function destroy(id) {
 
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 whitespace-nowrap">
 
                             <div class="flex justify-center gap-2">
 
@@ -170,9 +167,14 @@ function destroy(id) {
                     </tr>
 
                     <tr v-if="faculties.length === 0">
-                        <td colspan="9" class="text-center p-8 text-gray-500">
+
+                        <td
+                            colspan="9"
+                            class="text-center p-8 text-gray-500"
+                        >
                             No faculty members found.
                         </td>
+
                     </tr>
 
                 </tbody>
