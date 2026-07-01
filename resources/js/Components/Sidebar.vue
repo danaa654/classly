@@ -112,6 +112,13 @@ function hasRole(...roles) {
                 </Link>
 
                 <Link
+                    :href="route('faculty-subjects.index')"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Faculty Subjects
+                </Link>
+
+                <Link
                     href="#"
                     class="block px-5 py-3 hover:bg-slate-700"
                 >

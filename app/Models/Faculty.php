@@ -33,6 +33,22 @@ class Faculty extends Model
         return $this->belongsTo(Department::class);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Faculty Subjects
+    |--------------------------------------------------------------------------
+    |
+    | Every subject this faculty member is qualified to teach, via the
+    | dedicated faculty_subjects table (added for the Faculty Subject
+    | Assignment module).
+    |
+    */
+
+    public function facultySubjects()
+    {
+        return $this->hasMany(FacultySubject::class);
+    }
+
     public function getFullNameAttribute()
     {
         return collect([

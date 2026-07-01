@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FacultyController;
+use App\Http\Controllers\FacultySubjectController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\SpecializationController;
 use App\Http\Controllers\CurriculumController;
@@ -107,6 +108,11 @@ Route::middleware(['auth'])->group(function () {
 
         Route::resource('faculty', FacultyController::class);
         Route::resource('subjects', SubjectController::class);
+
+        // Faculty Subject Assignment — which subjects a faculty member is
+        // allowed to teach.
+        Route::resource('faculty-subjects', FacultySubjectController::class)
+            ->except(['show']);
 
         // Future Modules
         // Route::resource('rooms', RoomController::class);

@@ -127,4 +127,20 @@ class Subject extends Model
             ->withPivot(['id', 'item_type', 'year_level', 'semester', 'sort_order', 'active'])
             ->withTimestamps();
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Faculty Assignment
+    |--------------------------------------------------------------------------
+    |
+    | Every faculty member qualified to teach this subject, via the
+    | dedicated faculty_subjects table (added for the Faculty Subject
+    | Assignment module).
+    |
+    */
+
+    public function facultySubjects()
+    {
+        return $this->hasMany(FacultySubject::class);
+    }
 }
