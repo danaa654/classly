@@ -119,7 +119,7 @@ function hasRole(...roles) {
                 </Link>
 
                 <Link
-                    href="#"
+                    :href="route('rooms.index')"
                     class="block px-5 py-3 hover:bg-slate-700"
                 >
                     Rooms

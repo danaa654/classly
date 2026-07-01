@@ -13,6 +13,7 @@ use App\Http\Controllers\SpecializationController;
 use App\Http\Controllers\CurriculumController;
 use App\Http\Controllers\CurriculumItemController;
 use App\Http\Controllers\SubjectController;
+use App\Http\Controllers\RoomController;
 
 /*
 |--------------------------------------------------------------------------
@@ -114,8 +115,10 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('faculty-subjects', FacultySubjectController::class)
             ->except(['show']);
 
+        // Rooms — master list only (no schedules/availability here).
+        Route::resource('rooms', RoomController::class);
+
         // Future Modules
-        // Route::resource('rooms', RoomController::class);
         // Route::resource('schedules', ScheduleController::class);
 
     });
