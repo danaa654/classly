@@ -84,6 +84,13 @@ function hasRole(...roles) {
                     Curriculum
                 </Link>
 
+                <Link
+                    :href="route('curriculum-items.index')"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Curriculum Items
+                </Link>
+
             </template>
 
             <!-- ADMIN + REGISTRAR + DEAN + ASSISTANT DEAN + OIC -->

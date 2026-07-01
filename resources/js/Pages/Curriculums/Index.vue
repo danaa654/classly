@@ -1,195 +1,200 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
-import { Link, router } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 
-defineProps({
+defineOptions({
+    layout: DashboardLayout,
+})
+
+const props = defineProps({
     curricula: Array,
 })
 
-function destroy(id) {
-    if (confirm('Are you sure you want to delete this curriculum?')) {
-        router.delete(`/curriculums/${id}`)
+function curriculumLabel(curriculum) {
+    if (curriculum.specialization) {
+        return `${curriculum.program.code} - ${curriculum.specialization.name}`
     }
+
+    return curriculum.program.code
+}
+
+function destroyCurriculum(curriculum) {
+    if (!confirm(`Delete ${curriculum.code}? This cannot be undone.`)) {
+        return
+    }
+
+    router.delete(route('curriculums.destroy', curriculum.id), {
+        preserveScroll: true,
+    })
 }
 </script>
 
 <template>
-    <DashboardLayout>
 
-        <div class="flex justify-between items-center mb-6">
+<Head title="Curriculums" />
+
+<div>
+
+    <!-- Header -->
+
+    <div class="flex justify-between items-center mb-6">
+
+        <div>
 
             <h1 class="text-3xl font-bold">
-                Curricula
+                Curriculums
             </h1>
 
-            <Link
-                href="/curriculums/create"
-                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
-            >
-                Add Curriculum
-            </Link>
+            <p class="text-gray-500 mt-1">
+                Manage curriculums and their assigned subjects.
+            </p>
 
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <Link
+            :href="route('curriculums.create')"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg"
+        >
+            + New Curriculum
+        </Link>
 
-            <table class="w-full">
+    </div>
 
-                <thead class="bg-gray-100">
+    <!-- Table -->
 
-                    <tr>
+    <div class="bg-white rounded-lg shadow overflow-hidden">
 
-                        <th class="text-left p-4">
-                            Program
-                        </th>
+        <table class="min-w-full">
 
-                        <th class="text-left p-4">
-                            Specialization
-                        </th>
+            <thead class="bg-gray-100">
 
-                        <th class="text-left p-4">
-                            Code
-                        </th>
+                <tr>
 
-                        <th class="text-left p-4">
-                            Curriculum Name
-                        </th>
+                    <th class="px-4 py-3 text-left">
+                        Code
+                    </th>
 
-                        <th class="text-left p-4">
-                            Academic Year
-                        </th>
+                    <th class="px-4 py-3 text-left">
+                        Name
+                    </th>
 
-                        <th class="text-left p-4">
-                            Effective Year
-                        </th>
+                    <th class="px-4 py-3 text-left">
+                        Program
+                    </th>
 
-                        <th class="text-left p-4">
-                            Status
-                        </th>
+                    <th class="px-4 py-3 text-left">
+                        Academic Year
+                    </th>
 
-                        <th class="text-left p-4">
-                            Actions
-                        </th>
+                    <th class="px-4 py-3 text-center">
+                        Effective Year
+                    </th>
 
-                    </tr>
+                    <th class="px-4 py-3 text-center">
+                        Status
+                    </th>
 
-                </thead>
+                    <th class="px-4 py-3 text-center">
+                        Actions
+                    </th>
 
-                <tbody>
+                </tr>
 
-                    <tr
-                        v-for="curriculum in curricula"
-                        :key="curriculum.id"
-                        class="border-t hover:bg-gray-50"
-                    >
+            </thead>
 
-                        <!-- Program -->
-                        <td class="p-4 font-medium">
+            <tbody>
 
-                            {{ curriculum.program?.department?.abbreviation }}
-                            •
-                            {{ curriculum.program?.code }}
+                <tr
+                    v-for="curriculum in curricula"
+                    :key="curriculum.id"
+                    class="border-t hover:bg-gray-50"
+                >
 
-                        </td>
+                    <td class="px-4 py-3 font-semibold">
+                        {{ curriculum.code }}
+                    </td>
 
-                        <!-- Specialization -->
-                        <td class="p-4">
+                    <td class="px-4 py-3">
+                        {{ curriculum.name }}
+                    </td>
 
-                            {{
-                                curriculum.specialization?.name
-                                    ?? 'General Program'
-                            }}
+                    <td class="px-4 py-3">
+                        {{ curriculumLabel(curriculum) }}
+                        <span class="text-gray-400 text-xs block">
+                            {{ curriculum.program.department?.abbreviation }}
+                        </span>
+                    </td>
 
-                        </td>
+                    <td class="px-4 py-3">
+                        {{ curriculum.academic_year }}
+                    </td>
 
-                        <!-- Code -->
-                        <td class="p-4 font-mono">
+                    <td class="px-4 py-3 text-center">
+                        {{ curriculum.effective_year }}
+                    </td>
 
-                            {{ curriculum.code }}
+                    <td class="px-4 py-3 text-center">
 
-                        </td>
-
-                        <!-- Curriculum Name -->
-                        <td class="p-4">
-
-                            {{ curriculum.name }}
-
-                        </td>
-
-                        <!-- Academic Year -->
-                        <td class="p-4">
-
-                            {{ curriculum.academic_year }}
-
-                        </td>
-
-                        <!-- Effective Year -->
-                        <td class="p-4">
-
-                            {{ curriculum.effective_year }}
-
-                        </td>
-
-                        <!-- Status -->
-                        <td class="p-4">
-
-                            <span
-                                v-if="curriculum.active"
-                                class="text-green-600 font-semibold"
-                            >
-                                Active
-                            </span>
-
-                            <span
-                                v-else
-                                class="text-red-600 font-semibold"
-                            >
-                                Inactive
-                            </span>
-
-                        </td>
-
-                        <!-- Actions -->
-                        <td class="p-4 whitespace-nowrap">
-
-                            <div class="flex gap-2">
-
-                                <Link
-                                    :href="`/curriculums/${curriculum.id}/edit`"
-                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-                                >
-                                    Edit
-                                </Link>
-
-                                <button
-                                    @click="destroy(curriculum.id)"
-                                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
-                                >
-                                    Delete
-                                </button>
-
-                            </div>
-
-                        </td>
-
-                    </tr>
-
-                    <tr v-if="curricula.length === 0">
-
-                        <td
-                            colspan="8"
-                            class="text-center p-8 text-gray-500"
+                        <span
+                            v-if="curriculum.active"
+                            class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs"
                         >
-                            No curricula found.
-                        </td>
+                            Active
+                        </span>
 
-                    </tr>
+                        <span
+                            v-else
+                            class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs"
+                        >
+                            Inactive
+                        </span>
 
-                </tbody>
+                    </td>
 
-            </table>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
 
-        </div>
+                        <Link
+                            :href="route('curriculums.items.manage', curriculum.id)"
+                            class="text-indigo-600 hover:underline mr-3"
+                        >
+                            Manage Items
+                        </Link>
 
-    </DashboardLayout>
+                        <Link
+                            :href="route('curriculums.edit', curriculum.id)"
+                            class="text-blue-600 hover:underline mr-3"
+                        >
+                            Edit
+                        </Link>
+
+                        <button
+                            @click="destroyCurriculum(curriculum)"
+                            class="text-red-600 hover:underline"
+                        >
+                            Delete
+                        </button>
+
+                    </td>
+
+                </tr>
+
+                <tr v-if="curricula.length === 0">
+
+                    <td
+                        colspan="7"
+                        class="text-center py-8 text-gray-500"
+                    >
+                        No curriculums found.
+                    </td>
+
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
 </template>

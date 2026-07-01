@@ -108,21 +108,23 @@ class Subject extends Model
     |--------------------------------------------------------------------------
     |
     | A subject is a master-list entry that can be reused across many
-    | curriculums (e.g. NSTP1 under BSIT, BSCS, BSHM, etc.). The pivot
-    | carries the year_level/semester placement, which differs per
-    | curriculum.
+    | curriculums (e.g. NSTP1 under BSIT, BSCS, BSHM, etc.) via
+    | curriculum_items. curriculum_items also holds non-Subject item types
+    | (OJT, and future types) that never reference a subject at all — those
+    | rows simply never show up on the other side of these relationships.
     |
     */
 
-    public function curriculumSubjects()
+    public function curriculumItems()
     {
-        return $this->hasMany(CurriculumSubject::class);
+        return $this->hasMany(CurriculumItem::class);
     }
 
     public function curriculums()
     {
-        return $this->belongsToMany(Curriculum::class, 'curriculum_subjects')
-            ->withPivot(['year_level', 'semester'])
+        return $this->belongsToMany(Curriculum::class, 'curriculum_items')
+            ->wherePivot('item_type', CurriculumItem::TYPE_SUBJECT)
+            ->withPivot(['id', 'item_type', 'year_level', 'semester', 'sort_order', 'active'])
             ->withTimestamps();
     }
 }

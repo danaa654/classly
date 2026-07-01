@@ -10,6 +10,7 @@ use App\Http\Controllers\FacultyController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\SpecializationController;
 use App\Http\Controllers\CurriculumController;
+use App\Http\Controllers\CurriculumItemController;
 use App\Http\Controllers\SubjectController;
 
 /*
@@ -71,6 +72,28 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('specializations', SpecializationController::class);
 
         Route::resource('curriculums', CurriculumController::class);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Curriculum Items
+        |--------------------------------------------------------------------------
+        |
+        | Standard CRUD for attaching items (Subject or OJT) into a
+        | curriculum's prospectus. ->parameters() keeps the route
+        | wildcard camelCase ({curriculumItem}) so it matches the
+        | controller's $curriculumItem argument for implicit model
+        | binding.
+        |
+        */
+
+        Route::resource('curriculum-items', CurriculumItemController::class)
+            ->except(['show'])
+            ->parameters(['curriculum-items' => 'curriculumItem']);
+
+        // Curriculum-scoped "Manage Items" workspace — grouped by year
+        // level and semester for a single curriculum.
+        Route::get('/curriculums/{curriculum}/items', [CurriculumItemController::class, 'manage'])
+            ->name('curriculums.items.manage');
 
     });
 

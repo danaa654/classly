@@ -42,25 +42,37 @@ class Curriculum extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Prospectus (Subjects inside the curriculum)
+    | Curriculum Items (Subjects, OJT, and future item types)
     |--------------------------------------------------------------------------
     |
-    | Subjects are a master list shared across curriculums. This
-    | curriculum's actual prospectus is the set of subjects attached
-    | through the curriculum_subjects pivot, each with its own
-    | year_level/semester placement.
+    | This curriculum's full prospectus — every item type included. This is
+    | the relationship to reach for on the Manage/Index pages, which need
+    | to show Subject and OJT rows side by side.
     |
     */
 
-    public function curriculumSubjects()
+    public function curriculumItems()
     {
-        return $this->hasMany(CurriculumSubject::class);
+        return $this->hasMany(CurriculumItem::class);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Subjects (convenience accessor)
+    |--------------------------------------------------------------------------
+    |
+    | Subjects are a master list shared across curriculums. This exposes
+    | just the Subject-type items of this curriculum's prospectus as an
+    | actual collection of Subject models — this is what the scheduler
+    | should use, since it only ever schedules Subject items into rooms.
+    |
+    */
 
     public function subjects()
     {
-        return $this->belongsToMany(Subject::class, 'curriculum_subjects')
-            ->withPivot(['year_level', 'semester'])
+        return $this->belongsToMany(Subject::class, 'curriculum_items')
+            ->wherePivot('item_type', CurriculumItem::TYPE_SUBJECT)
+            ->withPivot(['id', 'item_type', 'year_level', 'semester', 'sort_order', 'active'])
             ->withTimestamps();
     }
 
