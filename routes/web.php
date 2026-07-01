@@ -10,6 +10,7 @@ use App\Http\Controllers\FacultyController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\SpecializationController;
 use App\Http\Controllers\CurriculumController;
+use App\Http\Controllers\SubjectController;
 
 /*
 |--------------------------------------------------------------------------
@@ -82,9 +83,9 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('role:Admin|Registrar|Dean|Assistant Dean|OIC')->group(function () {
 
         Route::resource('faculty', FacultyController::class);
+        Route::resource('subjects', SubjectController::class);
 
         // Future Modules
-        // Route::resource('subjects', SubjectController::class);
         // Route::resource('rooms', RoomController::class);
         // Route::resource('schedules', ScheduleController::class);
 

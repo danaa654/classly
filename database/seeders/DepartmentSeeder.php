@@ -11,24 +11,36 @@ class DepartmentSeeder extends Seeder
     {
         Department::insert([
             [
-                'code' => 'CCS',
                 'name' => 'College of Computer Studies',
                 'abbreviation' => 'CCS',
+                'description' => null,
+                'active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
             ],
             [
-                'code' => 'CRIM',
                 'name' => 'College of Criminal Justice',
                 'abbreviation' => 'CRIM',
+                'description' => null,
+                'active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
             ],
             [
-                'code' => 'CTE',
                 'name' => 'College of Teacher Education',
                 'abbreviation' => 'CTE',
+                'description' => null,
+                'active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
             ],
             [
-                'code' => 'SHTM',
                 'name' => 'School of Hospitality and Tourism Management',
                 'abbreviation' => 'SHTM',
+                'description' => null,
+                'active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
             ],
         ]);
     }

@@ -9,10 +9,19 @@ class RolesAndPermissionsSeeder extends Seeder
 {
     public function run(): void
     {
-        Role::firstOrCreate(['name' => 'Admin']);
-        Role::firstOrCreate(['name' => 'Registrar']);
-        Role::firstOrCreate(['name' => 'Dean']);
-        Role::firstOrCreate(['name' => 'Assistant Dean']);
-        Role::firstOrCreate(['name' => 'OIC']);
+        $roles = [
+            'Admin',
+            'Registrar',
+            'Dean',
+            'Assistant Dean',
+            'OIC',
+        ];
+
+        foreach ($roles as $role) {
+            Role::firstOrCreate([
+                'name' => $role,
+                'guard_name' => 'web',
+            ]);
+        }
     }
 }

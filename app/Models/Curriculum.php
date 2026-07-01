@@ -42,16 +42,26 @@ class Curriculum extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Future Relationship
+    | Prospectus (Subjects inside the curriculum)
     |--------------------------------------------------------------------------
     |
-    | This will contain the prospectus (subjects inside the curriculum).
+    | Subjects are a master list shared across curriculums. This
+    | curriculum's actual prospectus is the set of subjects attached
+    | through the curriculum_subjects pivot, each with its own
+    | year_level/semester placement.
     |
     */
 
     public function curriculumSubjects()
     {
         return $this->hasMany(CurriculumSubject::class);
+    }
+
+    public function subjects()
+    {
+        return $this->belongsToMany(Subject::class, 'curriculum_subjects')
+            ->withPivot(['year_level', 'semester'])
+            ->withTimestamps();
     }
 
     /*
