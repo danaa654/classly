@@ -14,6 +14,7 @@ use App\Http\Controllers\CurriculumController;
 use App\Http\Controllers\CurriculumItemController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\RoomController;
+use App\Http\Controllers\SectionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -96,6 +97,19 @@ Route::middleware(['auth'])->group(function () {
         // level and semester for a single curriculum.
         Route::get('/curriculums/{curriculum}/items', [CurriculumItemController::class, 'manage'])
             ->name('curriculums.items.manage');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Sections
+        |--------------------------------------------------------------------------
+        |
+        | Section master data (e.g. BSIT-1A) — grouped by curriculum. No
+        | scheduling logic lives here; this is used later by the
+        | automatic scheduling engine.
+        |
+        */
+
+        Route::resource('sections', SectionController::class);
 
     });
 

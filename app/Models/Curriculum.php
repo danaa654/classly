@@ -42,6 +42,20 @@ class Curriculum extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | Sections
+    |--------------------------------------------------------------------------
+    |
+    | The section groupings (e.g. BSIT-1A) that follow this curriculum.
+    |
+    */
+
+    public function sections()
+    {
+        return $this->hasMany(Section::class);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Curriculum Items (Subjects, OJT, and future item types)
     |--------------------------------------------------------------------------
     |
