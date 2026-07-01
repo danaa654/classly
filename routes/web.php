@@ -26,7 +26,7 @@ Route::get('/', function () {
 
 /*
 |--------------------------------------------------------------------------
-| Protected Routes (Authentication Required)
+| Protected Routes
 |--------------------------------------------------------------------------
 */
 
@@ -34,7 +34,7 @@ Route::middleware(['auth'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Dashboard (Role-Based)
+    | Dashboard
     |--------------------------------------------------------------------------
     */
 
@@ -43,51 +43,52 @@ Route::middleware(['auth'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | User Management
+    | ADMIN ONLY
     |--------------------------------------------------------------------------
+    | Only the Admin can create/manage user accounts.
     */
 
-    Route::resource('users', UserController::class);
+    Route::middleware('role:Admin')->group(function () {
+
+        Route::resource('users', UserController::class);
+
+    });
 
     /*
     |--------------------------------------------------------------------------
-    | Department Management
+    | ADMIN + REGISTRAR
     |--------------------------------------------------------------------------
+    | Registrar has the same power as Admin except Users.
     */
 
-    Route::resource('departments', DepartmentController::class);
+    Route::middleware('role:Admin|Registrar')->group(function () {
+
+        Route::resource('departments', DepartmentController::class);
+
+        Route::resource('programs', ProgramController::class);
+
+        Route::resource('specializations', SpecializationController::class);
+
+        Route::resource('curriculums', CurriculumController::class);
+
+    });
 
     /*
     |--------------------------------------------------------------------------
-    | Faculty Management
+    | ADMIN + REGISTRAR + DEAN + ASSISTANT DEAN + OIC
     |--------------------------------------------------------------------------
     */
 
-    Route::resource('faculty', FacultyController::class);
+    Route::middleware('role:Admin|Registrar|Dean|Assistant Dean|OIC')->group(function () {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Program Management
-    |--------------------------------------------------------------------------
-    */
+        Route::resource('faculty', FacultyController::class);
 
-    Route::resource('programs', ProgramController::class);
+        // Future Modules
+        // Route::resource('subjects', SubjectController::class);
+        // Route::resource('rooms', RoomController::class);
+        // Route::resource('schedules', ScheduleController::class);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Specialization Management
-    |--------------------------------------------------------------------------
-    */
-
-    Route::resource('specializations', SpecializationController::class);
-
-    /*
-    |--------------------------------------------------------------------------
-    | Curriculum Management
-    |--------------------------------------------------------------------------
-    */
-
-    Route::resource('curriculums', CurriculumController::class);
+    });
 
 });
 
@@ -97,4 +98,4 @@ Route::middleware(['auth'])->group(function () {
 |--------------------------------------------------------------------------
 */
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';
