@@ -1,85 +1,124 @@
 <script setup>
-import { Link } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { Link, usePage } from '@inertiajs/vue3'
+
+const page = usePage()
+
+const user = computed(() => page.props.auth?.user)
+
+const role = computed(() => {
+    return user.value?.roles?.[0] ?? ''
+})
+
+function hasRole(...roles) {
+    return roles.includes(role.value)
+}
 </script>
 
 <template>
-    <div class="w-64 bg-slate-900 text-white min-h-screen">
+    <div class="w-64 bg-slate-900 text-white min-h-screen flex flex-col">
 
-        <div class="p-5 text-2xl font-bold border-b border-slate-700">
-            CLASSLY
+        <!-- Logo -->
+        <div class="p-5 border-b border-slate-700">
+            <h1 class="text-3xl font-bold">
+                CLASSLY
+            </h1>
+
+            <p class="text-sm text-slate-400 mt-2">
+                {{ role }}
+            </p>
         </div>
 
-        <nav class="mt-5">
+        <!-- Navigation -->
+        <nav class="flex-1 py-3">
 
+            <!-- Dashboard -->
             <Link
-                href="/"
+                :href="route('dashboard')"
                 class="block px-5 py-3 hover:bg-slate-700"
             >
                 Dashboard
             </Link>
 
-            <Link
-                href="/users"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Users
-            </Link>
+            <!-- USERS (ADMIN ONLY) -->
+            <template v-if="hasRole('Admin')">
 
-            <Link
-                href="/departments"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Colleges
-            </Link>
+                <Link
+                    :href="route('users.index')"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Users
+                </Link>
 
-            <Link
-                href="/programs"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Programs
-            </Link>
+            </template>
 
-            <Link
-                href="/specializations"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Specializations
-            </Link>
+            <!-- ADMIN + REGISTRAR -->
 
-            <Link
-                href="/curriculums"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Curriculum
-            </Link>
+            <template v-if="hasRole('Admin', 'Registrar')">
 
-            <Link
-                href="/faculty"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Faculty
-            </Link>
+                <Link
+                    :href="route('departments.index')"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Colleges
+                </Link>
 
-            <Link
-                href="/subjects"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Subjects
-            </Link>
+                <Link
+                    :href="route('programs.index')"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Programs
+                </Link>
 
-            <Link
-                href="/rooms"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Rooms
-            </Link>
+                <Link
+                    :href="route('specializations.index')"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Specializations
+                </Link>
 
-            <Link
-                href="/schedule"
-                class="block px-5 py-3 hover:bg-slate-700"
-            >
-                Schedule
-            </Link>
+                <Link
+                    :href="route('curriculums.index')"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Curriculum
+                </Link>
+
+            </template>
+
+            <!-- ADMIN + REGISTRAR + DEAN + ASSISTANT DEAN + OIC -->
+
+            <template v-if="hasRole('Admin', 'Registrar', 'Dean', 'Assistant Dean', 'OIC')">
+
+                <Link
+                    :href="route('faculty.index')"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Faculty
+                </Link>
+
+                <Link
+                    href="#"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Subjects
+                </Link>
+
+                <Link
+                    href="#"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Rooms
+                </Link>
+
+                <Link
+                    href="#"
+                    class="block px-5 py-3 hover:bg-slate-700"
+                >
+                    Schedule
+                </Link>
+
+            </template>
 
         </nav>
 

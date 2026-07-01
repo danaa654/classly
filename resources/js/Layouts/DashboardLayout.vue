@@ -7,19 +7,21 @@ const sidebarOpen = ref(true)
 </script>
 
 <template>
-    <div class="flex h-screen bg-gray-100">
 
-        <Sidebar :open="sidebarOpen" />
+<div class="flex h-screen bg-gray-100">
 
-        <div class="flex-1 flex flex-col">
+    <Sidebar :open="sidebarOpen" />
 
-            <Topbar @toggle="sidebarOpen = !sidebarOpen" />
+    <div class="flex-1 flex flex-col">
 
-            <main class="p-6 overflow-y-auto flex-1">
-                <slot />
-            </main>
+        <Topbar @toggle="sidebarOpen = !sidebarOpen" />
 
-        </div>
+        <main class="flex-1 overflow-y-auto p-6">
+            <slot />
+        </main>
 
     </div>
+
+</div>
+
 </template>
