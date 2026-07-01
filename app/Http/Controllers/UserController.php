@@ -7,9 +7,28 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class UserController extends Controller
+class UserController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [
+            new Middleware(function ($request, $next) {
+
+                abort_unless(
+                    auth()->user()->hasRole('Admin'),
+                    403,
+                    'Unauthorized.'
+                );
+
+                return $next($request);
+            }),
+        ];
+    }
+
     /**
      * Display a listing of users.
      */

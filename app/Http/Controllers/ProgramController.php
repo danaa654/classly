@@ -6,9 +6,27 @@ use App\Models\Program;
 use App\Models\Department;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class ProgramController extends Controller
+class ProgramController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [
+            new Middleware(function ($request, $next) {
+
+                abort_unless(
+                    auth()->user()->hasAnyRole(['Admin', 'Registrar']),
+                    403,
+                    'Unauthorized.'
+                );
+
+                return $next($request);
+            }),
+        ];
+    }
+
     /**
      * Display a listing of the resource.
      */

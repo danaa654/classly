@@ -7,9 +7,27 @@ use App\Models\Specialization;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class SpecializationController extends Controller
+class SpecializationController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [
+            new Middleware(function ($request, $next) {
+
+                abort_unless(
+                    auth()->user()->hasAnyRole(['Admin', 'Registrar']),
+                    403,
+                    'Unauthorized.'
+                );
+
+                return $next($request);
+            }),
+        ];
+    }
+
     /**
      * Display a listing of the resource.
      */
