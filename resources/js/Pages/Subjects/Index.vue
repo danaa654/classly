@@ -83,7 +83,15 @@ function destroySubject(subject) {
                     </th>
 
                     <th class="px-4 py-3 text-center">
-                        Room
+                        Room Type
+                    </th>
+
+                    <th class="px-4 py-3 text-center">
+                        Room Group
+                    </th>
+
+                    <th class="px-4 py-3 text-center">
+                        Practicum
                     </th>
 
                     <th class="px-4 py-3 text-center">
@@ -127,7 +135,29 @@ function destroySubject(subject) {
                     </td>
 
                     <td class="px-4 py-3 text-center">
-                        {{ subject.required_room }}
+                        {{ subject.required_room_type }}
+                    </td>
+
+                    <td class="px-4 py-3 text-center">
+                        {{ subject.required_room_group ?? '—' }}
+                    </td>
+
+                    <td class="px-4 py-3 text-center">
+
+                        <span
+                            v-if="subject.is_practicum"
+                            class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs"
+                        >
+                            Yes
+                        </span>
+
+                        <span
+                            v-else
+                            class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs"
+                        >
+                            No
+                        </span>
+
                     </td>
 
                     <td class="px-4 py-3 text-center">
@@ -171,7 +201,7 @@ function destroySubject(subject) {
                 <tr v-if="subjects.length === 0">
 
                     <td
-                        colspan="8"
+                        colspan="10"
                         class="text-center py-8 text-gray-500"
                     >
                         No subjects found.

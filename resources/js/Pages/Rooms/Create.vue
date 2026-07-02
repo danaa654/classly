@@ -1,12 +1,14 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useForm, Link } from '@inertiajs/vue3'
+import { computed, watch } from 'vue'
 
 const form = useForm({
     room_code: '',
     room_name: '',
 
     room_type: 'Lecture',
+    room_group: 'General',
 
     building: '',
     floor: '',
@@ -14,6 +16,43 @@ const form = useForm({
     capacity: 1,
 
     active: true,
+})
+
+/*
+|--------------------------------------------------------------------------
+| Room Group Options
+|--------------------------------------------------------------------------
+|
+| "General" is a Lecture-only room group — Laboratory rooms must always
+| belong to a specific program. Mirrors the equivalent watcher pattern
+| used on the Subject Create/Edit forms for required_room_group.
+|
+*/
+
+const roomGroupOptions = computed(() => {
+
+    const all = [
+        { value: 'General', label: 'General' },
+        { value: 'BSIT', label: 'BSIT' },
+        { value: 'BSED', label: 'BSED' },
+        { value: 'BSHM', label: 'BSHM' },
+        { value: 'BSTM', label: 'BSTM' },
+        { value: 'BSCRIM', label: 'BSCRIM' },
+    ]
+
+    if (form.room_type === 'Laboratory') {
+        return all.filter((option) => option.value !== 'General')
+    }
+
+    return all
+})
+
+watch(() => form.room_type, (newType) => {
+
+    if (newType === 'Laboratory' && form.room_group === 'General') {
+        form.room_group = 'BSIT'
+    }
+
 })
 
 function submit() {
@@ -91,49 +130,80 @@ function submit() {
 
                 </div>
 
-                <!-- ROOM TYPE -->
+                <!-- ROOM TYPE / ROOM GROUP -->
 
                 <div>
 
-                    <label class="block mb-2">
-                        Room Type
-                    </label>
+                    <h2 class="text-lg font-semibold mb-4">
+                        Room Type &amp; Room Group
+                    </h2>
 
-                    <select
-                        v-model="form.room_type"
-                        class="w-full border rounded p-2"
-                    >
-                        <option value="Lecture">
-                            Lecture
-                        </option>
+                    <div class="grid grid-cols-2 gap-4">
 
-                        <option value="Computer Laboratory">
-                            Computer Laboratory
-                        </option>
+                        <div>
 
-                        <option value="Science Laboratory">
-                            Science Laboratory
-                        </option>
+                            <label class="block mb-2">
+                                Room Type
+                            </label>
 
-                        <option value="Speech Laboratory">
-                            Speech Laboratory
-                        </option>
+                            <select
+                                v-model="form.room_type"
+                                class="w-full border rounded p-2"
+                            >
+                                <option value="Lecture">
+                                    Lecture
+                                </option>
 
-                        <option value="PE Area">
-                            PE Area
-                        </option>
+                                <option value="Laboratory">
+                                    Laboratory
+                                </option>
+                            </select>
 
-                        <option value="Any">
-                            Any
-                        </option>
-                    </select>
+                            <p
+                                v-if="form.errors.room_type"
+                                class="text-red-500 text-sm mt-1"
+                            >
+                                {{ form.errors.room_type }}
+                            </p>
 
-                    <p
-                        v-if="form.errors.room_type"
-                        class="text-red-500 text-sm mt-1"
-                    >
-                        {{ form.errors.room_type }}
-                    </p>
+                        </div>
+
+                        <div>
+
+                            <label class="block mb-2">
+                                Room Group
+                            </label>
+
+                            <select
+                                v-model="form.room_group"
+                                class="w-full border rounded p-2"
+                            >
+                                <option
+                                    v-for="option in roomGroupOptions"
+                                    :key="option.value"
+                                    :value="option.value"
+                                >
+                                    {{ option.label }}
+                                </option>
+                            </select>
+
+                            <p
+                                v-if="form.room_type === 'Laboratory'"
+                                class="text-gray-500 text-sm mt-1"
+                            >
+                                Laboratory rooms must belong to a specific program.
+                            </p>
+
+                            <p
+                                v-if="form.errors.room_group"
+                                class="text-red-500 text-sm mt-1"
+                            >
+                                {{ form.errors.room_group }}
+                            </p>
+
+                        </div>
+
+                    </div>
 
                 </div>
 

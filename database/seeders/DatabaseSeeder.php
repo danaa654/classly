@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             SpecializationSeeder::class,
             CurriculumSeeder::class,
             AdminUserSeeder::class,
+            SubjectSeeder::class,
         ]);
     }
 }

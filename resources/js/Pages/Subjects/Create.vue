@@ -1,7 +1,7 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 defineOptions({
     layout: DashboardLayout,
@@ -18,7 +18,9 @@ const form = useForm({
     lecture_hours: 0,
     laboratory_hours: 0,
     is_major: true,
-    required_room: 'Lecture',
+    required_room_type: 'Lecture',
+    required_room_group: 'General',
+    is_practicum: false,
     allow_split_schedule: true,
     prerequisite_id: '',
     active: true,
@@ -26,6 +28,59 @@ const form = useForm({
 
 const totalHours = computed(() => {
     return (Number(form.lecture_hours) || 0) + (Number(form.laboratory_hours) || 0)
+})
+
+// Room Group only makes sense when the subject actually needs a room.
+const roomGroupDisabled = computed(() => form.required_room_type === 'None')
+
+// "General" is a Lecture-only room group — Laboratory subjects must pick a
+// specific program, so General is hidden from the dropdown whenever Room
+// Type is Laboratory (enforced server-side too, this is just UX).
+const roomGroupOptions = computed(() => {
+    const all = [
+        { value: 'General', label: 'General' },
+        { value: 'BSIT', label: 'BSIT' },
+        { value: 'BSED', label: 'BSED' },
+        { value: 'BSHM', label: 'BSHM' },
+        { value: 'BSTM', label: 'BSTM' },
+        { value: 'BSCRIM', label: 'BSCRIM' },
+    ]
+
+    if (form.required_room_type === 'Laboratory') {
+        return all.filter(option => option.value !== 'General')
+    }
+
+    return all
+})
+
+// Checking Practicum/OJT forces Room Type to "None" and locks the dropdown,
+// since a Practicum subject never gets assigned a room.
+watch(() => form.is_practicum, (isPracticum) => {
+    if (isPracticum) {
+        form.required_room_type = 'None'
+    } else if (form.required_room_type === 'None') {
+        form.required_room_type = 'Lecture'
+    }
+})
+
+// Keeps Required Room Group in sync with Room Type. The backend enforces
+// all of this too (a disabled/tampered field can't smuggle in a bad
+// value), but mirroring it here keeps the form from ever showing/
+// submitting a value that doesn't make sense for the selected room type:
+//   - None          -> room group cleared (Practicum/OJT gets no room)
+//   - Lecture        -> defaults to "General" (standard classrooms)
+//   - Laboratory     -> "General" isn't valid, so it's cleared and the
+//                        user must explicitly pick a program
+watch(() => form.required_room_type, (roomType) => {
+    if (roomType === 'None') {
+        form.required_room_group = null
+    } else if (roomType === 'Lecture') {
+        form.required_room_group = 'General'
+    } else if (roomType === 'Laboratory') {
+        if (!form.required_room_group || form.required_room_group === 'General') {
+            form.required_room_group = null
+        }
+    }
 })
 
 function submit() {
@@ -195,9 +250,9 @@ function submit() {
 
         </div>
 
-        <!-- Classification / Required Room -->
+        <!-- Classification / Required Room Type / Required Room Group -->
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-3 gap-4">
 
             <div>
 
@@ -222,23 +277,47 @@ function submit() {
             <div>
 
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Required Room
+                    Required Room Type
                 </label>
 
                 <select
-                    v-model="form.required_room"
-                    class="w-full border-gray-300 rounded-lg"
+                    v-model="form.required_room_type"
+                    :disabled="form.is_practicum"
+                    class="w-full border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500"
                 >
                     <option value="Lecture">Lecture</option>
-                    <option value="Computer Laboratory">Computer Laboratory</option>
-                    <option value="Science Laboratory">Science Laboratory</option>
-                    <option value="Speech Laboratory">Speech Laboratory</option>
-                    <option value="PE Area">PE Area</option>
-                    <option value="Any">Any</option>
+                    <option value="Laboratory">Laboratory</option>
+                    <option value="None">None (Practicum/OJT)</option>
                 </select>
 
-                <p v-if="form.errors.required_room" class="text-red-600 text-sm mt-1">
-                    {{ form.errors.required_room }}
+                <p v-if="form.errors.required_room_type" class="text-red-600 text-sm mt-1">
+                    {{ form.errors.required_room_type }}
+                </p>
+
+            </div>
+
+            <div>
+
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Required Room Group
+                </label>
+
+                <select
+                    v-model="form.required_room_group"
+                    :disabled="roomGroupDisabled"
+                    class="w-full border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                    <option
+                        v-for="option in roomGroupOptions"
+                        :key="option.value"
+                        :value="option.value"
+                    >
+                        {{ option.label }}
+                    </option>
+                </select>
+
+                <p v-if="form.errors.required_room_group" class="text-red-600 text-sm mt-1">
+                    {{ form.errors.required_room_group }}
                 </p>
 
             </div>
@@ -286,6 +365,11 @@ function submit() {
             <label class="flex items-center gap-2">
                 <input type="checkbox" v-model="form.active" class="rounded" />
                 <span class="text-sm text-gray-700">Active</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+                <input type="checkbox" v-model="form.is_practicum" class="rounded" />
+                <span class="text-sm text-gray-700">Practicum/OJT</span>
             </label>
 
         </div>

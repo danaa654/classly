@@ -42,6 +42,7 @@ function destroy(id) {
                         <th class="p-4 text-left">Room Code</th>
                         <th class="p-4 text-left">Room Name</th>
                         <th class="p-4 text-left">Room Type</th>
+                        <th class="p-4 text-left">Room Group</th>
                         <th class="p-4 text-left">Building</th>
                         <th class="p-4 text-left">Floor</th>
                         <th class="p-4 text-left">Capacity</th>
@@ -83,38 +84,28 @@ function destroy(id) {
                             </span>
 
                             <span
-                                v-else-if="room.room_type === 'Computer Laboratory'"
+                                v-else
                                 class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm"
                             >
-                                Computer Laboratory
+                                Laboratory
                             </span>
 
-                            <span
-                                v-else-if="room.room_type === 'Science Laboratory'"
-                                class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm"
-                            >
-                                Science Laboratory
-                            </span>
+                        </td>
+
+                        <td class="p-4">
 
                             <span
-                                v-else-if="room.room_type === 'Speech Laboratory'"
-                                class="bg-pink-100 text-pink-700 px-3 py-1 rounded-full text-sm"
+                                v-if="room.room_group === 'General'"
+                                class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
                             >
-                                Speech Laboratory
-                            </span>
-
-                            <span
-                                v-else-if="room.room_type === 'PE Area'"
-                                class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-sm"
-                            >
-                                PE Area
+                                General
                             </span>
 
                             <span
                                 v-else
-                                class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
+                                class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm"
                             >
-                                Any
+                                {{ room.room_group }}
                             </span>
 
                         </td>
@@ -176,7 +167,7 @@ function destroy(id) {
                     <tr v-if="rooms.length === 0">
 
                         <td
-                            colspan="9"
+                            colspan="10"
                             class="text-center p-8 text-gray-500"
                         >
                             No rooms found.

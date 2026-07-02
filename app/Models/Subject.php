@@ -37,7 +37,9 @@ class Subject extends Model
         |--------------------------------------------------------------------------
         */
 
-        'required_room',
+        'required_room_type',
+        'required_room_group',
+        'is_practicum',
 
         'allow_split_schedule',
 
@@ -76,6 +78,7 @@ class Subject extends Model
             'total_hours' => 'integer',
             'is_major' => 'boolean',
             'allow_split_schedule' => 'boolean',
+            'is_practicum' => 'boolean',
             'active' => 'boolean',
         ];
     }
@@ -142,5 +145,20 @@ class Subject extends Model
     public function facultySubjects()
     {
         return $this->hasMany(FacultySubject::class);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scopes
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Subjects eligible for the automatic scheduler
+     * (i.e. everything except Practicum/OJT).
+     */
+    public function scopeSchedulable($query)
+    {
+        return $query->where('is_practicum', false);
     }
 }

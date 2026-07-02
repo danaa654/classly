@@ -64,57 +64,7 @@ class RoomController extends Controller implements HasMiddleware
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-
-            'room_code' => [
-                'required',
-                'string',
-                'max:20',
-                'unique:rooms,room_code',
-            ],
-
-            'room_name' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
-            'room_type' => [
-                'required',
-                Rule::in([
-                    'Lecture',
-                    'Computer Laboratory',
-                    'Science Laboratory',
-                    'Speech Laboratory',
-                    'PE Area',
-                    'Any',
-                ]),
-            ],
-
-            'building' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
-            'floor' => [
-                'nullable',
-                'string',
-                'max:50',
-            ],
-
-            'capacity' => [
-                'required',
-                'numeric',
-                'min:1',
-            ],
-
-            'active' => [
-                'required',
-                'boolean',
-            ],
-
-        ]);
+        $validated = $request->validate($this->rules($request));
 
         /*
         |--------------------------------------------------------------------------
@@ -150,58 +100,7 @@ class RoomController extends Controller implements HasMiddleware
      */
     public function update(Request $request, Room $room)
     {
-        $validated = $request->validate([
-
-            'room_code' => [
-                'required',
-                'string',
-                'max:20',
-                Rule::unique('rooms', 'room_code')
-                    ->ignore($room->id),
-            ],
-
-            'room_name' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
-            'room_type' => [
-                'required',
-                Rule::in([
-                    'Lecture',
-                    'Computer Laboratory',
-                    'Science Laboratory',
-                    'Speech Laboratory',
-                    'PE Area',
-                    'Any',
-                ]),
-            ],
-
-            'building' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
-            'floor' => [
-                'nullable',
-                'string',
-                'max:50',
-            ],
-
-            'capacity' => [
-                'required',
-                'numeric',
-                'min:1',
-            ],
-
-            'active' => [
-                'required',
-                'boolean',
-            ],
-
-        ]);
+        $validated = $request->validate($this->rules($request, $room));
 
         /*
         |--------------------------------------------------------------------------
@@ -230,5 +129,105 @@ class RoomController extends Controller implements HasMiddleware
         return redirect()
             ->route('rooms.index')
             ->with('success', 'Room deleted successfully.');
+    }
+
+    /**
+     * Shared validation rules for store() and update().
+     *
+     * @param  \Illuminate\Http\Request  $request  The current request —
+     *         needed so the room_group rule can look at the sibling
+     *         room_type value.
+     * @param  \App\Models\Room|null  $room  The room being updated, null
+     *         when creating (used for the unique/ignore rule).
+     */
+    private function rules(Request $request, ?Room $room = null): array
+    {
+        return [
+
+            'room_code' => [
+                'required',
+                'string',
+                'max:20',
+                $room
+                    ? Rule::unique('rooms', 'room_code')->ignore($room->id)
+                    : Rule::unique('rooms', 'room_code'),
+            ],
+
+            'room_name' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+
+            /*
+            |--------------------------------------------------------------------------
+            | Room Type / Room Group
+            |--------------------------------------------------------------------------
+            |
+            | room_type reflects PAP's actual room inventory (Lecture /
+            | Laboratory only). room_group mirrors
+            | Subject::required_room_group — it names the academic program
+            | whose lecture rooms / laboratories this room belongs to
+            | (General, BSIT, BSED, BSHM, BSTM, BSCRIM). Criminalistics
+            | specializations (FB / LD / QD / FI) all collapse to BSCRIM.
+            |
+            | Business rule: "General" is a Lecture-only room group.
+            | Laboratory rooms must always belong to a specific program —
+            | this mirrors the equivalent rule already enforced in
+            | SubjectController for required_room_group.
+            |
+            */
+
+            'room_type' => [
+                'required',
+                Rule::in([
+                    'Lecture',
+                    'Laboratory',
+                ]),
+            ],
+
+            'room_group' => [
+                'required',
+                Rule::in([
+                    'General',
+                    'BSIT',
+                    'BSED',
+                    'BSHM',
+                    'BSTM',
+                    'BSCRIM',
+                ]),
+                function ($attribute, $value, $fail) use ($request) {
+
+                    if ($request->input('room_type') === 'Laboratory' && $value === 'General') {
+                        $fail('General is a Lecture-only room group. Laboratory rooms must select a specific program (BSIT, BSED, BSHM, BSTM, or BSCRIM).');
+                    }
+
+                },
+            ],
+
+            'building' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+
+            'floor' => [
+                'nullable',
+                'string',
+                'max:50',
+            ],
+
+            'capacity' => [
+                'required',
+                'numeric',
+                'min:1',
+            ],
+
+            'active' => [
+                'required',
+                'boolean',
+            ],
+
+        ];
     }
 }

@@ -21,11 +21,32 @@ return new class extends Migration
 
             $table->enum('room_type', [
                 'Lecture',
-                'Computer Laboratory',
-                'Science Laboratory',
-                'Speech Laboratory',
-                'PE Area',
-                'Any',
+                'Laboratory',
+            ]);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Room Group
+            |--------------------------------------------------------------------------
+            |
+            | Mirrors Subject::required_room_group. Names the academic program
+            | whose lecture rooms / laboratories this room belongs to (General,
+            | BSIT, BSED, BSHM, BSTM, BSCRIM). Criminalistics specializations
+            | (FB / LD / QD / FI) collapse to BSCRIM — the scheduler picks
+            | whichever Criminalistics room is free.
+            |
+            | "General" is a Lecture-only value — Laboratory rooms must always
+            | belong to a specific program.
+            |
+            */
+
+            $table->enum('room_group', [
+                'General',
+                'BSIT',
+                'BSED',
+                'BSHM',
+                'BSTM',
+                'BSCRIM',
             ]);
 
             $table->string('building');

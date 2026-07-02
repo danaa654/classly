@@ -70,78 +70,9 @@ class SubjectController extends Controller implements HasMiddleware
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $validated = $request->validate($this->rules($request));
 
-            'subject_code' => [
-                'required',
-                'string',
-                'max:20',
-                'unique:subjects,subject_code',
-            ],
-
-            'descriptive_title' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
-            // units / lecture_hours / laboratory_hours are stored as
-            // unsignedTinyInteger columns, so they must be validated as
-            // whole numbers, not arbitrary decimals.
-            'units' => [
-                'required',
-                'integer',
-                'min:1',
-                'max:6',
-            ],
-
-            'lecture_hours' => [
-                'required',
-                'integer',
-                'min:0',
-                'max:10',
-            ],
-
-            'laboratory_hours' => [
-                'required',
-                'integer',
-                'min:0',
-                'max:10',
-            ],
-
-            'is_major' => [
-                'required',
-                'boolean',
-            ],
-
-            'required_room' => [
-                'required',
-                Rule::in([
-                    'Lecture',
-                    'Computer Laboratory',
-                    'Science Laboratory',
-                    'Speech Laboratory',
-                    'PE Area',
-                    'Any',
-                ]),
-            ],
-
-            'allow_split_schedule' => [
-                'required',
-                'boolean',
-            ],
-
-            'prerequisite_id' => [
-                'nullable',
-                'exists:subjects,id',
-            ],
-
-            'active' => [
-                'required',
-                'boolean',
-            ],
-
-        ]);
+        $validated = $this->applyRoomGroupOverrides($validated);
 
         /*
         |--------------------------------------------------------------------------
@@ -191,78 +122,9 @@ class SubjectController extends Controller implements HasMiddleware
      */
     public function update(Request $request, Subject $subject)
     {
-        $validated = $request->validate([
+        $validated = $request->validate($this->rules($request, $subject));
 
-            'subject_code' => [
-                'required',
-                'string',
-                'max:20',
-                Rule::unique('subjects', 'subject_code')
-                    ->ignore($subject->id),
-            ],
-
-            'descriptive_title' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
-            'units' => [
-                'required',
-                'integer',
-                'min:1',
-                'max:6',
-            ],
-
-            'lecture_hours' => [
-                'required',
-                'integer',
-                'min:0',
-                'max:10',
-            ],
-
-            'laboratory_hours' => [
-                'required',
-                'integer',
-                'min:0',
-                'max:10',
-            ],
-
-            'is_major' => [
-                'required',
-                'boolean',
-            ],
-
-            'required_room' => [
-                'required',
-                Rule::in([
-                    'Lecture',
-                    'Computer Laboratory',
-                    'Science Laboratory',
-                    'Speech Laboratory',
-                    'PE Area',
-                    'Any',
-                ]),
-            ],
-
-            'allow_split_schedule' => [
-                'required',
-                'boolean',
-            ],
-
-            'prerequisite_id' => [
-                'nullable',
-                'exists:subjects,id',
-                // A subject can't be its own prerequisite.
-                Rule::notIn([$subject->id]),
-            ],
-
-            'active' => [
-                'required',
-                'boolean',
-            ],
-
-        ]);
+        $validated = $this->applyRoomGroupOverrides($validated);
 
         /*
         |--------------------------------------------------------------------------
@@ -301,5 +163,194 @@ class SubjectController extends Controller implements HasMiddleware
         return redirect()
             ->route('subjects.index')
             ->with('success', 'Subject deleted successfully.');
+    }
+
+    /**
+     * Shared validation rules for store() and update().
+     *
+     * @param  \Illuminate\Http\Request  $request  The current request —
+     *         needed so the required_room_group rule can look at the
+     *         sibling required_room_type / is_practicum values.
+     * @param  \App\Models\Subject|null  $subject  The subject being updated,
+     *         null when creating (used for the unique/notIn ignore rules).
+     */
+    private function rules(Request $request, ?Subject $subject = null): array
+    {
+        return [
+
+            'subject_code' => [
+                'required',
+                'string',
+                'max:20',
+                $subject
+                    ? Rule::unique('subjects', 'subject_code')->ignore($subject->id)
+                    : Rule::unique('subjects', 'subject_code'),
+            ],
+
+            'descriptive_title' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+
+            // units / lecture_hours / laboratory_hours are stored as
+            // unsignedTinyInteger columns, so they must be validated as
+            // whole numbers, not arbitrary decimals.
+            'units' => [
+                'required',
+                'integer',
+                'min:1',
+                'max:6',
+            ],
+
+            'lecture_hours' => [
+                'required',
+                'integer',
+                'min:0',
+                'max:10',
+            ],
+
+            'laboratory_hours' => [
+                'required',
+                'integer',
+                'min:0',
+                'max:10',
+            ],
+
+            'is_major' => [
+                'required',
+                'boolean',
+            ],
+
+            /*
+            |--------------------------------------------------------------------------
+            | Room Type / Room Group / Practicum
+            |--------------------------------------------------------------------------
+            |
+            | required_room_type reflects PAP's actual room inventory
+            | (Lecture / Laboratory / None) and replaces the old, more
+            | granular required_room enum.
+            |
+            | required_room_group replaces the old required_specialization
+            | field. It no longer names individual specializations (IT, HM,
+            | TM, ED, FB, LD, QD, FI) — it names the academic program whose
+            | laboratory the scheduler should search (General, BSIT, BSED,
+            | BSHM, BSTM, BSCRIM). Criminalistics specializations (FB / LD /
+            | QD / FI) all collapse to BSCRIM; the scheduler picks whichever
+            | Criminalistics lab is free.
+            |
+            | required_room_type and required_room_group are still validated
+            | against their full allowed lists even when is_practicum is
+            | true — applyRoomGroupOverrides() forces the scheduler-relevant
+            | value server-side afterwards, so a disabled/tampered frontend
+            | field can't smuggle in a bad state.
+            |
+            */
+
+            'required_room_type' => [
+                'required',
+                Rule::in([
+                    'Lecture',
+                    'Laboratory',
+                    'None',
+                ]),
+            ],
+
+            'required_room_group' => [
+                'nullable',
+                Rule::in([
+                    'General',
+                    'BSIT',
+                    'BSED',
+                    'BSHM',
+                    'BSTM',
+                    'BSCRIM',
+                ]),
+                function ($attribute, $value, $fail) use ($request) {
+
+                    // Practicum/OJT and "None" subjects never get a room —
+                    // any value here gets nulled server-side regardless, so
+                    // there's nothing to enforce.
+                    if ($request->boolean('is_practicum')) {
+                        return;
+                    }
+
+                    $roomType = $request->input('required_room_type');
+
+                    if ($roomType === 'Laboratory') {
+                        if (blank($value)) {
+                            $fail('A required room group is required for Laboratory subjects.');
+                        } elseif ($value === 'General') {
+                            $fail('General is a Lecture-only room group. Laboratory subjects must select a specific program (BSIT, BSED, BSHM, BSTM, or BSCRIM).');
+                        }
+                    }
+
+                },
+            ],
+
+            'is_practicum' => [
+                'required',
+                'boolean',
+            ],
+
+            'allow_split_schedule' => [
+                'required',
+                'boolean',
+            ],
+
+            'prerequisite_id' => $subject
+                ? [
+                    'nullable',
+                    'exists:subjects,id',
+                    // A subject can't be its own prerequisite.
+                    Rule::notIn([$subject->id]),
+                ]
+                : [
+                    'nullable',
+                    'exists:subjects,id',
+                ],
+
+            'active' => [
+                'required',
+                'boolean',
+            ],
+
+        ];
+    }
+
+    /**
+     * Server-side source of truth for the required_room_type /
+     * required_room_group relationship — mirrors the frontend watchers but
+     * doesn't trust them, so a disabled/tampered field can't smuggle in a
+     * bad state:
+     *
+     *   - is_practicum forces required_room_type to "None".
+     *   - required_room_type = "None" forces required_room_group to NULL
+     *     (Practicum/OJT subjects never get a room).
+     *   - required_room_type = "Lecture" defaults required_room_group to
+     *     "General" when left blank (lecture rooms are standard
+     *     classrooms; "General" is never forced on subjects that already
+     *     specify a program).
+     *   - required_room_type = "Laboratory" is left as submitted — the
+     *     required_room_group validation rule already rejects blank or
+     *     "General" values for laboratory subjects, so nothing to fix up
+     *     here.
+     */
+    private function applyRoomGroupOverrides(array $validated): array
+    {
+        if ($validated['is_practicum']) {
+            $validated['required_room_type'] = 'None';
+        }
+
+        if ($validated['required_room_type'] === 'None') {
+            $validated['required_room_group'] = null;
+        } elseif (
+            $validated['required_room_type'] === 'Lecture'
+            && blank($validated['required_room_group'] ?? null)
+        ) {
+            $validated['required_room_group'] = 'General';
+        }
+
+        return $validated;
     }
 }
