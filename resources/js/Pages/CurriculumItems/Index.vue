@@ -15,7 +15,7 @@ const YEAR_LABELS = {
     2: '2nd Year',
     3: '3rd Year',
     4: '4th Year',
-    5: '5th Year',
+    
 }
 
 const SEMESTER_LABELS = {
@@ -37,21 +37,22 @@ function curriculumLabel(curriculum) {
 }
 
 // Falls back to computing these client-side in case the backend
-// resource hasn't appended display_title / display_code.
+// resource hasn't appended display_title / display_code. Subject and
+// Practicum/OJT items both carry a subject_id now, so both resolve
+// through the linked subject; `title` is kept only as a fallback for
+// any legacy free-text OJT rows.
 function displayTitle(item) {
     if (item.display_title !== undefined) return item.display_title
-    return item.item_type === 'Subject' ? item.subject?.descriptive_title : item.title
+    return item.subject?.descriptive_title ?? item.title
 }
 
 function displayCode(item) {
     if (item.display_code !== undefined) return item.display_code
-    return item.item_type === 'Subject' ? item.subject?.subject_code : null
+    return item.subject?.subject_code ?? null
 }
 
 function itemLabel(item) {
-    return item.item_type === 'Subject'
-        ? item.subject?.subject_code
-        : item.title
+    return item.subject?.subject_code ?? item.title
 }
 
 function destroyCurriculumItem(item) {
@@ -82,7 +83,7 @@ function destroyCurriculumItem(item) {
             </h1>
 
             <p class="text-gray-500 mt-1">
-                Every Subject and OJT item across all curriculums.
+                Every Subject and Practicum/OJT item across all curriculums.
             </p>
 
         </div>
@@ -172,7 +173,7 @@ function destroyCurriculumItem(item) {
                             v-else
                             class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs"
                         >
-                            OJT
+                            Practicum / OJT
                         </span>
 
                     </td>

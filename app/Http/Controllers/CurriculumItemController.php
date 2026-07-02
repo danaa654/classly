@@ -40,7 +40,7 @@ class CurriculumItemController extends Controller implements HasMiddleware
 
     /**
      * Display a global listing of every curriculum item — Subject and
-     * OJT alike — across all curriculums.
+     * Practicum/OJT alike — across all curriculums.
      */
     public function index()
     {
@@ -75,18 +75,33 @@ class CurriculumItemController extends Controller implements HasMiddleware
                 ->orderBy('code')
                 ->get(),
 
+            // Subject mode — the checklist should never offer a Practicum
+            // subject, so it's excluded at the query level, not just
+            // filtered client-side.
             'subjects' => Subject::where('active', true)
+                ->where('is_practicum', false)
+                ->orderBy('subject_code')
+                ->get(),
+
+            // Practicum/OJT mode — the inverse query. A subject can only
+            // ever land in one of these two props, never both.
+            'practicumSubjects' => Subject::where('active', true)
+                ->where('is_practicum', true)
                 ->orderBy('subject_code')
                 ->get(),
 
             'selectedCurriculumId' => $selectedCurriculumId,
 
-            // Lets the Subject dropdown gray out subjects already sitting
-            // in this curriculum, instead of letting the user pick one
-            // and only finding out after submitting.
+            // Lets the Subject checklist and Practicum Subject dropdown
+            // gray out / exclude subjects already sitting in this
+            // curriculum, instead of letting the user pick one and only
+            // finding out after submitting. Not scoped to item_type —
+            // Practicum/OJT items carry a subject_id now too, and the
+            // underlying DB unique index (curriculum_id, subject_id)
+            // isn't scoped by type either.
             'assignedSubjectIds' => $selectedCurriculumId
-                ? CurriculumItem::subjects()
-                    ->where('curriculum_id', $selectedCurriculumId)
+                ? CurriculumItem::where('curriculum_id', $selectedCurriculumId)
+                    ->whereNotNull('subject_id')
                     ->pluck('subject_id')
                 : [],
 
@@ -98,9 +113,9 @@ class CurriculumItemController extends Controller implements HasMiddleware
      *
      * Subject items are bulk-creatable — the Create form lets the user
      * check off several subjects at once and places all of them into
-     * the same year_level/semester in one submit. OJT items are always
-     * singular (each has its own title), so that branch just creates
-     * one row.
+     * the same year_level/semester in one submit. Practicum/OJT items
+     * are always singular (each is tied to one Practicum subject), so
+     * that branch just creates one row.
      *
      * The Form Request's conditional rules do the type-specific shape
      * validation; the CurriculumItem model's saving() hook nulls out
@@ -125,8 +140,12 @@ class CurriculumItemController extends Controller implements HasMiddleware
      */
     private function storeSubjects(array $validated)
     {
-        $alreadyAssigned = CurriculumItem::subjects()
-            ->where('curriculum_id', $validated['curriculum_id'])
+        // Not scoped to Subject-type rows — a subject already attached as
+        // a Practicum/OJT item is just as unavailable here, since the DB's
+        // (curriculum_id, subject_id) unique index doesn't care about
+        // item_type either.
+        $alreadyAssigned = CurriculumItem::where('curriculum_id', $validated['curriculum_id'])
+            ->whereNotNull('subject_id')
             ->pluck('subject_id')
             ->all();
 
@@ -177,7 +196,10 @@ class CurriculumItemController extends Controller implements HasMiddleware
     }
 
     /**
-     * Create a single OJT item.
+     * Create a single Practicum/OJT item. The item is tied to a Practicum
+     * entry in the Subjects master list (subject_id) rather than a
+     * free-text title — Hours stays a manually-entered field since it
+     * varies by program even for the same practicum subject.
      */
     private function storeOjt(array $validated)
     {
@@ -189,7 +211,7 @@ class CurriculumItemController extends Controller implements HasMiddleware
         CurriculumItem::create([
             'curriculum_id' => $validated['curriculum_id'],
             'item_type' => CurriculumItem::TYPE_OJT,
-            'title' => $validated['title'],
+            'subject_id' => $validated['subject_id'],
             'ojt_hours' => $validated['ojt_hours'],
             'year_level' => $validated['year_level'],
             'semester' => $validated['semester'],
@@ -199,7 +221,7 @@ class CurriculumItemController extends Controller implements HasMiddleware
 
         return redirect()
             ->route('curriculums.items.manage', $validated['curriculum_id'])
-            ->with('success', 'OJT item added to curriculum successfully.');
+            ->with('success', 'Practicum/OJT item added to curriculum successfully.');
     }
 
     /**
@@ -217,15 +239,26 @@ class CurriculumItemController extends Controller implements HasMiddleware
                 ->orderBy('code')
                 ->get(),
 
+            // Subject mode / Practicum-OJT mode — split at the query
+            // level (not client-side) so a Practicum subject can never
+            // appear in the normal Subject dropdown, or vice versa.
             'subjects' => Subject::where('active', true)
+                ->where('is_practicum', false)
+                ->orderBy('subject_code')
+                ->get(),
+
+            'practicumSubjects' => Subject::where('active', true)
+                ->where('is_practicum', true)
                 ->orderBy('subject_code')
                 ->get(),
 
             // Subjects already used elsewhere in this curriculum (excluding
-            // this item itself), so the dropdown can gray them out.
-            'assignedSubjectIds' => CurriculumItem::subjects()
-                ->where('curriculum_id', $curriculumItem->curriculum_id)
+            // this item itself), so the Subject / Practicum Subject
+            // dropdowns can gray/exclude them. Not scoped to item_type —
+            // see the note in create() above.
+            'assignedSubjectIds' => CurriculumItem::where('curriculum_id', $curriculumItem->curriculum_id)
                 ->where('id', '!=', $curriculumItem->id)
+                ->whereNotNull('subject_id')
                 ->pluck('subject_id'),
 
         ]);
@@ -264,7 +297,7 @@ class CurriculumItemController extends Controller implements HasMiddleware
     /**
      * Manage Items — curriculum-scoped prospectus view.
      *
-     * Shows every item (Subject and OJT) assigned to a single curriculum,
+     * Shows every item (Subject and Practicum/OJT) assigned to a single curriculum,
      * grouped by year level and semester. This is the primary workspace
      * for assigning, re-placing, and removing items from a curriculum.
      */

@@ -43,33 +43,32 @@ class UpdateCurriculumItemRequest extends FormRequest
 
             /*
             |--------------------------------------------------------------------------
-            | Subject fields (item_type = Subject only)
+            | Subject fields (Subject and Practicum/OJT items both use this)
             |--------------------------------------------------------------------------
+            |
+            | Practicum/OJT items now reference a Practicum entry in the
+            | Subjects master list here too, instead of a free-text title —
+            | so this rule applies for both item types. The uniqueness
+            | check mirrors the DB's (curriculum_id, subject_id) unique
+            | index, which isn't scoped by item_type, so neither is this.
+            |
             */
 
             'subject_id' => [
-                Rule::requiredIf($isSubject),
+                Rule::requiredIf($isSubject || $isOjt),
                 'nullable',
                 'exists:subjects,id',
                 Rule::unique('curriculum_items', 'subject_id')
                     ->where(fn ($query) => $query
-                        ->where('curriculum_id', $this->input('curriculum_id'))
-                        ->where('item_type', CurriculumItem::TYPE_SUBJECT))
+                        ->where('curriculum_id', $this->input('curriculum_id')))
                     ->ignore($currentItem),
             ],
 
             /*
             |--------------------------------------------------------------------------
-            | OJT fields (item_type = OJT only)
+            | Practicum / OJT fields (item_type = OJT only)
             |--------------------------------------------------------------------------
             */
-
-            'title' => [
-                Rule::requiredIf($isOjt),
-                'nullable',
-                'string',
-                'max:255',
-            ],
 
             'ojt_hours' => [
                 Rule::requiredIf($isOjt),
@@ -89,7 +88,7 @@ class UpdateCurriculumItemRequest extends FormRequest
                 'required',
                 'integer',
                 'min:1',
-                'max:5',
+                'max:4',
             ],
 
             'semester' => [
@@ -121,8 +120,7 @@ class UpdateCurriculumItemRequest extends FormRequest
         return [
             'subject_id.required' => 'Select a subject.',
             'subject_id.unique' => 'That subject is already assigned to this curriculum.',
-            'title.required' => 'Enter a title for this OJT item.',
-            'ojt_hours.required' => 'Enter the number of OJT hours.',
+            'ojt_hours.required' => 'Enter the number of practicum hours.',
         ];
     }
 }

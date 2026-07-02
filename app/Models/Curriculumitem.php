@@ -30,7 +30,7 @@ class CurriculumItem extends Model
 
     public const ITEM_TYPE_LABELS = [
         self::TYPE_SUBJECT => 'Subject',
-        self::TYPE_OJT => 'Internship / OJT',
+        self::TYPE_OJT => 'Practicum / OJT',
     ];
 
     /*
@@ -82,16 +82,20 @@ class CurriculumItem extends Model
     | etc.), the fields that don't belong to its item_type are force-nulled
     | here so the two types can never bleed into each other in the DB.
     |
+    | Practicum/OJT items now reuse subject_id (pointing at a Practicum
+    | entry in the Subjects master list) instead of a free-text title —
+    | so subject_id stays populated for both types, and the legacy
+    | free-text `title` column is nulled for both.
+    |
     */
 
     protected static function booted(): void
     {
         static::saving(function (CurriculumItem $item) {
+            $item->title = null;
+
             if ($item->item_type === self::TYPE_SUBJECT) {
-                $item->title = null;
                 $item->ojt_hours = null;
-            } else {
-                $item->subject_id = null;
             }
         });
     }
@@ -171,21 +175,20 @@ class CurriculumItem extends Model
     }
 
     // What the Index/Manage tables show in the "Title" column, regardless
-    // of item type — the subject's descriptive title for Subject items,
-    // or the free-text title for OJT items.
+    // of item type — both Subject and Practicum/OJT items resolve to the
+    // linked subject's descriptive title now. `title` is kept only as a
+    // fallback for any legacy free-text OJT rows saved before Practicum/
+    // OJT items were tied to the Subjects master list.
     public function getDisplayTitleAttribute(): ?string
     {
-        return $this->isSubject()
-            ? $this->subject?->descriptive_title
-            : $this->title;
+        return $this->subject?->descriptive_title ?? $this->title;
     }
 
     // What the Index/Manage tables show in the "Subject Code" column —
-    // only ever populated for Subject items.
+    // populated for both item types now that Practicum/OJT items also
+    // carry a subject_id.
     public function getDisplayCodeAttribute(): ?string
     {
-        return $this->isSubject()
-            ? $this->subject?->subject_code
-            : null;
+        return $this->subject?->subject_code;
     }
 }

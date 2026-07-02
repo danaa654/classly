@@ -17,7 +17,7 @@ const YEAR_LABELS = {
     2: 'Second Year',
     3: 'Third Year',
     4: 'Fourth Year',
-    5: 'Fifth Year',
+    
 }
 
 const SEMESTER_LABELS = {
@@ -34,20 +34,21 @@ function semesterLabel(semester) {
     return SEMESTER_LABELS[semester] ?? '—'
 }
 
+// Subject and Practicum/OJT items both carry a subject_id now, so both
+// resolve through the linked subject; `title` is kept only as a
+// fallback for any legacy free-text OJT rows.
 function displayTitle(item) {
     if (item.display_title !== undefined) return item.display_title
-    return item.item_type === 'Subject' ? item.subject?.descriptive_title : item.title
+    return item.subject?.descriptive_title ?? item.title
 }
 
 function displayCode(item) {
     if (item.display_code !== undefined) return item.display_code
-    return item.item_type === 'Subject' ? item.subject?.subject_code : null
+    return item.subject?.subject_code ?? null
 }
 
 function itemLabel(item) {
-    return item.item_type === 'Subject'
-        ? item.subject?.subject_code
-        : item.title
+    return item.subject?.subject_code ?? item.title
 }
 
 /*
@@ -199,7 +200,7 @@ function removeItem(item) {
                     <span class="text-sm text-gray-500 space-x-3">
                         <span>{{ totalUnits(grouped[year][semester]) }} units</span>
                         <span v-if="totalOjtHours(grouped[year][semester]) > 0">
-                            {{ totalOjtHours(grouped[year][semester]) }} OJT hours
+                            {{ totalOjtHours(grouped[year][semester]) }} Practicum hours
                         </span>
                     </span>
 
@@ -260,7 +261,7 @@ function removeItem(item) {
                                     v-else
                                     class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs"
                                 >
-                                    OJT
+                                    Practicum / OJT
                                 </span>
 
                             </td>

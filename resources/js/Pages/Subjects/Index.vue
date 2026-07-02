@@ -1,14 +1,100 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
+import { reactive, watch } from 'vue'
 
 defineOptions({
     layout: DashboardLayout,
 })
 
 const props = defineProps({
-    subjects: Array,
+    subjects: Object,
+    filters: Object,
 })
+
+/*
+|--------------------------------------------------------------------------
+| Filter State
+|--------------------------------------------------------------------------
+|
+| Seeded from the `filters` prop the controller echoes back, so a page
+| refresh (or a bookmarked/shared URL) restores the exact same filtered
+| view instead of resetting to "all subjects".
+|
+*/
+
+const form = reactive({
+    search: props.filters.search ?? '',
+    room_type: props.filters.room_type ?? '',
+    classification: props.filters.classification ?? '',
+    room_group: props.filters.room_group ?? '',
+    status: props.filters.status ?? '',
+})
+
+/*
+|--------------------------------------------------------------------------
+| Push filter state to the server
+|--------------------------------------------------------------------------
+|
+| - preserveState keeps local component state (and scroll target) intact
+|   between requests instead of re-mounting the page.
+| - preserveScroll stops Inertia from jumping back to the top on every
+|   keystroke/selection.
+| - replace avoids stacking a new browser history entry per keystroke,
+|   while still keeping the final query string in the URL (bookmarkable).
+| - Empty values are stripped so the URL stays clean (?search=IT instead
+|   of ?search=IT&room_type=&classification=&...).
+|
+*/
+
+function applyFilters(options = {}) {
+    const query = {}
+
+    for (const key in form) {
+        if (form[key] !== '' && form[key] !== null) {
+            query[key] = form[key]
+        }
+    }
+
+    router.get(route('subjects.index'), query, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+        only: ['subjects', 'filters'],
+        ...options,
+    })
+}
+
+/*
+|--------------------------------------------------------------------------
+| Debounced Search
+|--------------------------------------------------------------------------
+|
+| Dropdown filters apply immediately (see their @change handlers below);
+| only the free-text search is debounced, since it fires on every
+| keystroke and would otherwise flood the server with requests.
+|
+*/
+
+let searchTimeout = null
+
+watch(() => form.search, () => {
+    clearTimeout(searchTimeout)
+
+    searchTimeout = setTimeout(() => {
+        applyFilters()
+    }, 350)
+})
+
+function resetFilters() {
+    form.search = ''
+    form.room_type = ''
+    form.classification = ''
+    form.room_group = ''
+    form.status = ''
+
+    applyFilters()
+}
 
 function destroySubject(subject) {
     if (!confirm(`Delete ${subject.subject_code} - ${subject.descriptive_title}? This cannot be undone.`)) {
@@ -49,6 +135,88 @@ function destroySubject(subject) {
         >
             + New Subject
         </Link>
+
+    </div>
+
+    <!-- Search & Filters -->
+
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+
+        <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+
+            <!-- Search -->
+
+            <input
+                v-model="form.search"
+                type="text"
+                placeholder="Search by subject code or title..."
+                class="w-full lg:flex-1 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+
+            <!-- Room Type -->
+
+            <select
+                v-model="form.room_type"
+                @change="applyFilters()"
+                class="w-full lg:w-44 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+                <option value="">All Room Types</option>
+                <option value="Lecture">Lecture</option>
+                <option value="Laboratory">Laboratory</option>
+                <option value="Practicum">Practicum/OJT</option>
+            </select>
+
+            <!-- Classification -->
+
+            <select
+                v-model="form.classification"
+                @change="applyFilters()"
+                class="w-full lg:w-40 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+                <option value="">All Classifications</option>
+                <option value="Major">Major</option>
+                <option value="Minor">Minor</option>
+            </select>
+
+            <!-- Room Group -->
+
+            <select
+                v-model="form.room_group"
+                @change="applyFilters()"
+                class="w-full lg:w-40 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+                <option value="">All Room Groups</option>
+                <option value="General">General</option>
+                <option value="BSIT">BSIT</option>
+                <option value="BSED">BSED</option>
+                <option value="BSHM">BSHM</option>
+                <option value="BSTM">BSTM</option>
+                <option value="BSCRIM">BSCRIM</option>
+            </select>
+
+            <!-- Status -->
+
+            <select
+                v-model="form.status"
+                @change="applyFilters()"
+                class="w-full lg:w-36 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+                <option value="">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+            </select>
+
+            <!-- Reset -->
+
+            <button
+                @click="resetFilters"
+                type="button"
+                class="w-full lg:w-auto px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+            >
+                Reset Filters
+            </button>
+
+        </div>
 
     </div>
 
@@ -109,7 +277,7 @@ function destroySubject(subject) {
             <tbody>
 
                 <tr
-                    v-for="subject in subjects"
+                    v-for="subject in subjects.data"
                     :key="subject.id"
                     class="border-t hover:bg-gray-50"
                 >
@@ -198,7 +366,7 @@ function destroySubject(subject) {
 
                 </tr>
 
-                <tr v-if="subjects.length === 0">
+                <tr v-if="subjects.data.length === 0">
 
                     <td
                         colspan="10"
@@ -212,6 +380,45 @@ function destroySubject(subject) {
             </tbody>
 
         </table>
+
+        <!-- Pagination -->
+
+        <div
+            v-if="subjects.links.length > 3"
+            class="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3"
+        >
+
+            <p class="text-sm text-gray-500">
+                Showing {{ subjects.from ?? 0 }}–{{ subjects.to ?? 0 }} of {{ subjects.total }} subjects
+            </p>
+
+            <div class="flex flex-wrap gap-1">
+
+                <template v-for="(link, index) in subjects.links" :key="index">
+
+                    <Link
+                        v-if="link.url"
+                        :href="link.url"
+                        preserve-state
+                        preserve-scroll
+                        class="px-3 py-1.5 text-sm rounded-lg border"
+                        :class="link.active
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'"
+                        v-html="link.label"
+                    />
+
+                    <span
+                        v-else
+                        class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 text-gray-300 cursor-not-allowed"
+                        v-html="link.label"
+                    />
+
+                </template>
+
+            </div>
+
+        </div>
 
     </div>
 

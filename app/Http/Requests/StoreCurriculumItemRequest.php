@@ -65,15 +65,26 @@ class StoreCurriculumItemRequest extends FormRequest
 
             /*
             |--------------------------------------------------------------------------
-            | OJT fields (item_type = OJT only)
+            | Practicum / OJT fields (item_type = OJT only)
             |--------------------------------------------------------------------------
+            |
+            | Practicum/OJT items reuse the Subjects master list instead of
+            | a free-text title — the Registrar picks from Subjects flagged
+            | is_practicum = true (scoped to the curriculum's program on
+            | the frontend). The uniqueness check mirrors the DB's
+            | (curriculum_id, subject_id) constraint, which doesn't care
+            | about item_type, so it's checked the same way regardless of
+            | which type this subject is being attached as.
+            |
             */
 
-            'title' => [
+            'subject_id' => [
                 Rule::requiredIf($isOjt),
                 'nullable',
-                'string',
-                'max:255',
+                'exists:subjects,id',
+                Rule::unique('curriculum_items', 'subject_id')
+                    ->where(fn ($query) => $query
+                        ->where('curriculum_id', $this->input('curriculum_id'))),
             ],
 
             'ojt_hours' => [
@@ -94,7 +105,7 @@ class StoreCurriculumItemRequest extends FormRequest
                 'required',
                 'integer',
                 'min:1',
-                'max:5',
+                'max:4',
             ],
 
             'semester' => [
@@ -126,8 +137,9 @@ class StoreCurriculumItemRequest extends FormRequest
         return [
             'subject_ids.required' => 'Select at least one subject.',
             'subject_ids.min' => 'Select at least one subject.',
-            'title.required' => 'Enter a title for this OJT item.',
-            'ojt_hours.required' => 'Enter the number of OJT hours.',
+            'subject_id.required' => 'Select a practicum subject.',
+            'subject_id.unique' => 'That subject is already assigned to this curriculum.',
+            'ojt_hours.required' => 'Enter the number of practicum hours.',
         ];
     }
 }

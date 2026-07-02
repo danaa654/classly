@@ -11,6 +11,7 @@ const props = defineProps({
     curriculumItem: Object,
     curricula: Array,
     subjects: Array,
+    practicumSubjects: Array,
     assignedSubjectIds: Array,
 })
 
@@ -18,7 +19,6 @@ const form = useForm({
     curriculum_id: props.curriculumItem.curriculum_id,
     item_type: props.curriculumItem.item_type,
     subject_id: props.curriculumItem.subject_id ?? '',
-    title: props.curriculumItem.title ?? '',
     ojt_hours: props.curriculumItem.ojt_hours ?? '',
     year_level: props.curriculumItem.year_level,
     semester: props.curriculumItem.semester,
@@ -31,16 +31,55 @@ const isOjt = computed(() => form.item_type === 'OJT')
 
 // Only clear fields when the type is actually changed away from what
 // was originally loaded — otherwise this would wipe out the existing
-// subject_id / title+hours the moment the form mounts.
+// subject_id / hours the moment the form mounts.
 watch(() => form.item_type, (newType, oldType) => {
     if (newType === oldType) return
 
     form.subject_id = ''
-    form.title = ''
     form.ojt_hours = ''
+
+    // 5th Year isn't a valid placement for Practicum/OJT items — see the
+    // Year Level select below.
+    if (form.item_type === 'OJT' && form.year_level === 5) {
+        form.year_level = 4
+    }
 })
 
 const assignedSet = computed(() => new Set(props.assignedSubjectIds ?? []))
+
+/*
+|--------------------------------------------------------------------------
+| Practicum / OJT — Practicum Subject Filtering
+|--------------------------------------------------------------------------
+|
+| The `practicumSubjects` prop is already scoped to is_practicum = true
+| at the controller level, so the only filtering left to do here is
+| program-matching (same rule as the Create page) plus excluding
+| subjects already assigned elsewhere in this curriculum.
+|
+*/
+
+const selectedCurriculum = computed(() => {
+    return props.curricula.find((curriculum) => curriculum.id === form.curriculum_id) ?? null
+})
+
+const curriculumProgramCode = computed(() => {
+    return selectedCurriculum.value?.program?.code ?? null
+})
+
+const filteredPracticumSubjects = computed(() => {
+    return props.practicumSubjects.filter((subject) => {
+        if (subject.required_room_group !== curriculumProgramCode.value) return false
+
+        // Keep this item's own current practicum subject selectable even
+        // though it's technically "assigned" (to this very item).
+        return !assignedSet.value.has(subject.id) || subject.id === form.subject_id
+    })
+})
+
+const selectedPracticumSubject = computed(() => {
+    return filteredPracticumSubjects.value.find((subject) => subject.id === form.subject_id) ?? null
+})
 
 const backHref = computed(() => {
     return route('curriculums.items.manage', form.curriculum_id)
@@ -110,7 +149,7 @@ function submit() {
                 class="w-full border-gray-300 rounded-lg md:w-1/3"
             >
                 <option value="Subject">Subject</option>
-                <option value="OJT">Internship / OJT</option>
+                <option value="OJT">Practicum / OJT</option>
             </select>
 
             <p v-if="form.errors.item_type" class="text-red-600 text-sm mt-1">
@@ -162,7 +201,8 @@ function submit() {
                     <option :value="2">2nd Year</option>
                     <option :value="3">3rd Year</option>
                     <option :value="4">4th Year</option>
-                    <option :value="5">5th Year</option>
+                    <!-- Practicum/OJT never runs in a 5th year — see Goal 6. -->
+                    
                 </select>
 
                 <p v-if="form.errors.year_level" class="text-red-600 text-sm mt-1">
@@ -225,47 +265,80 @@ function submit() {
 
         </div>
 
-        <!-- OJT Fields -->
+        <!-- Practicum / OJT Fields -->
 
-        <div v-else-if="isOjt" class="grid grid-cols-2 gap-4">
+        <div v-else-if="isOjt">
 
-            <div>
+            <div class="grid grid-cols-2 gap-4">
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Title
-                </label>
+                <div>
 
-                <input
-                    v-model="form.title"
-                    type="text"
-                    placeholder="e.g. On-the-Job Training"
-                    class="w-full border-gray-300 rounded-lg"
-                />
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Practicum Subject
+                    </label>
 
-                <p v-if="form.errors.title" class="text-red-600 text-sm mt-1">
-                    {{ form.errors.title }}
-                </p>
+                    <select
+                        v-model="form.subject_id"
+                        class="w-full border-gray-300 rounded-lg"
+                    >
+                        <option value="" disabled>Select practicum subject</option>
+
+                        <option
+                            v-for="subject in filteredPracticumSubjects"
+                            :key="subject.id"
+                            :value="subject.id"
+                        >
+                            {{ subjectLabel(subject) }}
+                        </option>
+                    </select>
+
+                    <p
+                        v-if="filteredPracticumSubjects.length === 0"
+                        class="text-gray-400 text-xs mt-1"
+                    >
+                        No practicum subjects are set up yet for this curriculum's program.
+                    </p>
+
+                    <p v-if="form.errors.subject_id" class="text-red-600 text-sm mt-1">
+                        {{ form.errors.subject_id }}
+                    </p>
+
+                </div>
+
+                <div>
+
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Hours
+                    </label>
+
+                    <input
+                        v-model.number="form.ojt_hours"
+                        type="number"
+                        min="1"
+                        placeholder="e.g. 486"
+                        class="w-full border-gray-300 rounded-lg"
+                    />
+
+                    <p v-if="form.errors.ojt_hours" class="text-red-600 text-sm mt-1">
+                        {{ form.errors.ojt_hours }}
+                    </p>
+
+                </div>
 
             </div>
 
-            <div>
+            <!-- Auto-filled Subject Code / Title (Goal 4) -->
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Hours
-                </label>
-
-                <input
-                    v-model.number="form.ojt_hours"
-                    type="number"
-                    min="1"
-                    placeholder="e.g. 486"
-                    class="w-full border-gray-300 rounded-lg"
-                />
-
-                <p v-if="form.errors.ojt_hours" class="text-red-600 text-sm mt-1">
-                    {{ form.errors.ojt_hours }}
-                </p>
-
+            <div
+                v-if="selectedPracticumSubject"
+                class="mt-4 flex justify-between items-center rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm"
+            >
+                <span class="font-semibold text-gray-700">
+                    {{ selectedPracticumSubject.subject_code }}
+                </span>
+                <span class="text-gray-500">
+                    {{ selectedPracticumSubject.descriptive_title }}
+                </span>
             </div>
 
         </div>
@@ -313,7 +386,8 @@ function submit() {
 
             <button
                 type="submit"
-                :disabled="form.processing"
+                :disabled="form.processing
+                    || (isOjt && (!form.subject_id || !form.ojt_hours || form.ojt_hours < 1))"
                 class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg disabled:opacity-50"
             >
                 Update Item

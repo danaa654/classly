@@ -40,15 +40,109 @@ class SubjectController extends Controller implements HasMiddleware
     }
 
     /**
-     * Display all subjects.
+     * Display all subjects — filtered, searched, and paginated
+     * server-side.
+     *
+     * Query string params (all optional):
+     *   - search:         matches subject_code OR descriptive_title
+     *                      (case-insensitive, partial match)
+     *   - room_type:      Lecture | Laboratory | Practicum
+     *   - classification: Major | Minor
+     *   - room_group:     General | BSIT | BSED | BSHM | BSTM | BSCRIM
+     *   - status:         Active | Inactive
+     *   - page:           handled automatically by paginate()
      */
-    public function index()
+    public function index(Request $request)
     {
+        $filters = $request->only([
+            'search',
+            'room_type',
+            'classification',
+            'room_group',
+            'status',
+        ]);
+
+        $subjects = Subject::query()
+            ->with('prerequisite')
+
+            /*
+            |--------------------------------------------------------------------------
+            | Search — Subject Code / Descriptive Title
+            |--------------------------------------------------------------------------
+            |
+            | LOWER() on both sides keeps this case-insensitive regardless
+            | of the database's default collation.
+            |
+            */
+            ->when($filters['search'] ?? null, function ($query, $search) {
+                $term = '%' . strtolower($search) . '%';
+
+                $query->where(function ($query) use ($term) {
+                    $query->whereRaw('LOWER(subject_code) LIKE ?', [$term])
+                        ->orWhereRaw('LOWER(descriptive_title) LIKE ?', [$term]);
+                });
+            })
+
+            /*
+            |--------------------------------------------------------------------------
+            | Room Type Filter
+            |--------------------------------------------------------------------------
+            |
+            | "Practicum/OJT" is not a required_room_type value — it's
+            | driven by the is_practicum flag — so it's handled as its own
+            | branch rather than a plain column match.
+            |
+            */
+            ->when($filters['room_type'] ?? null, function ($query, $roomType) {
+                if ($roomType === 'Practicum') {
+                    $query->where('is_practicum', true);
+                } elseif (in_array($roomType, ['Lecture', 'Laboratory'])) {
+                    $query->where('required_room_type', $roomType);
+                }
+            })
+
+            /*
+            |--------------------------------------------------------------------------
+            | Classification Filter (Major / Minor)
+            |--------------------------------------------------------------------------
+            */
+            ->when($filters['classification'] ?? null, function ($query, $classification) {
+                $query->where('is_major', $classification === 'Major');
+            })
+
+            /*
+            |--------------------------------------------------------------------------
+            | Room Group Filter
+            |--------------------------------------------------------------------------
+            */
+            ->when($filters['room_group'] ?? null, function ($query, $roomGroup) {
+                $query->where('required_room_group', $roomGroup);
+            })
+
+            /*
+            |--------------------------------------------------------------------------
+            | Status Filter (Active / Inactive)
+            |--------------------------------------------------------------------------
+            */
+            ->when($filters['status'] ?? null, function ($query, $status) {
+                $query->where('active', $status === 'Active');
+            })
+
+            ->orderBy('subject_code')
+            ->paginate(15)
+            ->withQueryString();
+
         return Inertia::render('Subjects/Index', [
 
-            'subjects' => Subject::with('prerequisite')
-                ->orderBy('subject_code')
-                ->get(),
+            'subjects' => $subjects,
+
+            'filters' => [
+                'search' => $filters['search'] ?? '',
+                'room_type' => $filters['room_type'] ?? '',
+                'classification' => $filters['classification'] ?? '',
+                'room_group' => $filters['room_group'] ?? '',
+                'status' => $filters['status'] ?? '',
+            ],
 
         ]);
     }

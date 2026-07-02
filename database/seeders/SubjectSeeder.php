@@ -272,11 +272,11 @@ class SubjectSeeder extends Seeder
             ['code' => 'FLT5', 'title' => 'In-flight Food and Beverage Services / Food Menu Theory',           'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Any',     'prereq' => null],
 
             // Zero-hour bridging courses for non-ABM (Accountancy/Business/Management) SHS graduates.
-            ['code' => 'NON-ABM1', 'title' => 'Business Marketing',              'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => false, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'NON-ABM2', 'title' => 'Organization and Management',     'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => false, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'NON-ABM3', 'title' => 'Fundamentals of Accounting',      'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => false, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'NON-ABM4', 'title' => 'Business Finance',                'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => false, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'NON-ABM5', 'title' => 'Applied Economics',               'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => false, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'NON-ABM1', 'title' => 'Business Marketing',              'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'NON-ABM2', 'title' => 'Organization and Management',     'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'NON-ABM3', 'title' => 'Fundamentals of Accounting',      'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'NON-ABM4', 'title' => 'Business Finance',                'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'NON-ABM5', 'title' => 'Applied Economics',               'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
 
             // BSTM's "RESEARCH" and BSHM's "RESEARCH" are the same subject; BSED uses "RES" and
             // BSCRIM uses "RESEARCH1"/"RESEARCH2" — different codes, so no collision.
@@ -358,8 +358,8 @@ class SubjectSeeder extends Seeder
             ['code' => 'HCI101', 'title' => 'Introduction to Human Computer Interaction',          'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'CC102'],
 
             // Bridging courses for non-ICT SHS graduates.
-            ['code' => 'NON-ICT1', 'title' => 'Introduction to Computer Systems Servicing',  'lec' => 2, 'lab' => 3, 'units' => 0, 'major' => false, 'room' => 'Computer Laboratory', 'prereq' => null],
-            ['code' => 'NON-ICT2', 'title' => 'Installing and Configuring Computer Systems', 'lec' => 2, 'lab' => 3, 'units' => 0, 'major' => false, 'room' => 'Computer Laboratory', 'prereq' => 'NON-ICT1'],
+            ['code' => 'NON-ICT1', 'title' => 'Introduction to Computer Systems Servicing',  'lec' => 2, 'lab' => 3, 'units' => 0, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => null],
+            ['code' => 'NON-ICT2', 'title' => 'Installing and Configuring Computer Systems', 'lec' => 2, 'lab' => 3, 'units' => 0, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'NON-ICT1'],
 
             ['code' => 'CC104', 'title' => 'Data Structures and Algorithms',        'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'CC103'],
             ['code' => 'CC105', 'title' => 'Information Management',                'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'CC103'],
