@@ -75,14 +75,27 @@ const classificationFilter = ref('All') // 'All' | 'Minor' | 'Major'
 | Goal 1 — Automatic Program Filtering
 |--------------------------------------------------------------------------
 |
-| A curriculum belongs to a Program (e.g. BSIT). The checklist should
-| only ever offer:
-|   - every Minor subject (General Education — shared across programs)
-|   - Major subjects whose required_room_group matches the curriculum's
-|     program code
+| A curriculum belongs to a Program (e.g. BSIT). Subjects now carry a
+| many-to-many set of applicable programs (room_group_codes — see
+| Subject::roomGroups() / Subject::getRoomGroupCodesAttribute()) instead
+| of a single required_room_group value, and that assignment is
+| independent of Classification (Major/Minor).
+|
+| The checklist should only ever offer a subject if it's applicable to
+| the curriculum's program at all:
+|   - it's tagged "General" (General Education — shared across every
+|     program), or
+|   - it's tagged with the curriculum's own program code specifically
+|     (a subject can carry several program tags at once, e.g. a shared
+|     BSHM + BSTM subject — it's included for either).
+|
+| This no longer special-cases Minor subjects the way the old
+| required_room_group logic did — a Minor subject that's only tagged to
+| one specific program (e.g. SP101 -> Minor -> BSIT) now correctly only
+| shows up for that program, not for every curriculum.
 |
 | The mapping is derived entirely from data already sent to this page
-| (curricula[].program.code and subjects[].required_room_group), so this
+| (curricula[].program.code and subjects[].room_group_codes), so this
 | runs instantly on the client with no extra request.
 |
 */
@@ -95,6 +108,15 @@ const curriculumProgramCode = computed(() => {
     return selectedCurriculum.value?.program?.code ?? null
 })
 
+// A subject is applicable to the curriculum's program if it's tagged
+// "General" (applies everywhere) or tagged with that program code
+// specifically — regardless of how many other programs it's also
+// tagged with, and regardless of Classification.
+function isApplicableToProgram(subject, programCode) {
+    const groups = subject.room_group_codes ?? []
+    return groups.includes('General') || groups.includes(programCode)
+}
+
 const availableSubjects = computed(() => {
     return props.subjects.filter((subject) => !assignedSet.value.has(subject.id))
 })
@@ -105,11 +127,7 @@ const programFilteredSubjects = computed(() => {
     }
 
     return availableSubjects.value.filter((subject) => {
-        // Minors are General Education — every curriculum can use them.
-        if (!subject.is_major) return true
-
-        // Majors are scoped to the curriculum's own program.
-        return subject.required_room_group === curriculumProgramCode.value
+        return isApplicableToProgram(subject, curriculumProgramCode.value)
     })
 })
 
@@ -134,9 +152,8 @@ watch(() => form.curriculum_id, () => {
 | The `practicumSubjects` prop is already scoped to is_practicum = true
 | at the controller level (a Practicum subject is never mixed into the
 | `subjects` prop used above), so the only filtering left to do here is
-| the same program-matching rule used for Major subjects: only offer
-| subjects whose required_room_group matches the curriculum's own
-| program code.
+| the same program-matching rule used above: only offer subjects tagged
+| "General" or tagged with the curriculum's own program code.
 |
 */
 
@@ -150,7 +167,7 @@ const filteredPracticumSubjects = computed(() => {
     }
 
     return availablePracticumSubjects.value.filter((subject) => {
-        return subject.required_room_group === curriculumProgramCode.value
+        return isApplicableToProgram(subject, curriculumProgramCode.value)
     })
 })
 

@@ -57,6 +57,11 @@ const assignedSet = computed(() => new Set(props.assignedSubjectIds ?? []))
 | program-matching (same rule as the Create page) plus excluding
 | subjects already assigned elsewhere in this curriculum.
 |
+| Subjects now carry a many-to-many set of applicable programs
+| (room_group_codes) instead of a single required_room_group value — a
+| subject is a match if it's tagged "General" or tagged with the
+| curriculum's own program code specifically.
+|
 */
 
 const selectedCurriculum = computed(() => {
@@ -67,9 +72,14 @@ const curriculumProgramCode = computed(() => {
     return selectedCurriculum.value?.program?.code ?? null
 })
 
+function isApplicableToProgram(subject, programCode) {
+    const groups = subject.room_group_codes ?? []
+    return groups.includes('General') || groups.includes(programCode)
+}
+
 const filteredPracticumSubjects = computed(() => {
     return props.practicumSubjects.filter((subject) => {
-        if (subject.required_room_group !== curriculumProgramCode.value) return false
+        if (!isApplicableToProgram(subject, curriculumProgramCode.value)) return false
 
         // Keep this item's own current practicum subject selectable even
         // though it's technically "assigned" (to this very item).

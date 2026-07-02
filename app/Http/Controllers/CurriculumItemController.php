@@ -77,15 +77,19 @@ class CurriculumItemController extends Controller implements HasMiddleware
 
             // Subject mode — the checklist should never offer a Practicum
             // subject, so it's excluded at the query level, not just
-            // filtered client-side.
-            'subjects' => Subject::where('active', true)
+            // filtered client-side. roomGroups is eager-loaded so each
+            // subject's room_group_codes accessor (used by the frontend's
+            // program filter) doesn't trigger an N+1 query per subject.
+            'subjects' => Subject::with('roomGroups')
+                ->where('active', true)
                 ->where('is_practicum', false)
                 ->orderBy('subject_code')
                 ->get(),
 
             // Practicum/OJT mode — the inverse query. A subject can only
             // ever land in one of these two props, never both.
-            'practicumSubjects' => Subject::where('active', true)
+            'practicumSubjects' => Subject::with('roomGroups')
+                ->where('active', true)
                 ->where('is_practicum', true)
                 ->orderBy('subject_code')
                 ->get(),
@@ -242,12 +246,16 @@ class CurriculumItemController extends Controller implements HasMiddleware
             // Subject mode / Practicum-OJT mode — split at the query
             // level (not client-side) so a Practicum subject can never
             // appear in the normal Subject dropdown, or vice versa.
-            'subjects' => Subject::where('active', true)
+            // roomGroups is eager-loaded for the same reason as in
+            // create() above.
+            'subjects' => Subject::with('roomGroups')
+                ->where('active', true)
                 ->where('is_practicum', false)
                 ->orderBy('subject_code')
                 ->get(),
 
-            'practicumSubjects' => Subject::where('active', true)
+            'practicumSubjects' => Subject::with('roomGroups')
+                ->where('active', true)
                 ->where('is_practicum', true)
                 ->orderBy('subject_code')
                 ->get(),

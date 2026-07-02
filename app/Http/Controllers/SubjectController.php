@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Subject;
+use App\Models\SubjectRoomGroup;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -49,6 +50,8 @@ class SubjectController extends Controller implements HasMiddleware
      *   - room_type:      Lecture | Laboratory | Practicum
      *   - classification: Major | Minor
      *   - room_group:     General | BSIT | BSED | BSHM | BSTM | BSCRIM
+     *                      (matches subjects that have this program among
+     *                      their one-or-more assigned programs)
      *   - status:         Active | Inactive
      *   - page:           handled automatically by paginate()
      */
@@ -63,7 +66,7 @@ class SubjectController extends Controller implements HasMiddleware
         ]);
 
         $subjects = Subject::query()
-            ->with('prerequisite')
+            ->with(['prerequisite', 'roomGroups'])
 
             /*
             |--------------------------------------------------------------------------
@@ -114,9 +117,17 @@ class SubjectController extends Controller implements HasMiddleware
             |--------------------------------------------------------------------------
             | Room Group Filter
             |--------------------------------------------------------------------------
+            |
+            | A subject now can carry several programs, so this is a
+            | whereHas against the room_group_subject pivot (via the
+            | forRoomGroup scope) instead of a plain column match — a
+            | subject shows up under a program filter if it's applicable
+            | to that program at all, regardless of what else it's
+            | assigned to.
+            |
             */
             ->when($filters['room_group'] ?? null, function ($query, $roomGroup) {
-                $query->where('required_room_group', $roomGroup);
+                $query->forRoomGroup($roomGroup);
             })
 
             /*
@@ -156,6 +167,8 @@ class SubjectController extends Controller implements HasMiddleware
 
             'subjects' => Subject::orderBy('subject_code')->get(),
 
+            'roomGroupOptions' => SubjectRoomGroup::GROUPS,
+
         ]);
     }
 
@@ -166,7 +179,17 @@ class SubjectController extends Controller implements HasMiddleware
     {
         $validated = $request->validate($this->rules($request));
 
-        $validated = $this->applyRoomGroupOverrides($validated);
+        $roomGroups = $validated['room_groups'] ?? [];
+        unset($validated['room_groups']);
+
+        $validated = $this->applyRoomTypeOverrides($validated);
+
+        // Practicum/OJT and "None" room-type subjects never get a room, so
+        // they never get a program assignment either, regardless of what
+        // was submitted.
+        if ($validated['is_practicum'] || $validated['required_room_type'] === 'None') {
+            $roomGroups = [];
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -188,10 +211,12 @@ class SubjectController extends Controller implements HasMiddleware
             $validated['subject_code']
         );
 
-        Subject::create($validated);
+        $subject = Subject::create($validated);
+
+        $this->syncRoomGroups($subject, $roomGroups);
 
         return redirect()
-            ->route('subjects.index')
+            ->route('subjects.index', $request->query())
             ->with('success', 'Subject created successfully.');
     }
 
@@ -200,6 +225,8 @@ class SubjectController extends Controller implements HasMiddleware
      */
     public function edit(Subject $subject)
     {
+        $subject->load('roomGroups');
+
         return Inertia::render('Subjects/Edit', [
 
             'subject' => $subject,
@@ -207,6 +234,8 @@ class SubjectController extends Controller implements HasMiddleware
             'subjects' => Subject::where('id', '!=', $subject->id)
                 ->orderBy('subject_code')
                 ->get(),
+
+            'roomGroupOptions' => SubjectRoomGroup::GROUPS,
 
         ]);
     }
@@ -218,7 +247,14 @@ class SubjectController extends Controller implements HasMiddleware
     {
         $validated = $request->validate($this->rules($request, $subject));
 
-        $validated = $this->applyRoomGroupOverrides($validated);
+        $roomGroups = $validated['room_groups'] ?? [];
+        unset($validated['room_groups']);
+
+        $validated = $this->applyRoomTypeOverrides($validated);
+
+        if ($validated['is_practicum'] || $validated['required_room_type'] === 'None') {
+            $roomGroups = [];
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -242,20 +278,28 @@ class SubjectController extends Controller implements HasMiddleware
 
         $subject->update($validated);
 
+        $this->syncRoomGroups($subject, $roomGroups);
+
+        // Edit.vue appends the filter query string it arrived with onto
+        // this PUT request's URL, so $request->query() reflects whatever
+        // search/filters were active on the index — passing it straight
+        // through here lands the redirect back on that same filtered view.
         return redirect()
-            ->route('subjects.index')
+            ->route('subjects.index', $request->query())
             ->with('success', 'Subject updated successfully.');
     }
 
     /**
      * Delete subject.
      */
-    public function destroy(Subject $subject)
+    public function destroy(Request $request, Subject $subject)
     {
         $subject->delete();
 
+        // Index.vue appends the current filter query string onto this
+        // DELETE request's URL for the same reason as update() above.
         return redirect()
-            ->route('subjects.index')
+            ->route('subjects.index', $request->query())
             ->with('success', 'Subject deleted successfully.');
     }
 
@@ -263,8 +307,8 @@ class SubjectController extends Controller implements HasMiddleware
      * Shared validation rules for store() and update().
      *
      * @param  \Illuminate\Http\Request  $request  The current request —
-     *         needed so the required_room_group rule can look at the
-     *         sibling required_room_type / is_practicum values.
+     *         needed so the room_groups rule can look at the sibling
+     *         required_room_type / is_practicum values.
      * @param  \App\Models\Subject|null  $subject  The subject being updated,
      *         null when creating (used for the unique/notIn ignore rules).
      */
@@ -311,6 +355,10 @@ class SubjectController extends Controller implements HasMiddleware
                 'max:10',
             ],
 
+            // Classification is purely descriptive now — it no longer
+            // drives any default for room_groups. Major and Minor subjects
+            // both support any combination of programs (see room_groups
+            // below), assigned independently of this value.
             'is_major' => [
                 'required',
                 'boolean',
@@ -318,26 +366,24 @@ class SubjectController extends Controller implements HasMiddleware
 
             /*
             |--------------------------------------------------------------------------
-            | Room Type / Room Group / Practicum
+            | Room Type / Room Groups (Programs) / Practicum
             |--------------------------------------------------------------------------
             |
             | required_room_type reflects PAP's actual room inventory
-            | (Lecture / Laboratory / None) and replaces the old, more
-            | granular required_room enum.
+            | (Lecture / Laboratory / None).
             |
-            | required_room_group replaces the old required_specialization
-            | field. It no longer names individual specializations (IT, HM,
-            | TM, ED, FB, LD, QD, FI) — it names the academic program whose
-            | laboratory the scheduler should search (General, BSIT, BSED,
-            | BSHM, BSTM, BSCRIM). Criminalistics specializations (FB / LD /
-            | QD / FI) all collapse to BSCRIM; the scheduler picks whichever
-            | Criminalistics lab is free.
+            | room_groups replaces the old single required_room_group field.
+            | It's a plain array of one-or-more programs (General, BSIT,
+            | BSED, BSHM, BSTM, BSCRIM) this subject is applicable to —
+            | Criminalistics specializations (FB / LD / QD / FI) still all
+            | collapse to BSCRIM upstream of this list; the scheduler picks
+            | whichever Criminalistics lab is free.
             |
-            | required_room_type and required_room_group are still validated
-            | against their full allowed lists even when is_practicum is
-            | true — applyRoomGroupOverrides() forces the scheduler-relevant
-            | value server-side afterwards, so a disabled/tampered frontend
-            | field can't smuggle in a bad state.
+            | required_room_type is still validated against its full
+            | allowed list even when is_practicum is true —
+            | applyRoomTypeOverrides() forces the scheduler-relevant value
+            | server-side afterwards, so a disabled/tampered frontend field
+            | can't smuggle in a bad state.
             |
             */
 
@@ -350,36 +396,43 @@ class SubjectController extends Controller implements HasMiddleware
                 ]),
             ],
 
-            'required_room_group' => [
-                'nullable',
-                Rule::in([
-                    'General',
-                    'BSIT',
-                    'BSED',
-                    'BSHM',
-                    'BSTM',
-                    'BSCRIM',
-                ]),
+            'room_groups' => [
+                'array',
+                // Cross-field business rule (needs is_practicum /
+                // required_room_type), kept on the same field as the
+                // 'array' rule so any failure surfaces under
+                // form.errors.room_groups on the frontend.
                 function ($attribute, $value, $fail) use ($request) {
 
                     // Practicum/OJT and "None" subjects never get a room —
-                    // any value here gets nulled server-side regardless, so
-                    // there's nothing to enforce.
+                    // any selection here gets cleared server-side
+                    // regardless, so there's nothing to enforce.
                     if ($request->boolean('is_practicum')) {
                         return;
                     }
 
                     $roomType = $request->input('required_room_type');
+                    $roomGroups = (array) $value;
 
-                    if ($roomType === 'Laboratory') {
-                        if (blank($value)) {
-                            $fail('A required room group is required for Laboratory subjects.');
-                        } elseif ($value === 'General') {
-                            $fail('General is a Lecture-only room group. Laboratory subjects must select a specific program (BSIT, BSED, BSHM, BSTM, or BSCRIM).');
-                        }
+                    if ($roomType === 'None') {
+                        return;
+                    }
+
+                    if (empty($roomGroups)) {
+                        $fail('At least one program must be selected.');
+
+                        return;
+                    }
+
+                    if ($roomType === 'Laboratory' && in_array('General', $roomGroups, true)) {
+                        $fail('General is a Lecture-only program. Laboratory subjects must select one or more specific programs (BSIT, BSED, BSHM, BSTM, or BSCRIM).');
                     }
 
                 },
+            ],
+
+            'room_groups.*' => [
+                Rule::in(SubjectRoomGroup::GROUPS),
             ],
 
             'is_practicum' => [
@@ -413,38 +466,47 @@ class SubjectController extends Controller implements HasMiddleware
     }
 
     /**
-     * Server-side source of truth for the required_room_type /
-     * required_room_group relationship — mirrors the frontend watchers but
-     * doesn't trust them, so a disabled/tampered field can't smuggle in a
-     * bad state:
+     * Server-side source of truth for is_practicum -> required_room_type —
+     * mirrors the frontend watcher but doesn't trust it, so a
+     * disabled/tampered field can't smuggle in a bad state:
      *
      *   - is_practicum forces required_room_type to "None".
-     *   - required_room_type = "None" forces required_room_group to NULL
-     *     (Practicum/OJT subjects never get a room).
-     *   - required_room_type = "Lecture" defaults required_room_group to
-     *     "General" when left blank (lecture rooms are standard
-     *     classrooms; "General" is never forced on subjects that already
-     *     specify a program).
-     *   - required_room_type = "Laboratory" is left as submitted — the
-     *     required_room_group validation rule already rejects blank or
-     *     "General" values for laboratory subjects, so nothing to fix up
-     *     here.
+     *
+     * Program assignment (room_groups) is handled separately in
+     * store()/update(), since it isn't a plain column on this table
+     * anymore.
      */
-    private function applyRoomGroupOverrides(array $validated): array
+    private function applyRoomTypeOverrides(array $validated): array
     {
         if ($validated['is_practicum']) {
             $validated['required_room_type'] = 'None';
         }
 
-        if ($validated['required_room_type'] === 'None') {
-            $validated['required_room_group'] = null;
-        } elseif (
-            $validated['required_room_type'] === 'Lecture'
-            && blank($validated['required_room_group'] ?? null)
-        ) {
-            $validated['required_room_group'] = 'General';
-        }
-
         return $validated;
+    }
+
+    /**
+     * Replace a subject's assigned programs with the given list. Used by
+     * both store() and update() so a subject's room_group_subject rows
+     * always exactly match what was submitted (order doesn't matter,
+     * duplicates are collapsed).
+     */
+    private function syncRoomGroups(Subject $subject, array $roomGroups): void
+    {
+        $subject->roomGroups()->delete();
+
+        $rows = collect($roomGroups)
+            ->unique()
+            ->map(fn ($roomGroup) => [
+                'subject_id' => $subject->id,
+                'room_group' => $roomGroup,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])
+            ->all();
+
+        if (! empty($rows)) {
+            SubjectRoomGroup::insert($rows);
+        }
     }
 }

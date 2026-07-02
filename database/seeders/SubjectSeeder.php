@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Subject;
+use App\Models\SubjectRoomGroup;
 use Illuminate\Database\Seeder;
 
 /**
@@ -120,7 +121,7 @@ class SubjectSeeder extends Seeder
         // Pass 1: create/update every subject (no prerequisite yet).
         // ---------------------------------------------------------------
         foreach ($subjects as $s) {
-            Subject::updateOrCreate(
+            $subject = Subject::updateOrCreate(
                 ['subject_code' => $s['code']],
                 [
                     'descriptive_title'    => $s['title'],
@@ -130,12 +131,22 @@ class SubjectSeeder extends Seeder
                     'total_hours'          => $s['lec'] + $s['lab'],
                     'is_major'             => $s['major'],
                     'required_room_type'   => $this->mapRoomType($s),
-                    'required_room_group'  => $s['group'],
                     'is_practicum'         => $this->isPracticum($s),
                     'allow_split_schedule' => ($s['lec'] >= 4 || $s['lab'] >= 4),
                     'active'               => true,
                 ]
             );
+
+            // required_room_group no longer lives on the subjects table —
+            // it moved to the room_group_subject pivot table
+            // (Subject::roomGroups()). $s['group'] is a single program
+            // string per row (set by tag()), so each subject gets exactly
+            // one pivot row here. updateOrCreate() keeps this safe to
+            // re-run without duplicate pivot rows.
+            SubjectRoomGroup::updateOrCreate([
+                'subject_id' => $subject->id,
+                'room_group' => $s['group'],
+            ]);
         }
 
         // ---------------------------------------------------------------

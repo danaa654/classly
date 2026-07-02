@@ -1,7 +1,7 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 
 defineOptions({
     layout: DashboardLayout,
@@ -20,6 +20,10 @@ const props = defineProps({
 | Seeded from the `filters` prop the controller echoes back, so a page
 | refresh (or a bookmarked/shared URL) restores the exact same filtered
 | view instead of resetting to "all subjects".
+|
+| room_group here still filters against a single program at a time — it
+| matches any subject that has that program among its (possibly several)
+| assigned programs, via the forRoomGroup scope server-side.
 |
 */
 
@@ -67,6 +71,38 @@ function applyFilters(options = {}) {
 
 /*
 |--------------------------------------------------------------------------
+| Filter Query String
+|--------------------------------------------------------------------------
+|
+| Same non-empty-value logic as applyFilters() above, serialized to a
+| "?search=NON-" style string. Appended to the Edit link and Delete
+| request below so the round trip back to this page (via the controller's
+| redirect) lands on the same filtered view instead of resetting.
+|
+| Built from `form` here rather than read from window.location directly
+| in the template — referencing the bare `window` global inside a
+| template expression isn't reliably resolved by Vue's compiler and can
+| throw ("Cannot read properties of undefined (reading 'location')").
+| Computing it here also keeps it reactive to filter changes.
+|
+*/
+
+const filterQueryString = computed(() => {
+    const query = {}
+
+    for (const key in form) {
+        if (form[key] !== '' && form[key] !== null) {
+            query[key] = form[key]
+        }
+    }
+
+    const params = new URLSearchParams(query).toString()
+
+    return params ? `?${params}` : ''
+})
+
+/*
+|--------------------------------------------------------------------------
 | Debounced Search
 |--------------------------------------------------------------------------
 |
@@ -101,7 +137,10 @@ function destroySubject(subject) {
         return
     }
 
-    router.delete(route('subjects.destroy', subject.id), {
+    // Carries the current search/filter query string along so the
+    // controller's post-delete redirect lands back on the same filtered
+    // view instead of resetting to "all subjects".
+    router.delete(route('subjects.destroy', subject.id) + filterQueryString.value, {
         preserveScroll: true,
     })
 }
@@ -178,14 +217,14 @@ function destroySubject(subject) {
                 <option value="Minor">Minor</option>
             </select>
 
-            <!-- Room Group -->
+            <!-- Program (Room Group) -->
 
             <select
                 v-model="form.room_group"
                 @change="applyFilters()"
                 class="w-full lg:w-40 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
             >
-                <option value="">All Room Groups</option>
+                <option value="">All Programs</option>
                 <option value="General">General</option>
                 <option value="BSIT">BSIT</option>
                 <option value="BSED">BSED</option>
@@ -254,8 +293,8 @@ function destroySubject(subject) {
                         Room Type
                     </th>
 
-                    <th class="px-4 py-3 text-center">
-                        Room Group
+                    <th class="px-4 py-3 text-left">
+                        Programs
                     </th>
 
                     <th class="px-4 py-3 text-center">
@@ -306,8 +345,31 @@ function destroySubject(subject) {
                         {{ subject.required_room_type }}
                     </td>
 
-                    <td class="px-4 py-3 text-center">
-                        {{ subject.required_room_group ?? '—' }}
+                    <!--
+                        A subject can now carry several programs
+                        (e.g. Business Marketing -> BSHM + BSTM), so this
+                        renders one badge per assigned program instead of a
+                        single value.
+                    -->
+                    <td class="px-4 py-3">
+
+                        <div
+                            v-if="subject.room_group_codes && subject.room_group_codes.length"
+                            class="flex flex-wrap gap-1"
+                        >
+                            <span
+                                v-for="group in subject.room_group_codes"
+                                :key="group"
+                                class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs whitespace-nowrap"
+                            >
+                                {{ group }}
+                            </span>
+                        </div>
+
+                        <span v-else class="text-gray-400 text-sm">
+                            —
+                        </span>
+
                     </td>
 
                     <td class="px-4 py-3 text-center">
@@ -349,7 +411,7 @@ function destroySubject(subject) {
                     <td class="px-4 py-3 text-center">
 
                         <Link
-                            :href="route('subjects.edit', subject.id)"
+                            :href="route('subjects.edit', subject.id) + filterQueryString"
                             class="text-blue-600 hover:underline mr-3"
                         >
                             Edit

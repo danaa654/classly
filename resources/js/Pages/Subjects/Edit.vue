@@ -10,6 +10,10 @@ defineOptions({
 const props = defineProps({
     subject: Object,
     subjects: Array,
+    roomGroupOptions: {
+        type: Array,
+        default: () => ['General', 'BSIT', 'BSED', 'BSHM', 'BSTM', 'BSCRIM'],
+    },
 })
 
 const form = useForm({
@@ -20,42 +24,61 @@ const form = useForm({
     laboratory_hours: props.subject.laboratory_hours,
     is_major: props.subject.is_major,
     required_room_type: props.subject.required_room_type,
-    required_room_group: props.subject.required_room_group,
+    // Seeded from the subject's current programs (room_group_codes is
+    // appended server-side from the room_group_subject pivot rows).
+    room_groups: [...(props.subject.room_group_codes ?? [])],
     is_practicum: props.subject.is_practicum,
     allow_split_schedule: props.subject.allow_split_schedule,
     prerequisite_id: props.subject.prerequisite_id ?? '',
     active: props.subject.active,
 })
 
+/*
+|--------------------------------------------------------------------------
+| Return Query
+|--------------------------------------------------------------------------
+|
+| The Subjects index link that brought us here carries the current
+| search/filter state as a query string (e.g. ?search=NON-). Captured
+| once on load and reused for every "back to the list" trip below —
+| the update submit, and the Cancel / Back links — so returning to the
+| index always lands back on the same filtered view instead of resetting.
+|
+*/
+
+const returnQuery = window.location.search
+
 const totalHours = computed(() => {
     return (Number(form.lecture_hours) || 0) + (Number(form.laboratory_hours) || 0)
 })
 
-// Room Group only makes sense when the subject actually needs a room.
-const roomGroupDisabled = computed(() => form.required_room_type === 'None')
+// Programs only make sense when the subject actually needs a room.
+const roomGroupsDisabled = computed(() => form.required_room_type === 'None')
 
-// "General" is a Lecture-only room group — Laboratory subjects must pick a
-// specific program, so General is hidden from the dropdown whenever Room
-// Type is Laboratory (enforced server-side too, this is just UX).
-const roomGroupOptions = computed(() => {
-    const all = [
-        { value: 'General', label: 'General' },
-        { value: 'BSIT', label: 'BSIT' },
-        { value: 'BSED', label: 'BSED' },
-        { value: 'BSHM', label: 'BSHM' },
-        { value: 'BSTM', label: 'BSTM' },
-        { value: 'BSCRIM', label: 'BSCRIM' },
-    ]
-
+// "General" is a Lecture-only program — Laboratory subjects must pick one
+// or more specific programs, so General is hidden from the checklist
+// whenever Room Type is Laboratory (enforced server-side too, this is
+// just UX).
+const roomGroupChoices = computed(() => {
     if (form.required_room_type === 'Laboratory') {
-        return all.filter(option => option.value !== 'General')
+        return props.roomGroupOptions.filter(option => option !== 'General')
     }
 
-    return all
+    return props.roomGroupOptions
 })
 
-// Checking Practicum/OJT forces Room Type to "None" and locks the dropdown,
-// since a Practicum subject never gets assigned a room.
+function toggleRoomGroup(option) {
+    const index = form.room_groups.indexOf(option)
+
+    if (index === -1) {
+        form.room_groups.push(option)
+    } else {
+        form.room_groups.splice(index, 1)
+    }
+}
+
+// Checking Practicum/OJT forces Room Type to "None" and clears the
+// program selection, since a Practicum subject never gets assigned a room.
 watch(() => form.is_practicum, (isPracticum) => {
     if (isPracticum) {
         form.required_room_type = 'None'
@@ -64,28 +87,24 @@ watch(() => form.is_practicum, (isPracticum) => {
     }
 })
 
-// Keeps Required Room Group in sync with Room Type. The backend enforces
+// Keeps the program selection in sync with Room Type. The backend enforces
 // all of this too (a disabled/tampered field can't smuggle in a bad
 // value), but mirroring it here keeps the form from ever showing/
-// submitting a value that doesn't make sense for the selected room type:
-//   - None          -> room group cleared (Practicum/OJT gets no room)
-//   - Lecture        -> defaults to "General" (standard classrooms)
-//   - Laboratory     -> "General" isn't valid, so it's cleared and the
-//                        user must explicitly pick a program
+// submitting a selection that doesn't make sense for the selected room
+// type:
+//   - None        -> selection cleared (Practicum/OJT gets no room)
+//   - Laboratory  -> "General" isn't valid, so it's dropped from whatever
+//                     was already selected
 watch(() => form.required_room_type, (roomType) => {
     if (roomType === 'None') {
-        form.required_room_group = null
-    } else if (roomType === 'Lecture') {
-        form.required_room_group = 'General'
+        form.room_groups = []
     } else if (roomType === 'Laboratory') {
-        if (!form.required_room_group || form.required_room_group === 'General') {
-            form.required_room_group = null
-        }
+        form.room_groups = form.room_groups.filter(option => option !== 'General')
     }
 })
 
 function submit() {
-    form.put(route('subjects.update', props.subject.id))
+    form.put(route('subjects.update', props.subject.id) + returnQuery)
 }
 </script>
 
@@ -112,7 +131,7 @@ function submit() {
         </div>
 
         <Link
-            :href="route('subjects.index')"
+            :href="route('subjects.index') + returnQuery"
             class="text-gray-600 hover:underline"
         >
             &larr; Back to Subjects
@@ -251,9 +270,9 @@ function submit() {
 
         </div>
 
-        <!-- Classification / Required Room Type / Required Room Group -->
+        <!-- Classification / Required Room Type -->
 
-        <div class="grid grid-cols-3 gap-4">
+        <div class="grid grid-cols-2 gap-4">
 
             <div>
 
@@ -297,31 +316,63 @@ function submit() {
 
             </div>
 
-            <div>
+        </div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Required Room Group
+        <!-- Programs (Room Groups) -->
+        <!--
+            Multi-select: a subject can belong to any number of programs,
+            fully independent of Classification (Major/Minor). E.g.
+            English Communication -> Minor -> General; Business Marketing
+            -> Major -> BSHM + BSTM.
+        -->
+
+        <div>
+
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+                Programs
+            </label>
+
+            <p class="text-xs text-gray-500 mb-2">
+                Select every program this subject applies to. A subject is
+                considered applicable if it belongs to any of its assigned
+                programs.
+            </p>
+
+            <div
+                class="flex flex-wrap gap-2 border rounded-lg p-3"
+                :class="roomGroupsDisabled ? 'bg-gray-100 border-gray-200' : 'border-gray-300'"
+            >
+
+                <label
+                    v-for="option in roomGroupChoices"
+                    :key="option"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none"
+                    :class="[
+                        form.room_groups.includes(option)
+                            ? 'bg-blue-50 border-blue-400 text-blue-700'
+                            : 'bg-white border-gray-300 text-gray-700',
+                        roomGroupsDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50',
+                    ]"
+                >
+                    <input
+                        type="checkbox"
+                        class="rounded"
+                        :checked="form.room_groups.includes(option)"
+                        :disabled="roomGroupsDisabled"
+                        @change="toggleRoomGroup(option)"
+                    />
+                    {{ option }}
                 </label>
 
-                <select
-                    v-model="form.required_room_group"
-                    :disabled="roomGroupDisabled"
-                    class="w-full border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500"
-                >
-                    <option
-                        v-for="option in roomGroupOptions"
-                        :key="option.value"
-                        :value="option.value"
-                    >
-                        {{ option.label }}
-                    </option>
-                </select>
-
-                <p v-if="form.errors.required_room_group" class="text-red-600 text-sm mt-1">
-                    {{ form.errors.required_room_group }}
+                <p v-if="roomGroupsDisabled" class="text-xs text-gray-500 w-full">
+                    Practicum/OJT subjects (Room Type: None) don't get a program assignment.
                 </p>
 
             </div>
+
+            <p v-if="form.errors.room_groups" class="text-red-600 text-sm mt-1">
+                {{ form.errors.room_groups }}
+            </p>
 
         </div>
 
@@ -380,7 +431,7 @@ function submit() {
         <div class="flex justify-end gap-3 pt-4 border-t">
 
             <Link
-                :href="route('subjects.index')"
+                :href="route('subjects.index') + returnQuery"
                 class="px-5 py-2 rounded-lg border text-gray-600 hover:bg-gray-50"
             >
                 Cancel

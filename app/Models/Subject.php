@@ -35,10 +35,15 @@ class Subject extends Model
         |--------------------------------------------------------------------------
         | Scheduling
         |--------------------------------------------------------------------------
+        |
+        | required_room_group is gone — a subject's applicable programs now live
+        | in the room_group_subject pivot (see roomGroups() below), independent
+        | of is_major. Both Major and Minor subjects support any combination of
+        | programs.
+        |
         */
 
         'required_room_type',
-        'required_room_group',
         'is_practicum',
 
         'allow_split_schedule',
@@ -58,6 +63,21 @@ class Subject extends Model
         */
 
         'active',
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Appends
+    |--------------------------------------------------------------------------
+    |
+    | room_group_codes gives the frontend (Create/Edit forms, Index badges) a
+    | plain array of program strings instead of having to unpack the
+    | roomGroups relationship's pivot-row shape every time.
+    |
+    */
+
+    protected $appends = [
+        'room_group_codes',
     ];
 
     /*
@@ -103,6 +123,17 @@ class Subject extends Model
             Subject::class,
             'prerequisite_id'
         );
+    }
+
+    /**
+     * The one-or-more programs (General/BSIT/BSED/BSHM/BSTM/BSCRIM) this
+     * subject is applicable to. Replaces the old single required_room_group
+     * belongsTo-style column with a proper many-to-many via the
+     * room_group_subject pivot table.
+     */
+    public function roomGroups()
+    {
+        return $this->hasMany(SubjectRoomGroup::class);
     }
 
     /*
@@ -160,5 +191,48 @@ class Subject extends Model
     public function scopeSchedulable($query)
     {
         return $query->where('is_practicum', false);
+    }
+
+    /**
+     * Subjects applicable to a given program — i.e. subjects that have any
+     * room_group_subject row matching $roomGroup. This is the many-to-many
+     * equivalent of the old `where('required_room_group', $roomGroup)`
+     * filter, and is what both the Subjects index filter and the
+     * scheduler's room-matching logic should use going forward.
+     */
+    public function scopeForRoomGroup($query, string $roomGroup)
+    {
+        return $query->whereHas('roomGroups', function ($query) use ($roomGroup) {
+            $query->where('room_group', $roomGroup);
+        });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accessors
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Plain array of this subject's assigned program codes, e.g.
+     * ['BSHM', 'BSTM']. Empty array when no programs are assigned (Practicum/
+     * OJT subjects, or "None" room-type subjects, typically have none).
+     *
+     * Relies on roomGroups being eager-loaded (with('roomGroups')) wherever
+     * this accessor is read at scale, to avoid N+1 queries.
+     */
+    public function getRoomGroupCodesAttribute(): array
+    {
+        return $this->roomGroups->pluck('room_group')->all();
+    }
+
+    /**
+     * True if this subject is applicable to the given program — i.e. it has
+     * been assigned to that program, regardless of how many other programs
+     * it's also assigned to.
+     */
+    public function isApplicableToRoomGroup(string $roomGroup): bool
+    {
+        return $this->roomGroups->contains('room_group', $roomGroup);
     }
 }
