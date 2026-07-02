@@ -1,34 +1,151 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import Toast from '@/Components/Toast.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { useFlashToast } from '@/Composables/useFlashToast'
 
-defineProps({
+const props = defineProps({
     sections: Array,
+    programs: Array,
+    // Current filter state as resolved server-side, so the inputs below
+    // start in sync with the URL (?search=&program_id=&status=) instead
+    // of resetting on refresh — see SectionController::index().
+    filters: {
+        type: Object,
+        default: () => ({ search: '', program_id: null, status: null }),
+    },
 })
 
-function curriculumLabel(section) {
-    const curriculum = section.curriculum
+/*
+|--------------------------------------------------------------------------
+| Search / Program / Status filtering
+|--------------------------------------------------------------------------
+|
+| The URL query string is the source of truth for the current filter
+| state (so it survives a refresh/share/back-button), and these refs are
+| just the form-bound mirror of it. Program/Status changes re-query
+| immediately; Search debounces on typing but also submits instantly on
+| Enter. Every visit uses preserveState + replace so filtering never
+| pollutes browser history with one entry per keystroke.
+|
+*/
 
-    if (!curriculum) {
-        return '-'
-    }
+const search = ref(props.filters.search ?? '')
+const programId = ref(props.filters.program_id ?? '')
+const status = ref(props.filters.status ?? '')
 
-    return curriculum.display_name
-        ?? [
-            curriculum.program?.code,
-            curriculum.specialization?.name,
-        ].filter(Boolean).join(' - ')
+let searchDebounce = null
+
+function applyFilters() {
+    router.get(route('sections.index'), {
+        search: search.value || undefined,
+        program_id: programId.value || undefined,
+        status: status.value || undefined,
+    }, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    })
 }
 
-function destroy(id) {
-    if (confirm('Are you sure you want to delete this section?')) {
-        router.delete(route('sections.destroy', id))
+function applyFiltersNow() {
+    clearTimeout(searchDebounce)
+    applyFilters()
+}
+
+watch(search, () => {
+    clearTimeout(searchDebounce)
+    searchDebounce = setTimeout(applyFilters, 300)
+})
+
+watch([programId, status], applyFilters)
+
+onBeforeUnmount(() => clearTimeout(searchDebounce))
+
+const hasActiveFilters = computed(() =>
+    !!search.value || !!programId.value || !!status.value
+)
+
+// Server-driven success/warning/error toasts (created, updated, deleted,
+// and the "can't delete" guard all flow through this) — same pattern as
+// Academic Terms/Index.vue.
+const { toast, show } = useFlashToast()
+
+/*
+|--------------------------------------------------------------------------
+| Delete — Double Confirmation
+|--------------------------------------------------------------------------
+|
+| Same shape as Academic Terms' delete flow:
+|
+|   Step 1: a plain "Delete Section?" confirm dialog.
+|   Step 2: a modal requiring the user to type the section's own code
+|           exactly before the Delete button enables.
+|
+| Sections add a third state Academic Terms doesn't need: if the section
+| is currently in use (Section::is_in_use, computed server-side — see
+| SectionController::index()), requestDelete() short-circuits into an
+| "Unable to Delete" notice instead of Step 1. The server
+| (SectionController::destroy) re-checks this itself as the real guard;
+| the client-side check here is just for instant feedback.
+|
+*/
+
+const pendingSection = ref(null)     // section in the "Delete Section?" step
+const blockedSection = ref(null)     // section in the "Unable to Delete" step
+const confirmingSection = ref(null)  // section in the "type the code" step
+const deleteConfirmText = ref('')
+
+const deleteConfirmValid = computed(() =>
+    !!confirmingSection.value
+    && deleteConfirmText.value === confirmingSection.value.section_code
+)
+
+const deleteConfirmMismatch = computed(() =>
+    deleteConfirmText.value.length > 0 && !deleteConfirmValid.value
+)
+
+function requestDelete(section) {
+    if (section.is_in_use) {
+        blockedSection.value = section
+        return
     }
+
+    pendingSection.value = section
+}
+
+function proceedToTypedConfirm() {
+    confirmingSection.value = pendingSection.value
+    pendingSection.value = null
+    deleteConfirmText.value = ''
+}
+
+function cancelDelete() {
+    pendingSection.value = null
+    blockedSection.value = null
+    confirmingSection.value = null
+    deleteConfirmText.value = ''
+}
+
+function finalizeDelete() {
+    if (! deleteConfirmValid.value || ! confirmingSection.value) {
+        return
+    }
+
+    const section = confirmingSection.value
+
+    router.delete(route('sections.destroy', section.id), {
+        onFinish: () => cancelDelete(),
+        onError: () => show('Unable to delete the selected section.', 'error'),
+    })
 }
 </script>
 
 <template>
     <DashboardLayout>
+
+        <Toast :toast="toast" />
 
         <div class="flex justify-between items-center mb-6">
 
@@ -45,15 +162,49 @@ function destroy(id) {
 
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-col sm:flex-row gap-3">
 
-            <table class="w-full">
+            <input
+                v-model="search"
+                type="text"
+                placeholder="Search section code or section name..."
+                class="w-full sm:flex-1 border rounded p-2"
+                @keyup.enter="applyFiltersNow"
+            >
+
+            <select
+                v-model="programId"
+                class="w-full sm:w-56 border rounded p-2"
+            >
+                <option value="">All Programs</option>
+                <option
+                    v-for="program in programs"
+                    :key="program.id"
+                    :value="program.id"
+                >
+                    {{ program.code }} - {{ program.name }}
+                </option>
+            </select>
+
+            <select
+                v-model="status"
+                class="w-full sm:w-40 border rounded p-2"
+            >
+                <option value="">All</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+            </select>
+
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-x-auto">
+
+            <table class="w-full min-w-[640px]">
 
                 <thead class="bg-gray-100">
 
                     <tr>
                         <th class="p-4 text-left w-12">#</th>
-                        <th class="p-4 text-left">Curriculum</th>
                         <th class="p-4 text-left">Section Code</th>
                         <th class="p-4 text-left">Section Name</th>
                         <th class="p-4 text-left">Capacity</th>
@@ -75,10 +226,6 @@ function destroy(id) {
 
                         <td class="p-4">
                             {{ index + 1 }}
-                        </td>
-
-                        <td class="p-4">
-                            {{ curriculumLabel(section) }}
                         </td>
 
                         <td class="p-4 font-medium">
@@ -123,7 +270,7 @@ function destroy(id) {
                                 </Link>
 
                                 <button
-                                    @click="destroy(section.id)"
+                                    @click="requestDelete(section)"
                                     class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
                                 >
                                     Delete
@@ -138,10 +285,10 @@ function destroy(id) {
                     <tr v-if="sections.length === 0">
 
                         <td
-                            colspan="7"
+                            colspan="6"
                             class="text-center p-8 text-gray-500"
                         >
-                            No sections found.
+                            {{ hasActiveFilters ? 'No sections match your filters.' : 'No sections found.' }}
                         </td>
 
                     </tr>
@@ -150,6 +297,139 @@ function destroy(id) {
 
             </table>
 
+        </div>
+
+        <!-- Step 1: Delete Section? -->
+        <div
+            v-if="pendingSection"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+        >
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+
+                <h3 class="text-lg font-semibold mb-2">
+                    Delete Section?
+                </h3>
+
+                <p class="text-gray-500 text-sm mb-6">
+                    {{ pendingSection.section_code }} ({{ pendingSection.section_name }})
+                    will be permanently removed.
+                    <br><br>
+                    This action cannot be undone.
+                </p>
+
+                <div class="flex justify-end gap-2">
+
+                    <button
+                        type="button"
+                        @click="cancelDelete"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="proceedToTypedConfirm"
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                    >
+                        Continue
+                    </button>
+
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Blocked: section is currently in use -->
+        <div
+            v-if="blockedSection"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+        >
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+
+                <h3 class="text-lg font-semibold mb-2">
+                    Unable to Delete
+                </h3>
+
+                <p class="text-gray-500 text-sm mb-6">
+                    This section is currently being used by the system.
+                    <br><br>
+                    Please remove all related records before deleting this section.
+                </p>
+
+                <div class="flex justify-end">
+
+                    <button
+                        type="button"
+                        @click="cancelDelete"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                    >
+                        OK
+                    </button>
+
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Step 2: Type the section code to confirm -->
+        <div
+            v-if="confirmingSection"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+        >
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+
+                <h3 class="text-lg font-semibold mb-2">
+                    Final Confirmation
+                </h3>
+
+                <p class="text-gray-500 text-sm mb-4">
+                    To prevent accidental deletion, please type the section code.
+                </p>
+
+                <p class="text-sm text-gray-500 mb-2">
+                    Type:
+                    <span class="font-mono font-semibold text-gray-800">
+                        {{ confirmingSection.section_code }}
+                    </span>
+                </p>
+
+                <input
+                    v-model="deleteConfirmText"
+                    type="text"
+                    :placeholder="confirmingSection.section_code"
+                    autocomplete="off"
+                    spellcheck="false"
+                    class="w-full border rounded p-2 font-mono"
+                    @keyup.enter="finalizeDelete"
+                >
+
+                <p v-if="deleteConfirmMismatch" class="text-red-500 text-sm mt-1">
+                    Section code does not match.
+                </p>
+
+                <div class="flex justify-end gap-2 mt-6">
+
+                    <button
+                        type="button"
+                        @click="cancelDelete"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="finalizeDelete"
+                        :disabled="! deleteConfirmValid"
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Delete Section
+                    </button>
+
+                </div>
+
+            </div>
         </div>
 
     </DashboardLayout>

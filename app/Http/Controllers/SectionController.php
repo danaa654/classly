@@ -2,16 +2,27 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Curriculum;
+use App\Models\Program;
 use App\Models\Section;
+use App\Models\Specialization;
+use App\Services\SectionCodeService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 
 class SectionController extends Controller implements HasMiddleware
 {
+    /**
+     * Section Letters are capped at A-E — five sections per Program +
+     * Year Level (+ Specialization, for Programs that have one) is the
+     * hard ceiling.
+     */
+    public const ALLOWED_LETTERS = ['A', 'B', 'C', 'D', 'E'];
+
     /**
      * Controller Middleware
      */
@@ -39,17 +50,62 @@ class SectionController extends Controller implements HasMiddleware
 
     /**
      * Display all sections.
+     *
+     * Supports optional Search / Program / Status filtering via query
+     * params (?search=&program_id=&status=), all combinable. Filters are
+     * echoed back in the `filters` prop (not just applied to the query)
+     * so the Index page can preload its inputs from the URL and stay in
+     * sync after an Inertia visit — same idea as the URL being the
+     * source of truth for the current view, not local component state.
      */
-    public function index()
+    public function index(Request $request)
     {
-        return Inertia::render('Sections/Index', [
+        $search = trim((string) $request->input('search', ''));
 
-            'sections' => Section::with([
+        $programId = $request->input('program_id');
+
+        $status = $request->input('status');
+
+        $sections = Section::with([
                 'curriculum.program',
                 'curriculum.specialization',
             ])
-                ->orderBy('section_code')
-                ->get(),
+            // Powers Section::is_in_use on the frontend, so the
+            // delete-confirmation modal can block deletion instantly
+            // without a round trip. See Section::getIsInUseAttribute().
+            ->withCount('teachingAssignments')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('section_code', 'like', "%{$search}%")
+                        ->orWhere('section_name', 'like', "%{$search}%");
+                });
+            })
+            ->when($programId, function ($query) use ($programId) {
+                $query->whereHas('curriculum', function ($inner) use ($programId) {
+                    $inner->where('program_id', $programId);
+                });
+            })
+            ->when(in_array($status, ['Active', 'Inactive'], true), function ($query) use ($status) {
+                $query->where('status', $status);
+            })
+            ->orderBy('section_code')
+            ->get();
+
+        return Inertia::render('Sections/Index', [
+
+            'sections' => $sections,
+
+            // For the Program filter dropdown — same source as the
+            // Create/Edit forms so the option list stays consistent.
+            'programs' => Program::where('active', true)
+                ->orderBy('name')
+                ->get(['id', 'code', 'name']),
+
+            'filters' => [
+                'search' => $search,
+                'program_id' => $programId ? (int) $programId : null,
+                'status' => in_array($status, ['Active', 'Inactive'], true) ? $status : null,
+            ],
 
         ]);
     }
@@ -61,29 +117,42 @@ class SectionController extends Controller implements HasMiddleware
     {
         return Inertia::render('Sections/Create', [
 
-            'curriculums' => $this->curriculumOptions(),
+            'programs' => $this->programOptions(),
+
+            // Lets the frontend disable already-taken letters, auto-pick
+            // the next available one, and proactively warn/disable Save
+            // when a Program+Year(+Specialization) scope is already full
+            // — all without a round trip per keystroke.
+            'usedLetters' => $this->usedLetterMap(),
 
         ]);
     }
 
     /**
-     * Store section.
+     * Store section. Section Code is system-generated — see
+     * processSection() / SectionCodeService.
      */
     public function store(Request $request)
     {
-        $validated = $this->validateSection($request);
+        [$validated, $curriculum, $sectionCode] = $this->processSection($request);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Section Code
-        |--------------------------------------------------------------------------
-        */
+        Section::create([
 
-        $validated['section_code'] = strtoupper(
-            $validated['section_code']
-        );
+            'curriculum_id' => $curriculum->id,
 
-        Section::create($validated);
+            'section_code' => $sectionCode,
+
+            'section_name' => $validated['section_name'],
+
+            'year_level' => $validated['year_level'],
+
+            'section_letter' => $validated['section_letter'],
+
+            'capacity' => $validated['capacity'],
+
+            'status' => $validated['status'],
+
+        ]);
 
         return redirect()
             ->route('sections.index')
@@ -95,33 +164,47 @@ class SectionController extends Controller implements HasMiddleware
      */
     public function edit(Section $section)
     {
+        $section->load(['curriculum.program', 'curriculum.specialization']);
+
         return Inertia::render('Sections/Edit', [
 
-            'section' => $section->load('curriculum'),
+            'section' => $section,
 
-            'curriculums' => $this->curriculumOptions(),
+            'programs' => $this->programOptions(),
+
+            // Excludes this section itself, so its own letter never
+            // reads as "taken" against itself while editing.
+            'usedLetters' => $this->usedLetterMap(excludeSectionId: $section->id),
 
         ]);
     }
 
     /**
-     * Update section.
+     * Update section. Section Code is re-generated from the submitted
+     * Program/Specialization/Year Level/Letter — it is never accepted
+     * directly from the client.
      */
     public function update(Request $request, Section $section)
     {
-        $validated = $this->validateSection($request, $section);
+        [$validated, $curriculum, $sectionCode] = $this->processSection($request, $section);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Section Code
-        |--------------------------------------------------------------------------
-        */
+        $section->update([
 
-        $validated['section_code'] = strtoupper(
-            $validated['section_code']
-        );
+            'curriculum_id' => $curriculum->id,
 
-        $section->update($validated);
+            'section_code' => $sectionCode,
+
+            'section_name' => $validated['section_name'],
+
+            'year_level' => $validated['year_level'],
+
+            'section_letter' => $validated['section_letter'],
+
+            'capacity' => $validated['capacity'],
+
+            'status' => $validated['status'],
+
+        ]);
 
         return redirect()
             ->route('sections.index')
@@ -130,36 +213,103 @@ class SectionController extends Controller implements HasMiddleware
 
     /**
      * Delete section.
+     *
+     * The frontend already blocks this via Section::is_in_use (see
+     * index()) before the user can even reach the type-to-confirm step —
+     * this check is the authoritative backstop in case that's ever
+     * bypassed, not the primary UX gate.
      */
     public function destroy(Section $section)
     {
-        $section->delete();
+        if ($section->isInUse()) {
+            return redirect()
+                ->route('sections.index')
+                ->with('error', 'Unable to delete the selected section.');
+        }
+
+        $sectionCode = $section->section_code;
+
+        try {
+
+            $section->delete();
+
+        } catch (\Throwable $e) {
+
+            report($e);
+
+            return redirect()
+                ->route('sections.index')
+                ->with('error', 'Unable to delete the selected section.');
+
+        }
 
         return redirect()
             ->route('sections.index')
-            ->with('success', 'Section deleted successfully.');
+            ->with('success', "Section {$sectionCode} deleted successfully.");
     }
 
     /**
-     * Shared validation rules for store/update.
+     * Shared validation + Section Code generation for store/update.
+     *
+     * Returns [validated request data, resolved Curriculum model,
+     * generated section code]. Every rule the frontend also enforces
+     * (letter restricted to A-E, capacity 20-45, max 5 sections per
+     * scope, no duplicate codes) is re-checked here — the frontend is a
+     * convenience, this is the actual gate.
+     *
+     * A handful of these checks flash a session 'error' message before
+     * throwing, in addition to the normal field-level $errors bag. The
+     * app's toast system reads that flash key directly (same as the
+     * 'success' flash already used on store/update above), so this is
+     * what actually produces the toast — there's no separate
+     * client-only toast trigger.
      */
-    private function validateSection(Request $request, ?Section $section = null): array
+    private function processSection(Request $request, ?Section $section = null): array
     {
-        return $request->validate([
+        // Normalize case up front so "a" and "A" behave identically,
+        // both for the ALLOWED_LETTERS check below and for the code/name
+        // generation that follows.
+        $request->merge([
+            'section_letter' => strtoupper((string) $request->input('section_letter')),
+        ]);
 
-            'curriculum_id' => [
+        $validated = $request->validate([
+
+            'program_id' => [
                 'required',
                 'integer',
-                'exists:curricula,id',
+                'exists:programs,id',
             ],
 
-            'section_code' => [
+            'specialization_id' => [
+                Rule::requiredIf(function () use ($request) {
+                    return SectionCodeService::requiresSpecialization(
+                        Program::find($request->input('program_id'))
+                    );
+                }),
+                'nullable',
+                'integer',
+                'exists:specializations,id',
+            ],
+
+            'year_level' => [
                 'required',
-                'string',
-                'max:20',
-                $section
-                    ? Rule::unique('sections', 'section_code')->ignore($section->id)
-                    : Rule::unique('sections', 'section_code'),
+                'integer',
+                'min:1',
+                function ($attribute, $value, $fail) use ($request) {
+
+                    $program = Program::find($request->input('program_id'));
+
+                    if ($program && $value > $program->years) {
+                        $fail("Year Level cannot exceed {$program->years} for {$program->code}.");
+                    }
+
+                },
+            ],
+
+            'section_letter' => [
+                'required',
+                Rule::in(self::ALLOWED_LETTERS),
             ],
 
             'section_name' => [
@@ -171,7 +321,7 @@ class SectionController extends Controller implements HasMiddleware
             'capacity' => [
                 'required',
                 'integer',
-                'min:1',
+                'between:20,45',
             ],
 
             'status' => [
@@ -182,21 +332,141 @@ class SectionController extends Controller implements HasMiddleware
                 ]),
             ],
 
+        ], [
+
+            'section_letter.in' => 'Section Letter must be one of A, B, C, D, or E.',
+
+            'capacity.between' => 'Capacity must be between 20 and 45 students.',
+
         ]);
+
+        $program = Program::findOrFail($validated['program_id']);
+
+        $specialization = ! empty($validated['specialization_id'])
+            ? Specialization::find($validated['specialization_id'])
+            : null;
+
+        // Server-side backstop: a Specialization only ever applies to a
+        // program that requires one (i.e. has active Specializations of
+        // its own). The frontend already hides/disables the field
+        // otherwise, so this only matters if that gets bypassed.
+        if ($specialization && ! SectionCodeService::requiresSpecialization($program)) {
+            $specialization = null;
+        }
+
+        // Max 5 sections per Program + Year Level (+ Specialization).
+        // Checked ahead of the duplicate-code check below so a maxed-out
+        // scope gets its own specific message rather than a generic
+        // "already exists" one.
+        $lettersInScope = $this->lettersInScope(
+            $program->id,
+            $specialization?->id,
+            $validated['year_level'],
+            excludeSectionId: $section?->id
+        );
+
+        if ($lettersInScope->count() >= count(self::ALLOWED_LETTERS)) {
+            session()->flash('error', 'All available sections (A–E) have already been created for this year level.');
+
+            throw ValidationException::withMessages([
+                'section_letter' => 'All available sections (A-E) have already been created for this year level.',
+            ]);
+        }
+
+        $curriculum = SectionCodeService::resolveCurriculum(
+            $program->id,
+            $specialization?->id
+        );
+
+        if (! $curriculum) {
+            throw ValidationException::withMessages([
+                'program_id' => 'No curriculum exists yet for '
+                    . $program->code
+                    . ($specialization ? " - {$specialization->name}" : '')
+                    . '. Please create one first before adding a section.',
+            ]);
+        }
+
+        $sectionCode = SectionCodeService::generate(
+            $program,
+            $specialization,
+            $validated['year_level'],
+            $validated['section_letter']
+        );
+
+        $duplicate = Section::where('section_code', $sectionCode)
+            ->when($section, fn ($query) => $query->where('id', '!=', $section->id))
+            ->exists();
+
+        if ($duplicate) {
+            session()->flash('error', 'This section already exists. Please choose another section letter.');
+
+            throw ValidationException::withMessages([
+                'section_letter' => 'This section already exists. Please choose another section letter.',
+            ]);
+        }
+
+        return [$validated, $curriculum, $sectionCode];
     }
 
     /**
-     * Curriculum dropdown options, with display_name resolved on the
-     * server so the Create/Edit pages don't need to know how it's built.
+     * Every distinct Section Letter already in use for a given
+     * Program + Year Level (+ Specialization) scope. Used by both the
+     * max-5 check above and usedLetterMap() below — kept as one method
+     * so the "what counts as this scope" definition only lives in one
+     * place.
      */
-    private function curriculumOptions()
+    private function lettersInScope(
+        int $programId,
+        ?int $specializationId,
+        int $yearLevel,
+        ?int $excludeSectionId = null
+    ): Collection {
+        return Section::whereHas('curriculum', function ($query) use ($programId, $specializationId) {
+                $query->where('program_id', $programId)
+                    ->where('specialization_id', $specializationId);
+            })
+            ->where('year_level', $yearLevel)
+            ->when($excludeSectionId, fn ($query) => $query->where('id', '!=', $excludeSectionId))
+            ->pluck('section_letter')
+            ->filter()
+            ->unique();
+    }
+
+    /**
+     * Every scope (Program + Specialization + Year Level) mapped to its
+     * currently-used letters, e.g. {"3_null_1": ["A","B"], "5_2_4": ["A"]}.
+     * Sent to the frontend so it can disable taken letters, auto-select
+     * the next free one, and know when a scope is completely full —
+     * entirely client-side, no per-change request needed.
+     */
+    private function usedLetterMap(?int $excludeSectionId = null): array
     {
-        return Curriculum::with(['program', 'specialization'])
-            ->orderByDesc('effective_year')
+        return Section::with('curriculum:id,program_id,specialization_id')
+            ->when($excludeSectionId, fn ($query) => $query->where('id', '!=', $excludeSectionId))
             ->get()
-            ->map(fn (Curriculum $curriculum) => [
-                'id' => $curriculum->id,
-                'display_name' => $curriculum->display_name,
-            ]);
+            ->filter(fn (Section $section) => $section->year_level
+                && $section->section_letter
+                && $section->curriculum)
+            ->groupBy(fn (Section $section) => $section->curriculum->program_id
+                . '_' . ($section->curriculum->specialization_id ?? 'null')
+                . '_' . $section->year_level)
+            ->map(fn ($group) => $group->pluck('section_letter')->unique()->values())
+            ->toArray();
+    }
+
+    /**
+     * Program dropdown options, with each program's active
+     * Specializations eager-loaded so the Create/Edit pages can filter
+     * the Specialization dropdown client-side without extra requests.
+     */
+    private function programOptions()
+    {
+        return Program::with(['specializations' => function ($query) {
+                $query->where('active', true)->orderBy('name');
+            }])
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
     }
 }

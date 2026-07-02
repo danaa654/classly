@@ -9,7 +9,10 @@ const sidebarOpen = ref(true)
 
 <template>
 
-<div class="flex h-screen bg-gray-100">
+<div
+    class="flex h-screen transition-colors duration-300"
+    style="background: var(--page-bg)"
+>
 
     <Sidebar :open="sidebarOpen" />
 

@@ -1,6 +1,8 @@
 <script setup>
+import { ref } from 'vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
-import { useForm } from '@inertiajs/vue3'
+import { Link, useForm } from '@inertiajs/vue3'
+import { ArrowLeftIcon, EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
     roles: Array,
@@ -15,151 +17,125 @@ const form = useForm({
     department_id: '',
 })
 
+const showPassword = ref(false)
+
 function submit() {
     form.post('/users')
 }
+
+// Shared input styling so every field looks identical — same recipe as
+// the Login form's inputs (rounded-xl, gold focus ring, token colors).
+const inputClass = 'w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30'
+const labelClass = 'mb-1.5 block text-sm font-medium text-[var(--text-secondary)]'
+const errorClass = 'mt-1.5 text-xs text-rose-500'
 </script>
 
 <template>
     <DashboardLayout>
         <div class="max-w-2xl">
-            <h1 class="text-3xl font-bold mb-6">
+
+            <Link
+                href="/users"
+                class="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--text-secondary)] transition-colors duration-150 hover:text-[var(--text-primary)]"
+            >
+                <ArrowLeftIcon class="h-4 w-4" />
+                Back to Users
+            </Link>
+
+            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
                 Add User
             </h1>
 
             <form
                 @submit.prevent="submit"
-                class="bg-white rounded-lg shadow p-6 space-y-5"
+                class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-5 transition-colors duration-300"
             >
 
                 <!-- Name -->
                 <div>
-                    <label class="block mb-2 font-medium">
-                        Name
-                    </label>
-
-                    <input
-                        v-model="form.name"
-                        type="text"
-                        class="w-full border rounded p-2"
-                    />
-
-                    <p
-                        v-if="form.errors.name"
-                        class="text-red-500 text-sm mt-1"
-                    >
-                        {{ form.errors.name }}
-                    </p>
+                    <label :class="labelClass">Name</label>
+                    <input v-model="form.name" type="text" :class="inputClass" />
+                    <p v-if="form.errors.name" :class="errorClass">{{ form.errors.name }}</p>
                 </div>
 
                 <!-- Email -->
                 <div>
-                    <label class="block mb-2 font-medium">
-                        Email
-                    </label>
-
-                    <input
-                        v-model="form.email"
-                        type="email"
-                        class="w-full border rounded p-2"
-                    />
-
-                    <p
-                        v-if="form.errors.email"
-                        class="text-red-500 text-sm mt-1"
-                    >
-                        {{ form.errors.email }}
-                    </p>
+                    <label :class="labelClass">Email</label>
+                    <input v-model="form.email" type="email" :class="inputClass" />
+                    <p v-if="form.errors.email" :class="errorClass">{{ form.errors.email }}</p>
                 </div>
 
                 <!-- Password -->
                 <div>
-                    <label class="block mb-2 font-medium">
-                        Password
-                    </label>
-
-                    <input
-                        v-model="form.password"
-                        type="password"
-                        class="w-full border rounded p-2"
-                    />
-
-                    <p
-                        v-if="form.errors.password"
-                        class="text-red-500 text-sm mt-1"
-                    >
-                        {{ form.errors.password }}
-                    </p>
+                    <label :class="labelClass">Password</label>
+                    <div class="relative">
+                        <input
+                            v-model="form.password"
+                            :type="showPassword ? 'text' : 'password'"
+                            :class="inputClass"
+                            class="pr-11"
+                        />
+                        <button
+                            type="button"
+                            tabindex="-1"
+                            @click="showPassword = !showPassword"
+                            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                            class="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-[var(--text-muted)] transition-colors duration-150 hover:text-[var(--text-primary)]"
+                        >
+                            <EyeSlashIcon v-if="showPassword" class="h-4 w-4" />
+                            <EyeIcon v-else class="h-4 w-4" />
+                        </button>
+                    </div>
+                    <p v-if="form.errors.password" :class="errorClass">{{ form.errors.password }}</p>
                 </div>
 
                 <!-- Role -->
                 <div>
-                    <label class="block mb-2 font-medium">
-                        Role
-                    </label>
-
-                    <select
-                        v-model="form.role"
-                        class="w-full border rounded p-2"
-                    >
-                        <option value="">
-                            Select Role
-                        </option>
-
-                        <option
-                            v-for="role in roles"
-                            :key="role.id"
-                            :value="role.name"
-                        >
+                    <label :class="labelClass">Role</label>
+                    <select v-model="form.role" :class="inputClass">
+                        <option value="">Select Role</option>
+                        <option v-for="role in roles" :key="role.id" :value="role.name">
                             {{ role.name }}
                         </option>
                     </select>
-
-                    <p
-                        v-if="form.errors.role"
-                        class="text-red-500 text-sm mt-1"
-                    >
-                        {{ form.errors.role }}
-                    </p>
+                    <p v-if="form.errors.role" :class="errorClass">{{ form.errors.role }}</p>
                 </div>
 
                 <!-- Department -->
+                <Transition
+                    enter-active-class="transition-all duration-200 ease-out"
+                    enter-from-class="opacity-0 -translate-y-1"
+                    enter-to-class="opacity-100 translate-y-0"
+                >
                     <div v-if="form.role === 'Dean' || form.role === 'OIC'">
-                        <label class="block mb-2 font-medium">
-                            Department
-                        </label>
-
-                        <select
-                            v-model="form.department_id"
-                            class="w-full border rounded p-2"
-                        >
+                        <label :class="labelClass">Department</label>
+                        <select v-model="form.department_id" :class="inputClass">
                             <option value="">Select Department</option>
-
-                            <option
-                                v-for="department in departments"
-                                :key="department.id"
-                                :value="department.id"
-                            >
+                            <option v-for="department in departments" :key="department.id" :value="department.id">
                                 {{ department.name }}
                             </option>
                         </select>
-
-                        <p
-                            v-if="form.errors.department_id"
-                            class="text-red-500 text-sm mt-1"
-                        >
-                            {{ form.errors.department_id }}
-                        </p>
+                        <p v-if="form.errors.department_id" :class="errorClass">{{ form.errors.department_id }}</p>
                     </div>
+                </Transition>
 
-                <!-- Submit Button -->
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="bg-green-500 text-white px-5 py-2 rounded hover:bg-green-600 disabled:opacity-50"
-                >
-                    {{ form.processing ? 'Saving...' : 'Save User' }}
-                </button>
+                <!-- Actions -->
+                <div class="flex items-center gap-3 pt-2">
+                    <button
+                        type="submit"
+                        :disabled="form.processing"
+                        class="rounded-full bg-[#D4A62A] px-6 py-2.5 text-sm font-semibold text-[#0B1220] shadow-lg shadow-[#D4A62A]/20 transition-all duration-200 hover:scale-[1.02] hover:bg-[#E8C766] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                    >
+                        {{ form.processing ? 'Saving...' : 'Save User' }}
+                    </button>
+
+                    <Link
+                        href="/users"
+                        class="rounded-full border border-[var(--card-border)] px-6 py-2.5 text-sm font-semibold text-[var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--page-bg)] hover:text-[var(--text-primary)]"
+                    >
+                        Cancel
+                    </Link>
+                </div>
 
             </form>
         </div>

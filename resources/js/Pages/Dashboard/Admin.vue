@@ -5,41 +5,41 @@ import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 <template>
     <DashboardLayout>
 
-        <h1 class="text-3xl font-bold mb-8">
+        <h1 class="text-3xl font-bold mb-8 text-[var(--text-primary)]">
             Admin Dashboard
         </h1>
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
 
-            <div class="bg-white rounded-xl shadow p-6">
-                <h2 class="text-gray-500 text-sm">Users</h2>
-                <p class="text-3xl font-bold mt-2">--</p>
+            <div class="bg-[var(--card-bg)] rounded-xl shadow p-6 border border-[var(--card-border)] transition-colors duration-300">
+                <h2 class="text-[var(--text-secondary)] text-sm">Users</h2>
+                <p class="text-3xl font-bold mt-2 text-[var(--text-primary)]">--</p>
             </div>
 
-            <div class="bg-white rounded-xl shadow p-6">
-                <h2 class="text-gray-500 text-sm">Faculty</h2>
-                <p class="text-3xl font-bold mt-2">--</p>
+            <div class="bg-[var(--card-bg)] rounded-xl shadow p-6 border border-[var(--card-border)] transition-colors duration-300">
+                <h2 class="text-[var(--text-secondary)] text-sm">Faculty</h2>
+                <p class="text-3xl font-bold mt-2 text-[var(--text-primary)]">--</p>
             </div>
 
-            <div class="bg-white rounded-xl shadow p-6">
-                <h2 class="text-gray-500 text-sm">Departments</h2>
-                <p class="text-3xl font-bold mt-2">--</p>
+            <div class="bg-[var(--card-bg)] rounded-xl shadow p-6 border border-[var(--card-border)] transition-colors duration-300">
+                <h2 class="text-[var(--text-secondary)] text-sm">Departments</h2>
+                <p class="text-3xl font-bold mt-2 text-[var(--text-primary)]">--</p>
             </div>
 
-            <div class="bg-white rounded-xl shadow p-6">
-                <h2 class="text-gray-500 text-sm">Programs</h2>
-                <p class="text-3xl font-bold mt-2">--</p>
+            <div class="bg-[var(--card-bg)] rounded-xl shadow p-6 border border-[var(--card-border)] transition-colors duration-300">
+                <h2 class="text-[var(--text-secondary)] text-sm">Programs</h2>
+                <p class="text-3xl font-bold mt-2 text-[var(--text-primary)]">--</p>
             </div>
 
         </div>
 
-        <div class="bg-white rounded-xl shadow mt-8 p-6">
+        <div class="bg-[var(--card-bg)] rounded-xl shadow mt-8 p-6 border border-[var(--card-border)] transition-colors duration-300">
 
-            <h2 class="text-xl font-semibold mb-4">
+            <h2 class="text-xl font-semibold mb-4 text-[var(--text-primary)]">
                 System Overview
             </h2>
 
-            <p class="text-gray-600">
+            <p class="text-[var(--text-secondary)]">
                 Welcome Administrator. You have full access to the Classly Management System.
             </p>
 

@@ -24,6 +24,10 @@ return new class extends Migration
 
             $table->string('section_name');
 
+            $table->unsignedTinyInteger('year_level');
+
+            $table->char('section_letter', 1);
+
             $table->unsignedInteger('capacity');
 
             $table->enum('status', ['Active', 'Inactive'])
