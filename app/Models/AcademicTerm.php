@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AcademicTerm extends Model
 {
@@ -14,9 +16,6 @@ class AcademicTerm extends Model
         'academic_year',
 
         'semester',
-
-        'registration_start_date',
-        'registration_end_date',
 
         'class_start_date',
         'class_end_date',
@@ -47,9 +46,6 @@ class AcademicTerm extends Model
      * Attribute casting.
      */
     protected $casts = [
-
-        'registration_start_date' => 'date:Y-m-d',
-        'registration_end_date' => 'date:Y-m-d',
 
         'class_start_date' => 'date:Y-m-d',
         'class_end_date' => 'date:Y-m-d',
@@ -89,6 +85,8 @@ class AcademicTerm extends Model
     protected $appends = [
         'semester_label',
         'display_name',
+        'start_year',
+        'is_locked',
     ];
 
     /*
@@ -103,21 +101,46 @@ class AcademicTerm extends Model
         3 => 'Summer',
     ];
 
+    public const STATUSES = [
+        'Draft',
+        'Published',
+        'Archived',
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Academic Year Date Range (Single Source of Truth)
+    |--------------------------------------------------------------------------
+    |
+    | Class Start / Class End only need to fall inside the selected
+    | Academic Year — nothing semester-specific. Institutions change their
+    | calendars (some start 1st Semester in June, others in August, some
+    | run trimesters, etc.), so we deliberately do NOT hardcode semester
+    | months here. This is the authoritative copy used by
+    | AcademicTermRequest for server-side validation.
+    |
+    | A matching (non-authoritative) copy lives client-side in
+    | resources/js/Composables/useAcademicTermForm.js purely so the date
+    | pickers can restrict themselves in the browser. Keep both in sync if
+    | this ever changes.
+    |
+    |   Academic Year "2026-2027" -> Jan 1, 2026 through Dec 31, 2027
+    |
+    */
+
+    public static function academicYearDateRange(int $startYear): array
+    {
+        return [
+            'min' => "{$startYear}-01-01",
+            'max' => ($startYear + 1) . '-12-31',
+        ];
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Relationships
     |--------------------------------------------------------------------------
     */
-
-    public function sections()
-    {
-        return $this->hasMany(Section::class);
-    }
-
-    public function schedules()
-    {
-        return $this->hasMany(Schedule::class);
-    }
 
     public function teachingAssignments()
     {
@@ -137,6 +160,60 @@ class AcademicTerm extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | Business Rules
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Archived terms are read-only — they represent historical record and
+     * should never be edited again once archived.
+     */
+    public function getIsLockedAttribute(): bool
+    {
+        return $this->status === 'Archived';
+    }
+
+    /**
+     * Whether this Academic Term already has real scheduling data hanging
+     * off it, in which case it must never be deleted (archive it instead).
+     *
+     * teachingAssignments (Faculty Loading) is the only scheduling-linked
+     * table that exists today. The other modules referenced in the spec —
+     * Schedules, Room Assignments, Curriculum Schedules, Generated
+     * Schedules — aren't built yet. Each check below is a no-op until its
+     * table exists, so this method is safe to call right now and will
+     * automatically start protecting those tables the moment they ship
+     * with an academic_term_id column — no need to remember to come back
+     * and touch this file again for each one.
+     */
+    public function hasSchedulingData(): bool
+    {
+        if ($this->teachingAssignments()->exists()) {
+            return true;
+        }
+
+        $futureScheduleTables = [
+            'schedules',
+            'room_assignments',
+            'curriculum_schedules',
+            'generated_schedules',
+        ];
+
+        foreach ($futureScheduleTables as $table) {
+            if (
+                Schema::hasTable($table)
+                && Schema::hasColumn($table, 'academic_term_id')
+                && DB::table($table)->where('academic_term_id', $this->id)->exists()
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Accessors
     |--------------------------------------------------------------------------
     */
@@ -149,5 +226,19 @@ class AcademicTerm extends Model
     public function getDisplayNameAttribute()
     {
         return "AY {$this->academic_year} \u{2022} {$this->semester_label}";
+    }
+
+    /**
+     * Derives the Start Year (e.g. 2026) from the stored "2026-2027"
+     * academic_year string. Used to pre-fill the Start Year input on the
+     * Edit form — the user never has to re-type or see the raw string.
+     */
+    public function getStartYearAttribute(): ?int
+    {
+        if (! $this->academic_year) {
+            return null;
+        }
+
+        return (int) substr($this->academic_year, 0, 4);
     }
 }

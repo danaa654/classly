@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AcademicTermRequest;
 use App\Models\AcademicTerm;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Throwable;
 
 class AcademicTermController extends Controller implements HasMiddleware
 {
@@ -62,19 +62,31 @@ class AcademicTermController extends Controller implements HasMiddleware
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(AcademicTermRequest $request)
     {
-        $validated = $this->validateAcademicTerm($request);
+        $validated = $request->validatedForSave();
 
-        DB::transaction(function () use ($validated) {
+        try {
 
-            if (! empty($validated['active'])) {
-                AcademicTerm::where('active', true)->update(['active' => false]);
-            }
+            DB::transaction(function () use ($validated) {
 
-            AcademicTerm::create($validated);
+                if (! empty($validated['active'])) {
+                    AcademicTerm::where('active', true)->update(['active' => false]);
+                }
 
-        });
+                AcademicTerm::create($validated);
+
+            });
+
+        } catch (Throwable $e) {
+
+            report($e);
+
+            return back()
+                ->withInput()
+                ->with('error', 'Failed to save Academic Term.');
+
+        }
 
         return redirect()
             ->route('academic-terms.index')
@@ -96,25 +108,49 @@ class AcademicTermController extends Controller implements HasMiddleware
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, AcademicTerm $academicTerm)
+    public function update(AcademicTermRequest $request, AcademicTerm $academicTerm)
     {
-        $validated = $this->validateAcademicTerm($request, $academicTerm);
+        // Archived Academic Terms are historical record — read-only,
+        // never editable again once they reach this status.
+        if ($academicTerm->status === 'Archived') {
+            return redirect()
+                ->route('academic-terms.index')
+                ->with('warning', 'Archived Academic Terms are read-only and cannot be edited.');
+        }
 
-        DB::transaction(function () use ($validated, $academicTerm) {
+        $validated = $request->validatedForSave();
+        $wasArchived = $academicTerm->status === 'Archived';
+        $isBeingArchived = ! $wasArchived && $validated['status'] === 'Archived';
 
-            if (! empty($validated['active'])) {
-                AcademicTerm::where('active', true)
-                    ->where('id', '!=', $academicTerm->id)
-                    ->update(['active' => false]);
-            }
+        try {
 
-            $academicTerm->update($validated);
+            DB::transaction(function () use ($validated, $academicTerm) {
 
-        });
+                if (! empty($validated['active'])) {
+                    AcademicTerm::where('active', true)
+                        ->where('id', '!=', $academicTerm->id)
+                        ->update(['active' => false]);
+                }
+
+                $academicTerm->update($validated);
+
+            });
+
+        } catch (Throwable $e) {
+
+            report($e);
+
+            return back()
+                ->withInput()
+                ->with('error', 'Failed to save Academic Term.');
+
+        }
 
         return redirect()
             ->route('academic-terms.index')
-            ->with('success', 'Academic Term updated successfully.');
+            ->with('success', $isBeingArchived
+                ? 'Academic Term archived successfully.'
+                : 'Academic Term updated successfully.');
     }
 
     /**
@@ -122,111 +158,27 @@ class AcademicTermController extends Controller implements HasMiddleware
      */
     public function destroy(AcademicTerm $academicTerm)
     {
-        abort_if(
-            $academicTerm->sections()->exists() || $academicTerm->schedules()->exists(),
-            422,
-            'Cannot delete an Academic Term that already has Sections or Schedules attached.'
-        );
+        // Rule 7: The active term can never be deleted — the rest of the
+        // app (dashboards, scheduling, the header badge) assumes there's
+        // always exactly one active term to point to.
+        if ($academicTerm->active) {
+            return redirect()
+                ->route('academic-terms.index')
+                ->with('warning', 'The active Academic Term cannot be deleted. Activate another Academic Term first.');
+        }
+
+        // Rule 9: Terms already carrying real scheduling data must be
+        // archived, not deleted, so that data is never orphaned.
+        if ($academicTerm->hasSchedulingData()) {
+            return redirect()
+                ->route('academic-terms.index')
+                ->with('warning', 'This Academic Term contains scheduling data and cannot be deleted. Archive it instead.');
+        }
 
         $academicTerm->delete();
 
         return redirect()
             ->route('academic-terms.index')
             ->with('success', 'Academic Term deleted successfully.');
-    }
-
-    /**
-     * Shared validation rules for store/update.
-     */
-    private function validateAcademicTerm(Request $request, ?AcademicTerm $academicTerm = null): array
-    {
-        return $request->validate([
-
-            'academic_year' => [
-                'required',
-                'string',
-                'regex:/^\d{4}-\d{4}$/',
-            ],
-
-            'semester' => [
-                'required',
-                'integer',
-                Rule::in([1, 2, 3]),
-                Rule::unique('academic_terms', 'semester')
-                    ->where(fn ($query) => $query->where('academic_year', $request->academic_year))
-                    ->ignore($academicTerm?->id),
-            ],
-
-            'registration_start_date' => [
-                'required',
-                'date',
-            ],
-
-            'registration_end_date' => [
-                'required',
-                'date',
-                'after_or_equal:registration_start_date',
-            ],
-
-            'class_start_date' => [
-                'required',
-                'date',
-            ],
-
-            'class_end_date' => [
-                'required',
-                'date',
-                'after_or_equal:class_start_date',
-            ],
-
-            'school_start_time' => [
-                'required',
-                'date_format:H:i',
-            ],
-
-            'school_end_time' => [
-                'required',
-                'date_format:H:i',
-                'after:school_start_time',
-            ],
-
-            'lunch_start_time' => [
-                'nullable',
-                'date_format:H:i',
-            ],
-
-            'lunch_end_time' => [
-                'nullable',
-                'date_format:H:i',
-                'after:lunch_start_time',
-            ],
-
-            'time_interval' => [
-                'required',
-                'integer',
-                'min:5',
-                'max:120',
-            ],
-
-            'monday' => ['boolean'],
-            'tuesday' => ['boolean'],
-            'wednesday' => ['boolean'],
-            'thursday' => ['boolean'],
-            'friday' => ['boolean'],
-            'saturday' => ['boolean'],
-            'sunday' => ['boolean'],
-
-            'status' => [
-                'required',
-                Rule::in([
-                    'Draft',
-                    'Published',
-                    'Archived',
-                ]),
-            ],
-
-            'active' => ['boolean'],
-
-        ]);
     }
 }

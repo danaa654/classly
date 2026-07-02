@@ -1,10 +1,17 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import Toast from '@/Components/Toast.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { ref, computed } from 'vue'
+import { useFlashToast } from '@/Composables/useFlashToast'
 
 defineProps({
     academicTerms: Array,
 })
+
+// Server-driven success/warning/error toasts (created, updated, archived,
+// deleted, and the "can't delete" guards all flow through this).
+const { toast, show } = useFlashToast()
 
 function formatDate(value) {
     if (!value) {
@@ -41,15 +48,67 @@ function statusClasses(status) {
     }[status] ?? 'bg-gray-100 text-gray-700'
 }
 
-function destroy(id) {
-    if (confirm('Are you sure you want to delete this academic term?')) {
-        router.delete(route('academic-terms.destroy', id))
+/*
+|--------------------------------------------------------------------------
+| Delete — Double Confirmation
+|--------------------------------------------------------------------------
+|
+| Step 1: a plain "Delete Academic Term?" confirm dialog.
+| Step 2: a modal requiring the user to type DELETE exactly before the
+|         Delete button enables. Only then is the destroy request sent.
+|
+| The active-term guard is also checked client-side first for instant
+| feedback, but the server (AcademicTermController::destroy) is the real
+| source of truth — it also blocks deletion of terms with scheduling data
+| and reports back via a warning toast either way.
+|
+*/
+
+const pendingTerm = ref(null)   // term selected for the "Delete Academic Term?" step
+const confirmingTerm = ref(null) // term in the "type DELETE" step
+const deleteConfirmText = ref('')
+
+const deleteConfirmValid = computed(() => deleteConfirmText.value === 'DELETE')
+
+function requestDelete(term) {
+    if (term.active) {
+        show('The active Academic Term cannot be deleted. Activate another Academic Term first.', 'warning')
+        return
     }
+
+    pendingTerm.value = term
+}
+
+function proceedToTypedConfirm() {
+    confirmingTerm.value = pendingTerm.value
+    pendingTerm.value = null
+    deleteConfirmText.value = ''
+}
+
+function cancelDelete() {
+    pendingTerm.value = null
+    confirmingTerm.value = null
+    deleteConfirmText.value = ''
+}
+
+function finalizeDelete() {
+    if (! deleteConfirmValid.value || ! confirmingTerm.value) {
+        return
+    }
+
+    const term = confirmingTerm.value
+
+    router.delete(route('academic-terms.destroy', term.id), {
+        onFinish: () => cancelDelete(),
+        onError: () => show('Something went wrong while deleting this Academic Term.', 'error'),
+    })
 }
 </script>
 
 <template>
     <DashboardLayout>
+
+        <Toast :toast="toast" />
 
         <div class="flex justify-between items-center mb-6">
 
@@ -76,7 +135,6 @@ function destroy(id) {
                         <th class="p-4 text-left w-12">#</th>
                         <th class="p-4 text-left">Academic Year</th>
                         <th class="p-4 text-left">Semester</th>
-                        <th class="p-4 text-left">Registration Dates</th>
                         <th class="p-4 text-left">Class Dates</th>
                         <th class="p-4 text-left">School Hours</th>
                         <th class="p-4 text-left">Status</th>
@@ -106,12 +164,6 @@ function destroy(id) {
 
                         <td class="p-4">
                             {{ term.semester_label }}
-                        </td>
-
-                        <td class="p-4 whitespace-nowrap">
-                            {{ formatDate(term.registration_start_date) }}
-                            &ndash;
-                            {{ formatDate(term.registration_end_date) }}
                         </td>
 
                         <td class="p-4 whitespace-nowrap">
@@ -158,15 +210,31 @@ function destroy(id) {
                             <div class="flex justify-center gap-2">
 
                                 <Link
+                                    v-if="term.status !== 'Archived'"
                                     :href="route('academic-terms.edit', term.id)"
                                     class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
                                 >
                                     Edit
                                 </Link>
 
+                                <span
+                                    v-else
+                                    title="Archived Academic Terms are read-only."
+                                    class="bg-gray-200 text-gray-500 px-4 py-2 rounded cursor-not-allowed"
+                                >
+                                    Edit
+                                </span>
+
                                 <button
-                                    @click="destroy(term.id)"
-                                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                                    @click="requestDelete(term)"
+                                    :disabled="term.active"
+                                    :title="term.active
+                                        ? 'Activate a different term before deleting this one.'
+                                        : 'Delete this Academic Term'"
+                                    class="px-4 py-2 rounded text-white"
+                                    :class="term.active
+                                        ? 'bg-gray-300 cursor-not-allowed'
+                                        : 'bg-red-500 hover:bg-red-600'"
                                 >
                                     Delete
                                 </button>
@@ -180,7 +248,7 @@ function destroy(id) {
                     <tr v-if="academicTerms.length === 0">
 
                         <td
-                            colspan="9"
+                            colspan="8"
                             class="text-center p-8 text-gray-500"
                         >
                             No academic terms found.
@@ -192,6 +260,91 @@ function destroy(id) {
 
             </table>
 
+        </div>
+
+        <!-- Step 1: Delete Academic Term? -->
+        <div
+            v-if="pendingTerm"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+        >
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+
+                <h3 class="text-lg font-semibold mb-2">
+                    Delete Academic Term?
+                </h3>
+
+                <p class="text-gray-500 text-sm mb-6">
+                    {{ pendingTerm.academic_year }} &bull; {{ pendingTerm.semester_label }} will be permanently removed. This cannot be undone.
+                </p>
+
+                <div class="flex justify-end gap-2">
+
+                    <button
+                        type="button"
+                        @click="cancelDelete"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="proceedToTypedConfirm"
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                    >
+                        Continue
+                    </button>
+
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Step 2: Type DELETE to confirm -->
+        <div
+            v-if="confirmingTerm"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+        >
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+
+                <h3 class="text-lg font-semibold mb-2">
+                    Type DELETE to permanently delete this Academic Term.
+                </h3>
+
+                <p class="text-gray-500 text-sm mb-4">
+                    {{ confirmingTerm.academic_year }} &bull; {{ confirmingTerm.semester_label }}
+                </p>
+
+                <input
+                    v-model="deleteConfirmText"
+                    type="text"
+                    placeholder="DELETE"
+                    class="w-full border rounded p-2 mb-6 uppercase tracking-wide"
+                    @keyup.enter="finalizeDelete"
+                >
+
+                <div class="flex justify-end gap-2">
+
+                    <button
+                        type="button"
+                        @click="cancelDelete"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="finalizeDelete"
+                        :disabled="! deleteConfirmValid"
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Delete
+                    </button>
+
+                </div>
+
+            </div>
         </div>
 
     </DashboardLayout>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { useAppShell } from '@/Composables/useAppShell'
+import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 // mobileOpen is the same reactive flag Sidebar.vue reads to show/hide
 // itself on small screens — flipping it here is what makes the
@@ -84,6 +85,9 @@ function initials(name) {
                     </span>
                 </div>
             </div>
+
+            <!-- Theme toggle -->
+            <ThemeToggle class="hidden sm:block" />
 
             <!-- Welcome + role -->
             <div class="hidden sm:flex items-center gap-3 brand-font">

@@ -39,12 +39,9 @@ return new class extends Migration
 
             /*
             |--------------------------------------------------------------------------
-            | Important Dates
+            | Class Period
             |--------------------------------------------------------------------------
             */
-
-            $table->date('registration_start_date');
-            $table->date('registration_end_date');
 
             $table->date('class_start_date');
             $table->date('class_end_date');
