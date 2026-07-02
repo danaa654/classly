@@ -49,6 +49,11 @@ class Faculty extends Model
         return $this->hasMany(FacultySubject::class);
     }
 
+    public function teachingAssignments()
+    {
+        return $this->hasMany(TeachingAssignment::class);
+    }
+
     public function getFullNameAttribute()
     {
         return collect([

@@ -1,0 +1,174 @@
+<script setup>
+import { computed, watch } from 'vue';
+
+const props = defineProps({
+    form: { type: Object, required: true },
+    academicTerms: { type: Array, required: true },
+    sections: { type: Array, required: true },
+    curriculumItems: { type: Array, required: true },
+    faculties: { type: Array, required: true },
+    facultySubjects: { type: Array, required: true },
+});
+
+const selectedSection = computed(() =>
+    props.sections.find((section) => section.id === props.form.section_id) ?? null
+);
+
+// Only curriculum items belonging to the selected section's curriculum
+// are offered — this is the "Section -> Curriculum Item" cascade.
+const availableCurriculumItems = computed(() => {
+    if (!selectedSection.value) return [];
+
+    return props.curriculumItems.filter(
+        (item) => item.curriculum_id === selectedSection.value.curriculum_id
+    );
+});
+
+const selectedCurriculumItem = computed(() =>
+    props.curriculumItems.find((item) => item.id === props.form.curriculum_item_id) ?? null
+);
+
+// Only faculty qualified (via Faculty Subjects) to teach the selected
+// curriculum item's subject are offered — the "Curriculum Item ->
+// Faculty" cascade.
+const availableFaculties = computed(() => {
+    if (!selectedCurriculumItem.value) return [];
+
+    const qualifiedFacultyIds = props.facultySubjects
+        .filter((fs) => fs.subject_id === selectedCurriculumItem.value.subject_id)
+        .map((fs) => fs.faculty_id);
+
+    return props.faculties.filter((faculty) => qualifiedFacultyIds.includes(faculty.id));
+});
+
+// Resetting downstream selections whenever an upstream one changes
+// prevents silently submitting a subject/faculty combo left over from
+// a previously selected section or curriculum item.
+watch(
+    () => props.form.section_id,
+    () => {
+        props.form.curriculum_item_id = null;
+        props.form.faculty_id = null;
+    }
+);
+
+watch(
+    () => props.form.curriculum_item_id,
+    () => {
+        props.form.faculty_id = null;
+    }
+);
+</script>
+
+<template>
+    <div class="space-y-6">
+        <!-- Academic Term -->
+        <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700">Academic Term</label>
+            <select
+                v-model="form.academic_term_id"
+                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+            >
+                <option :value="null" disabled>Select an academic term</option>
+                <option v-for="term in academicTerms" :key="term.id" :value="term.id">
+                    {{ term.display_name }}
+                </option>
+            </select>
+            <p v-if="form.errors.academic_term_id" class="mt-1 text-sm text-red-600">
+                {{ form.errors.academic_term_id }}
+            </p>
+        </div>
+
+        <!-- Section -->
+        <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700">Section</label>
+            <select
+                v-model="form.section_id"
+                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+            >
+                <option :value="null" disabled>Select a section</option>
+                <option v-for="section in sections" :key="section.id" :value="section.id">
+                    {{ section.section_code }}
+                    <template v-if="section.curriculum?.program">
+                        — {{ section.curriculum.program.code }}
+                    </template>
+                </option>
+            </select>
+            <p v-if="form.errors.section_id" class="mt-1 text-sm text-red-600">
+                {{ form.errors.section_id }}
+            </p>
+        </div>
+
+        <!-- Curriculum Item -->
+        <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700">Curriculum Item</label>
+            <select
+                v-model="form.curriculum_item_id"
+                :disabled="!selectedSection"
+                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+            >
+                <option :value="null" disabled>
+                    {{ selectedSection ? 'Select a curriculum item' : 'Select a section first' }}
+                </option>
+                <option v-for="item in availableCurriculumItems" :key="item.id" :value="item.id">
+                    <template v-if="item.display_code">{{ item.display_code }} — </template>{{ item.display_title }}
+                </option>
+            </select>
+            <p v-if="selectedSection && availableCurriculumItems.length === 0" class="mt-1 text-sm text-gray-500">
+                This section's curriculum has no active subjects yet.
+            </p>
+            <p v-if="form.errors.curriculum_item_id" class="mt-1 text-sm text-red-600">
+                {{ form.errors.curriculum_item_id }}
+            </p>
+        </div>
+
+        <!-- Faculty -->
+        <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700">Assigned Faculty</label>
+            <select
+                v-model="form.faculty_id"
+                :disabled="!selectedCurriculumItem"
+                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+            >
+                <option :value="null" disabled>
+                    {{ selectedCurriculumItem ? 'Select a faculty member' : 'Select a curriculum item first' }}
+                </option>
+                <option v-for="faculty in availableFaculties" :key="faculty.id" :value="faculty.id">
+                    {{ faculty.full_name }}
+                </option>
+            </select>
+            <p v-if="selectedCurriculumItem && availableFaculties.length === 0" class="mt-1 text-sm text-amber-600">
+                No faculty is currently qualified to teach this subject. Add a qualification via Faculty Subjects first.
+            </p>
+            <p v-if="form.errors.faculty_id" class="mt-1 text-sm text-red-600">
+                {{ form.errors.faculty_id }}
+            </p>
+        </div>
+
+        <!-- Remarks -->
+        <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700">
+                Remarks <span class="text-gray-400">(optional)</span>
+            </label>
+            <textarea
+                v-model="form.remarks"
+                rows="3"
+                placeholder="e.g. Overload, temporary substitute, pending dean approval..."
+                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+            ></textarea>
+            <p v-if="form.errors.remarks" class="mt-1 text-sm text-red-600">
+                {{ form.errors.remarks }}
+            </p>
+        </div>
+
+        <!-- Active -->
+        <label class="flex cursor-pointer items-center gap-3">
+            <input
+                v-model="form.active"
+                type="checkbox"
+                class="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span class="text-sm text-gray-700">Active assignment</span>
+        </label>
+    </div>
+</template>

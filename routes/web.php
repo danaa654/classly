@@ -15,7 +15,9 @@ use App\Http\Controllers\CurriculumItemController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\SectionController;
-
+use App\Http\Controllers\AcademicTermController;
+use App\Http\Controllers\TeachingAssignmentController;
+use App\Http\Controllers\ProfileController;
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -111,6 +113,20 @@ Route::middleware(['auth'])->group(function () {
 
         Route::resource('sections', SectionController::class);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Academic Terms
+        |--------------------------------------------------------------------------
+        |
+        | One Academic Term = one scheduling period (e.g. AY 2026-2027,
+        | 1st Semester). The registrar can prepare future terms while
+        | the current term is still active — only one term may have
+        | active = true at any time (enforced in the controller).
+        |
+        */
+
+        Route::resource('academic-terms', AcademicTermController::class);
+
     });
 
     /*
@@ -132,11 +148,43 @@ Route::middleware(['auth'])->group(function () {
         // Rooms — master list only (no schedules/availability here).
         Route::resource('rooms', RoomController::class);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Teaching Assignments (Faculty Loading)
+        |--------------------------------------------------------------------------
+        |
+        | Assigns which faculty member teaches each curriculum item, for
+        | which section, in a given academic term. This is NOT the final
+        | room/time schedule — it only prepares the data the future
+        | Greedy Scheduler will consume.
+        |
+        */
+
+        Route::resource('teaching-assignments', TeachingAssignmentController::class);
+
         // Future Modules
         // Route::resource('schedules', ScheduleController::class);
 
     });
 
+});
+
+/*
+|--------------------------------------------------------------------------
+| Profile
+|--------------------------------------------------------------------------
+|
+| Every authenticated user (regardless of role) can manage their own
+| account — these were missing from the route file, which caused Ziggy
+| to throw on any page rendering AuthenticatedLayout.vue (it always
+| calls route('profile.edit') and route('logout') in the nav dropdown).
+|
+*/
+
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 /*

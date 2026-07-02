@@ -112,6 +112,11 @@ class CurriculumItem extends Model
         return $this->belongsTo(Subject::class);
     }
 
+    public function teachingAssignments()
+    {
+        return $this->hasMany(TeachingAssignment::class);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Scopes

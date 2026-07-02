@@ -1,18 +1,22 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
+import AppFooter from '@/Components/AppFooter.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 
 const showingNavigationDropdown = ref(false);
+
+const page = usePage();
+const activeAcademicTerm = computed(() => page.props.activeAcademicTerm);
 </script>
 
 <template>
     <div>
-        <div class="min-h-screen bg-gray-100">
+        <div class="min-h-screen bg-gray-100 flex flex-col">
             <nav
                 class="border-b border-gray-100 bg-white"
             >
@@ -43,6 +47,24 @@ const showingNavigationDropdown = ref(false);
                         </div>
 
                         <div class="hidden sm:ms-6 sm:flex sm:items-center">
+                            <!-- Active Academic Term -->
+                            <div
+                                class="flex items-center gap-1.5 rounded-full border px-2.5 py-1"
+                                :class="activeAcademicTerm
+                                    ? 'bg-emerald-50 border-emerald-200'
+                                    : 'bg-gray-50 border-gray-200'"
+                            >
+                                <span
+                                    class="w-1.5 h-1.5 rounded-full shrink-0"
+                                    :class="activeAcademicTerm ? 'bg-emerald-500' : 'bg-gray-400'"
+                                ></span>
+                                <span class="text-[11px] font-semibold text-gray-700">
+                                    {{ activeAcademicTerm
+                                        ? `${activeAcademicTerm.semester_label} \u2022 SY ${activeAcademicTerm.academic_year}`
+                                        : 'No Active Academic Term' }}
+                                </span>
+                            </div>
+
                             <!-- Settings Dropdown -->
                             <div class="relative ms-3">
                                 <Dropdown align="right" width="48">
@@ -190,9 +212,11 @@ const showingNavigationDropdown = ref(false);
             </header>
 
             <!-- Page Content -->
-            <main>
+            <main class="flex-1">
                 <slot />
             </main>
+
+            <AppFooter />
         </div>
     </div>
 </template>

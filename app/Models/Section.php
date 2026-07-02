@@ -38,6 +38,11 @@ class Section extends Model
         return $this->belongsTo(Curriculum::class);
     }
 
+    public function teachingAssignments()
+    {
+        return $this->hasMany(TeachingAssignment::class);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Accessors

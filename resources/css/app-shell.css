@@ -3,14 +3,22 @@
    @import './app-shell.css';
    ═══════════════════════════════════════════════════════════ */
 
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
 :root {
     --sidebar-collapsed-w: 64px;
     --sidebar-expanded-w: 240px;
-    --sidebar-bg: #000B58;
+    --sidebar-bg: #02093f;
     --sidebar-border: rgba(255, 255, 255, 0.05);
     --sidebar-duration: 280ms;
     --sidebar-ease: cubic-bezier(0.4, 0, 0.2, 1);
     --blue-glow: rgba(59, 130, 246, 0.35);
+}
+
+/* ─── Brand font (topbar / logo wordmark) ────────────────────── */
+.brand-font,
+.brand-font * {
+    font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 }
 
 /* ─── Scrollbars ─────────────────────────────────────────────── */
@@ -58,7 +66,7 @@
     transition: opacity 200ms ease 60ms,
                 max-width var(--sidebar-duration) var(--sidebar-ease);
     pointer-events: none;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     letter-spacing: -0.01em;
 }
@@ -129,17 +137,25 @@
     pointer-events: auto;
 }
 
-/* ─── Submenu ────────────────────────────────────────────────── */
+/* ─── Submenu ─────────────────────────────────────────────────
+   Height is driven by content via the 0fr/1fr grid-row trick —
+   no hardcoded max-height, so it never clips regardless of how
+   many children a group has.
+   ──────────────────────────────────────────────────────────── */
 .nav-submenu {
-    overflow: hidden;
-    max-height: 0;
+    display: grid;
+    grid-template-rows: 0fr;
     opacity: 0;
-    transition: max-height 260ms var(--sidebar-ease),
+    transition: grid-template-rows 280ms var(--sidebar-ease),
                 opacity 200ms ease;
 }
 .nav-submenu.is-open {
-    max-height: 180px;
+    grid-template-rows: 1fr;
     opacity: 1;
+}
+.nav-submenu-inner {
+    overflow: hidden;
+    min-height: 0;
 }
 
 /* ─── Nav item icon centering ────────────────────────────────── */
@@ -167,7 +183,7 @@
     transform: translateY(-50%);
     background: #1e293b;
     color: #e2e8f0;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;

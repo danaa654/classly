@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\AcademicTerm;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -33,6 +34,12 @@ class HandleInertiaRequests extends Middleware
 
         return [
             ...parent::share($request),
+
+            // Shared on every Inertia response so any page/component can read
+            // $page.props.activeAcademicTerm without the controller having to
+            // fetch or pass it. Resolves to null (never throws) when no term
+            // is currently marked active.
+            'activeAcademicTerm' => fn () => AcademicTerm::active()->first(),
 
             'auth' => [
                 'user' => $user

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import Sidebar from '@/Components/Sidebar.vue'
 import Topbar from '@/Components/Topbar.vue'
+import AppFooter from '@/Components/AppFooter.vue'
 
 const sidebarOpen = ref(true)
 </script>
@@ -19,6 +20,8 @@ const sidebarOpen = ref(true)
         <main class="flex-1 overflow-y-auto p-6">
             <slot />
         </main>
+
+        <AppFooter />
 
     </div>
 

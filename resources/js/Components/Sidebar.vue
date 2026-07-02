@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { Link, router, usePage } from '@inertiajs/vue3'
 import { useAppShell } from '@/Composables/useAppShell'
 
-const { sidebarPinned, mobileOpen, togglePin, closeMobile } = useAppShell()
+const { sidebarPinned, mobileOpen, closeMobile } = useAppShell()
 
 const page = usePage()
 const user = computed(() => page.props.auth?.user)
@@ -30,7 +30,6 @@ const isVisible = computed(() => sidebarPinned.value || isHovering.value)
 ────────────────────────────────────────────────────────────────── */
 const navConfig = [
     { type: 'link', label: 'Dashboard', route: 'dashboard', icon: '📊', roles: null },
-    { type: 'link', label: 'Users', route: 'users.index', icon: '👥', roles: ['Admin'] },
     {
         type: 'group',
         id: 'academic',
@@ -38,6 +37,7 @@ const navConfig = [
         icon: '🏛️',
         roles: ['Admin', 'Registrar'],
         children: [
+            { label: 'Academic Terms', route: 'academic-terms.index', icon: '🗓️' },
             { label: 'Colleges', route: 'departments.index', icon: '🏫' },
             { label: 'Programs', route: 'programs.index', icon: '🎓' },
             { label: 'Specializations', route: 'specializations.index', icon: '🧩' },
@@ -54,10 +54,26 @@ const navConfig = [
         roles: ['Admin', 'Registrar', 'Dean', 'Assistant Dean', 'OIC'],
         children: [
             { label: 'Faculty', route: 'faculty.index', icon: '👨‍🏫' },
+            // Kept from the original menu — not in the requested list, but removing it
+            // would hide an existing page. Delete this line if it's no longer needed.
             { label: 'Subjects', route: 'subjects.index', icon: '📚' },
             { label: 'Faculty Subjects', route: 'faculty-subjects.index', icon: '🔗' },
             { label: 'Rooms', route: 'rooms.index', icon: '🏢' },
+            { label: 'Teaching Assignments', route: 'teaching-assignments.index', icon: '📋' },
             { label: 'Schedule', href: '#', icon: '🗓️', soon: true },
+        ],
+    },
+    {
+        type: 'group',
+        id: 'system',
+        label: 'System',
+        icon: '⚙️',
+        roles: ['Admin'],
+        children: [
+            { label: 'Users', route: 'users.index', icon: '👥' },
+            // TODO: swap in the real route name once the Settings page exists —
+            // safeRoute() below falls back to '#' instead of throwing if it's missing.
+            { label: 'Settings', route: 'settings.index', icon: '🛠️' },
         ],
     },
 ]
@@ -66,29 +82,55 @@ const visibleNav = computed(() =>
     navConfig.filter((item) => !item.roles || hasRole(...item.roles))
 )
 
+// Ziggy's route() throws on an unknown route name — guard so one bad/placeholder
+// route (e.g. Settings, above) can't break the whole sidebar.
+function safeRoute(name) {
+    try {
+        return route(name)
+    } catch (e) {
+        return '#'
+    }
+}
+
 function itemHref(item) {
-    return item.route ? route(item.route) : item.href
+    return item.route ? safeRoute(item.route) : (item.href ?? '#')
 }
 
 function isCurrent(item) {
-    return item.route ? route().current(item.route) : false
+    if (!item.route) return false
+    try {
+        return route().current(item.route)
+    } catch (e) {
+        return false
+    }
 }
 
 function groupActive(group) {
     return group.children.some((c) => isCurrent(c))
 }
 
-// Open any group that contains the active route by default.
+// Open whichever group contains the active route by default.
 const openGroups = reactive(
     Object.fromEntries(
         navConfig.filter((i) => i.type === 'group').map((g) => [g.id, groupActive(g)])
     )
 )
 
+// Accordion: only one group open at a time.
+function closeOtherGroups(exceptId) {
+    Object.keys(openGroups).forEach((id) => {
+        if (id !== exceptId) openGroups[id] = false
+    })
+}
+
 function onGroupClick(group) {
     if (isVisible.value) {
-        openGroups[group.id] = !openGroups[group.id]
+        const next = !openGroups[group.id]
+        closeOtherGroups(group.id)
+        openGroups[group.id] = next
     } else {
+        // Sidebar is collapsed (rail mode) — jump straight to the first child
+        // instead of expanding in place.
         const first = group.children.find((c) => c.route)
         if (first) router.visit(itemHref(first))
     }
@@ -109,37 +151,24 @@ function onNavClick() {
         <!-- Logo -->
         <div class="flex items-center h-16 px-4 border-b shrink-0" style="border-color: var(--sidebar-border)">
             <div class="flex items-center gap-3 w-full overflow-hidden">
-                <div class="w-8 h-8 shrink-0 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-sm">
-                    C
-                </div>
-                <div class="logo-wordmark flex flex-col leading-none">
-                    <span class="text-white font-black text-[15px] tracking-tight uppercase">
+                <img
+                    src="/logo.png"
+                    alt="Classly"
+                    class="w-8 h-8 shrink-0 rounded-lg object-cover"
+                />
+                <div class="logo-wordmark flex flex-col leading-none brand-font">
+                    <span class="text-white font-extrabold text-[16px] tracking-tight uppercase">
                         Classly<span class="text-blue-500">.</span>
                     </span>
-                    <span class="text-indigo-200/80 font-bold text-[9px] uppercase tracking-[0.15em] mt-0.5">
-                        {{ role }}
+                    <span class="text-indigo-200/80 font-bold text-[7px] uppercase tracking-[0.15em] mt-0.5">
+                        Your Friendly Class Scheduler
                     </span>
                 </div>
-
-                <button
-                    class="pin-btn ml-auto text-indigo-200 hover:text-white transition-colors"
-                    :aria-pressed="sidebarPinned"
-                    aria-label="Pin sidebar open"
-                    @click="togglePin"
-                >
-                    <svg class="w-3.5 h-3.5" :fill="sidebarPinned ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 3l5 5-6 2-3 8-2-2-4 4-2-2 4-4-2-2 8-3 2-6z" />
-                    </svg>
-                </button>
             </div>
         </div>
 
         <!-- Navigation -->
         <nav class="flex-1 overflow-y-auto custom-scrollbar px-2 py-3 space-y-0.5">
-            <div class="nav-section-heading px-2 pb-1 pt-2">
-                <p class="text-[9px] font-black text-indigo-200/70 uppercase tracking-[0.18em]">Menu</p>
-            </div>
-
             <template v-for="item in visibleNav" :key="item.id ?? item.route">
 
                 <!-- Single link -->
@@ -160,7 +189,11 @@ function onNavClick() {
                 </div>
 
                 <!-- Collapsible group -->
-                <div v-else>
+                <div v-else class="nav-group">
+                    <p class="nav-section-heading px-2 pb-1 pt-3 text-[10px] font-black text-indigo-200/60 uppercase tracking-[0.18em]">
+                        {{ item.label }}
+                    </p>
+
                     <div class="nav-link-wrap relative">
                         <div
                             class="relative flex items-center gap-3 px-2 py-2.5 rounded-xl transition-all duration-150 group cursor-pointer"
@@ -181,24 +214,27 @@ function onNavClick() {
                         <span class="nav-tooltip">{{ item.label }}</span>
                     </div>
 
-                    <div class="nav-submenu pl-2 mt-0.5 space-y-0.5" :class="{ 'is-open': openGroups[item.id] }">
-                        <div class="ml-6 pl-3 border-l space-y-0.5" style="border-color: rgba(59, 130, 246, 0.2)">
-                            <component
-                                :is="child.route ? Link : 'span'"
-                                v-for="child in item.children"
-                                :key="child.label"
-                                :href="child.route ? itemHref(child) : undefined"
-                                class="flex items-center gap-2 px-2 py-2 rounded-lg text-[12px] font-semibold transition-all duration-150"
-                                :class="[
-                                    isCurrent(child) ? 'text-blue-200 bg-blue-500/20' : 'text-indigo-100/70 hover:text-white hover:bg-white/10',
-                                    child.soon ? 'opacity-50 cursor-not-allowed pointer-events-none' : '',
-                                ]"
-                                @click="onNavClick"
-                            >
-                                <span class="text-sm">{{ child.icon }}</span>
-                                <span class="nav-label flex-1" style="font-size: 12px">{{ child.label }}</span>
-                                <span v-if="child.soon" class="nav-label text-[9px] font-black uppercase tracking-widest text-indigo-200/50">Soon</span>
-                            </component>
+                    <!-- Submenu: height comes from content via CSS grid, never clipped -->
+                    <div class="nav-submenu" :class="{ 'is-open': openGroups[item.id] }">
+                        <div class="nav-submenu-inner">
+                            <div class="ml-6 pl-3 border-l space-y-0.5" style="border-color: rgba(59, 130, 246, 0.2)">
+                                <component
+                                    :is="child.route ? Link : 'span'"
+                                    v-for="child in item.children"
+                                    :key="child.label"
+                                    :href="child.route ? itemHref(child) : undefined"
+                                    class="flex items-center gap-2 px-2 py-2 rounded-lg text-[13px] font-semibold transition-all duration-150"
+                                    :class="[
+                                        isCurrent(child) ? 'text-blue-200 bg-blue-500/20' : 'text-indigo-100/70 hover:text-white hover:bg-white/10',
+                                        child.soon ? 'opacity-50 cursor-not-allowed pointer-events-none' : '',
+                                    ]"
+                                    @click="onNavClick"
+                                >
+                                    <span class="text-sm">{{ child.icon }}</span>
+                                    <span class="nav-label flex-1" style="font-size: 13px">{{ child.label }}</span>
+                                    <span v-if="child.soon" class="nav-label text-[10px] font-black uppercase tracking-widest text-indigo-200/50">Soon</span>
+                                </component>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -215,8 +251,8 @@ function onNavClick() {
                     <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-[var(--sidebar-bg)]"></span>
                 </div>
                 <div class="sidebar-user-text flex flex-col leading-none overflow-hidden">
-                    <span class="text-[11px] font-bold text-white truncate">{{ user?.name }}</span>
-                    <span class="text-[9px] font-semibold text-indigo-200/80 uppercase tracking-widest mt-0.5">{{ role }}</span>
+                    <span class="text-[12px] font-bold text-white truncate">{{ user?.name }}</span>
+                    <span class="text-[10px] font-semibold text-indigo-200/80 uppercase tracking-widest mt-0.5">{{ role }}</span>
                 </div>
             </div>
 
