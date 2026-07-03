@@ -13,6 +13,7 @@ use App\Http\Controllers\SpecializationController;
 use App\Http\Controllers\CurriculumController;
 use App\Http\Controllers\CurriculumItemController;
 use App\Http\Controllers\SubjectController;
+use App\Http\Controllers\SubjectOfferingController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\SectionController;
 use App\Http\Controllers\AcademicTermController;
@@ -126,6 +127,38 @@ Route::middleware(['auth'])->group(function () {
         */
 
         Route::resource('academic-terms', AcademicTermController::class);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Subject Offerings
+        |--------------------------------------------------------------------------
+        |
+        | The actual classes offered for a selected Academic Term —
+        | generated (never manually created) from active Sections +
+        | their Curriculum's Curriculum Items. Admin + Registrar only:
+        | Dean/Assistant Dean/OIC have no access to this module at all
+        | (no Sidebar link, and a direct hit on any of these routes
+        | 403s via SubjectOfferingController::middleware() /
+        | SubjectOfferingPolicy). "generate" (Create/Store below) is
+        | additionally checked per-action against
+        | SubjectOfferingPolicy::generate() — currently the same
+        | Admin|Registrar set, kept separate so it can be narrowed on
+        | its own later without touching view access.
+        |
+        | No resource route here on purpose — there is no store/update/
+        | destroy for a single offering. "create"/"store" below are the
+        | Generate form, not a manual record form.
+        |
+        */
+
+        Route::get('subject-offerings', [SubjectOfferingController::class, 'index'])
+            ->name('subject-offerings.index');
+
+        Route::get('subject-offerings/generate', [SubjectOfferingController::class, 'create'])
+            ->name('subject-offerings.create');
+
+        Route::post('subject-offerings/generate', [SubjectOfferingController::class, 'store'])
+            ->name('subject-offerings.store');
 
     });
 

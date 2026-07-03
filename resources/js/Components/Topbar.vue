@@ -10,17 +10,12 @@ import ThemeToggle from '@/Components/ThemeToggle.vue'
 const { mobileOpen } = useAppShell()
 
 const page = usePage()
-const user = computed(() => page.props.auth?.user)
 const activeAcademicTerm = computed(() => page.props.activeAcademicTerm)
 
-const role = computed(() => {
-    return user.value?.roles?.length ? user.value.roles[0] : 'User'
-})
-
-function initials(name) {
-    if (!name) return ''
-    return name.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase()
-}
+// TODO: wire this up to a real notifications count once that feature
+// exists (e.g. page.props.unreadNotificationsCount). Left as a static
+// false for now so the bell renders without a badge.
+const unreadNotifications = computed(() => page.props.unreadNotificationsCount > 0)
 </script>
 
 <template>
@@ -89,23 +84,26 @@ function initials(name) {
             <!-- Theme toggle -->
             <ThemeToggle class="hidden sm:block" />
 
-            <!-- Welcome + role -->
-            <div class="hidden sm:flex items-center gap-3 brand-font">
-                <div
-                    class="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-black border border-white/15 shadow-sm"
-                    style="background: linear-gradient(135deg, #2563eb, #4f46e5)"
-                >
-                    {{ initials(user?.name) }}
-                </div>
-                <div class="flex flex-col leading-tight">
-                    <span class="text-[13px] font-semibold text-white">
-                        Welcome, {{ user?.name ?? role }}
-                    </span>
-                    <span class="text-[9px] font-bold text-blue-200/70 uppercase tracking-widest">
-                        {{ role }}
-                    </span>
-                </div>
-            </div>
+            <!-- Notifications -->
+            <button
+                type="button"
+                class="relative flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition-colors duration-150 hover:text-white hover:bg-white/10"
+                aria-label="Notifications"
+            >
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                    />
+                </svg>
+                <span
+                    v-if="unreadNotifications"
+                    class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2"
+                    style="--tw-ring-color: var(--sidebar-bg)"
+                ></span>
+            </button>
         </div>
     </header>
 </template>

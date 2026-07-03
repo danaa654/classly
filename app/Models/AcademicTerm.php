@@ -147,6 +147,19 @@ class AcademicTerm extends Model
         return $this->hasMany(TeachingAssignment::class);
     }
 
+    /**
+     * Subject Offerings generated for this Academic Term (see
+     * SubjectOfferingGeneratorService). Added for the "Generate Subject
+     * Offerings" feature — SubjectOfferingController::create() needs
+     * this to withCount() each term's existing offerings, so the
+     * Generate page can show the replace-or-cancel prompt before the
+     * user submits.
+     */
+    public function subjectOfferings()
+    {
+        return $this->hasMany(SubjectOffering::class);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Scopes
@@ -178,13 +191,19 @@ class AcademicTerm extends Model
      * off it, in which case it must never be deleted (archive it instead).
      *
      * teachingAssignments (Faculty Loading) is the only scheduling-linked
-     * table that exists today. The other modules referenced in the spec —
-     * Schedules, Room Assignments, Curriculum Schedules, Generated
-     * Schedules — aren't built yet. Each check below is a no-op until its
-     * table exists, so this method is safe to call right now and will
-     * automatically start protecting those tables the moment they ship
-     * with an academic_term_id column — no need to remember to come back
-     * and touch this file again for each one.
+     * table that exists today. subject_offerings is deliberately NOT
+     * included here — offerings are pre-scheduling records (no room/time
+     * assigned yet), not scheduling data, so they shouldn't by themselves
+     * block an Academic Term from being deleted. Add 'subject_offerings'
+     * to $futureScheduleTables below if that should change later.
+     *
+     * The other modules referenced in the spec — Schedules, Room
+     * Assignments, Curriculum Schedules, Generated Schedules — aren't
+     * built yet. Each check below is a no-op until its table exists, so
+     * this method is safe to call right now and will automatically start
+     * protecting those tables the moment they ship with an
+     * academic_term_id column — no need to remember to come back and
+     * touch this file again for each one.
      */
     public function hasSchedulingData(): bool
     {

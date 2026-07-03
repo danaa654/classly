@@ -59,6 +59,12 @@ const navConfig = [
             { label: 'Subjects', route: 'subjects.index', icon: '📚' },
             { label: 'Faculty Subjects', route: 'faculty-subjects.index', icon: '🔗' },
             { label: 'Rooms', route: 'rooms.index', icon: '🏢' },
+            // Admin + Registrar only — Dean/Assistant Dean/OIC don't get
+            // this link (matches SubjectOfferingController::middleware()
+            // / SubjectOfferingPolicy, which 403 them if they hit the
+            // route directly anyway). Other items in this group have no
+            // `roles` and stay visible to the whole group as before.
+            { label: 'Subject Offerings', route: 'subject-offerings.index', icon: '🧾', roles: ['Admin', 'Registrar'] },
             { label: 'Teaching Assignments', route: 'teaching-assignments.index', icon: '📋' },
             { label: 'Schedule', href: '#', icon: '🗓️', soon: true },
         ],
@@ -81,6 +87,14 @@ const navConfig = [
 const visibleNav = computed(() =>
     navConfig.filter((item) => !item.roles || hasRole(...item.roles))
 )
+
+// Per-child role filter — same idea as visibleNav above, but at the
+// child level, since a group (e.g. "Faculty & Scheduling") can stay
+// visible to a role while individual items inside it (e.g. "Subject
+// Offerings") are still hidden from that same role.
+function visibleChildren(group) {
+    return group.children.filter((child) => !child.roles || hasRole(...child.roles))
+}
 
 // Ziggy's route() throws on an unknown route name — guard so one bad/placeholder
 // route (e.g. Settings, above) can't break the whole sidebar.
@@ -106,7 +120,7 @@ function isCurrent(item) {
 }
 
 function groupActive(group) {
-    return group.children.some((c) => isCurrent(c))
+    return visibleChildren(group).some((c) => isCurrent(c))
 }
 
 // Open whichever group contains the active route by default.
@@ -131,7 +145,7 @@ function onGroupClick(group) {
     } else {
         // Sidebar is collapsed (rail mode) — jump straight to the first child
         // instead of expanding in place.
-        const first = group.children.find((c) => c.route)
+        const first = visibleChildren(group).find((c) => c.route)
         if (first) router.visit(itemHref(first))
     }
 }
@@ -220,7 +234,7 @@ function onNavClick() {
                             <div class="ml-6 pl-3 border-l space-y-0.5" style="border-color: rgba(59, 130, 246, 0.2)">
                                 <component
                                     :is="child.route ? Link : 'span'"
-                                    v-for="child in item.children"
+                                    v-for="child in visibleChildren(item)"
                                     :key="child.label"
                                     :href="child.route ? itemHref(child) : undefined"
                                     class="flex items-center gap-2 px-2 py-2 rounded-lg text-[13px] font-semibold transition-all duration-150"
@@ -254,6 +268,26 @@ function onNavClick() {
                     <span class="text-[12px] font-bold text-white truncate">{{ user?.name }}</span>
                     <span class="text-[10px] font-semibold text-indigo-200/80 uppercase tracking-widest mt-0.5">{{ role }}</span>
                 </div>
+            </div>
+
+            <div class="nav-link-wrap relative">
+                <Link
+                    :href="route('profile.edit')"
+                    class="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl transition-all duration-150 group"
+                    :class="route().current('profile.edit')
+                        ? 'nav-link-active'
+                        : 'text-slate-100/80 hover:text-white hover:bg-white/10 border border-transparent'"
+                    @click="onNavClick"
+                >
+                    <span v-if="route().current('profile.edit')" class="active-pip"></span>
+                    <span class="nav-item-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    </span>
+                    <span class="nav-label">My Account</span>
+                </Link>
+                <span class="nav-tooltip">My Account</span>
             </div>
 
             <div class="nav-link-wrap relative">
