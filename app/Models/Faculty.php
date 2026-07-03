@@ -18,9 +18,9 @@ class Faculty extends Model
         'contact_number',
         'email',
         'department_id',
+        'faculty_scope',
         'employment_type',
         'max_units',
-        'teaching_qualification',
         'status',
     ];
 

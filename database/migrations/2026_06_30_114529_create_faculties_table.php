@@ -30,11 +30,25 @@ return new class extends Migration
 
             $table->string('email')->unique()->nullable();
 
-            // Home College
+            // Home College — nullable because General Education
+            // faculty (faculty_scope = general) are never tied to a
+            // department.
             $table->foreignId('department_id')
                 ->nullable()
                 ->constrained()
                 ->nullOnDelete();
+
+            // Defines WHO a faculty member is allowed to teach for.
+            // general           -> no department, Minor subjects only,
+            //                      any program.
+            // departmental      -> Major + Minor, own department only.
+            // cross_department  -> Major (own department only) + Minor
+            //                      (own department AND everywhere else).
+            $table->enum('faculty_scope', [
+                'general',
+                'departmental',
+                'cross_department',
+            ])->default('departmental');
 
             // Employment
             $table->enum('employment_type', [
@@ -45,13 +59,6 @@ return new class extends Migration
             // Maximum teaching load
             $table->unsignedTinyInteger('max_units')
                 ->default(24);
-
-            // Can teach...
-            $table->enum('teaching_qualification', [
-                'Major',
-                'Minor',
-                'Both',
-            ]);
 
             // Active / Inactive
             $table->boolean('status')->default(true);

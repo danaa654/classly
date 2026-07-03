@@ -19,13 +19,13 @@ const form = useForm({
     email: props.faculty.email ?? '',
     contact_number: props.faculty.contact_number ?? '',
 
+    faculty_scope: props.faculty.faculty_scope,
+
     department_id: props.faculty.department_id ?? '',
 
     employment_type: props.faculty.employment_type,
 
     max_units: props.faculty.max_units,
-
-    teaching_qualification: props.faculty.teaching_qualification,
 
     status: props.faculty.status,
 })
@@ -35,6 +35,15 @@ watch(
     (value) => {
         if (value === 'Full-Time') {
             form.max_units = 24
+        }
+    }
+)
+
+watch(
+    () => form.faculty_scope,
+    (value) => {
+        if (value === 'general') {
+            form.department_id = ''
         }
     }
 )
@@ -209,6 +218,56 @@ function submit() {
 
                 </div>
 
+                <!-- Faculty Scope -->
+
+                <div>
+
+                    <h2 class="text-lg font-semibold mb-4">
+                        Teaching Permissions
+                    </h2>
+
+                    <label class="block mb-2">
+                        Faculty Scope
+                    </label>
+
+                    <select
+                        v-model="form.faculty_scope"
+                        class="w-full border rounded p-2"
+                    >
+                        <option value="general">
+                            General Education
+                        </option>
+
+                        <option value="departmental">
+                            Departmental
+                        </option>
+
+                        <option value="cross_department">
+                            Cross Department
+                        </option>
+                    </select>
+
+                    <p class="text-sm text-gray-500 mt-2">
+                        <span v-if="form.faculty_scope === 'general'">
+                            Not tied to any department. Can only teach Minor subjects, across all programs.
+                        </span>
+                        <span v-else-if="form.faculty_scope === 'departmental'">
+                            Can teach Major and Minor subjects, but only within their own department.
+                        </span>
+                        <span v-else>
+                            Can teach Major subjects only within their own department, and Minor subjects both inside and outside their department.
+                        </span>
+                    </p>
+
+                    <p
+                        v-if="form.errors.faculty_scope"
+                        class="text-red-500 text-sm mt-1"
+                    >
+                        {{ form.errors.faculty_scope }}
+                    </p>
+
+                </div>
+
                 <!-- Department -->
 
                 <div>
@@ -219,11 +278,12 @@ function submit() {
 
                     <select
                         v-model="form.department_id"
-                        class="w-full border rounded p-2"
+                        :disabled="form.faculty_scope === 'general'"
+                        class="w-full border rounded p-2 disabled:bg-gray-100 disabled:text-gray-400"
                     >
 
                         <option value="">
-                            General Education Faculty
+                            Select Department
                         </option>
 
                         <option
@@ -235,6 +295,13 @@ function submit() {
                         </option>
 
                     </select>
+
+                    <p
+                        v-if="form.faculty_scope === 'general'"
+                        class="text-sm text-gray-500 mt-1"
+                    >
+                        General Education faculty are not assigned to a department.
+                    </p>
 
                     <p
                         v-if="form.errors.department_id"
@@ -286,25 +353,6 @@ function submit() {
                         >
 
                     </div>
-
-                </div>
-
-                <!-- Teaching Qualification -->
-
-                <div>
-
-                    <label class="block mb-2">
-                        Teaching Qualification
-                    </label>
-
-                    <select
-                        v-model="form.teaching_qualification"
-                        class="w-full border rounded p-2"
-                    >
-                        <option value="Major">Major</option>
-                        <option value="Minor">Minor</option>
-                        <option value="Both">Both</option>
-                    </select>
 
                 </div>
 

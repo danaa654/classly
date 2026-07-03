@@ -44,7 +44,7 @@ function destroy(id) {
                         <th class="p-4 text-left">Department</th>
                         <th class="p-4 text-left">Employment</th>
                         <th class="p-4 text-left">Max Units</th>
-                        <th class="p-4 text-left">Qualification</th>
+                        <th class="p-4 text-left">Faculty Scope</th>
                         <th class="p-4 text-left">Status</th>
                         <th class="p-4 text-center whitespace-nowrap">
                             Actions
@@ -102,24 +102,24 @@ function destroy(id) {
                         <td class="p-4">
 
                             <span
-                                v-if="faculty.teaching_qualification === 'Major'"
-                                class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm"
+                                v-if="faculty.faculty_scope === 'general'"
+                                class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm"
                             >
-                                Major
+                                General Education
                             </span>
 
                             <span
-                                v-else-if="faculty.teaching_qualification === 'Minor'"
-                                class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm"
+                                v-else-if="faculty.faculty_scope === 'departmental'"
+                                class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm"
                             >
-                                Minor
+                                Departmental
                             </span>
 
                             <span
                                 v-else
                                 class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm"
                             >
-                                Both
+                                Cross Department
                             </span>
 
                         </td>

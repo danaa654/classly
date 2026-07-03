@@ -65,6 +65,16 @@ class FacultyController extends Controller implements HasMiddleware
      */
     public function store(Request $request)
     {
+        // Faculty Scope drives whether a department is applicable.
+        // General Education faculty are never tied to a department,
+        // so we normalize department_id to null before validating —
+        // regardless of what the form happens to submit.
+        $request->merge([
+            'department_id' => $request->input('faculty_scope') === 'general'
+                ? null
+                : $request->input('department_id'),
+        ]);
+
         $validated = $request->validate([
 
             // Personal Information
@@ -110,8 +120,17 @@ class FacultyController extends Controller implements HasMiddleware
                 'unique:faculties,email',
             ],
 
-            // Department
+            // Faculty Scope
+            'faculty_scope' => [
+                'required',
+                'in:general,departmental,cross_department',
+            ],
+
+            // Department — required for Departmental and Cross
+            // Department scope, must be null for General Education.
             'department_id' => [
+                Rule::requiredIf(fn () => $request->input('faculty_scope') !== 'general'),
+                Rule::prohibitedIf(fn () => $request->input('faculty_scope') === 'general'),
                 'nullable',
                 'exists:departments,id',
             ],
@@ -128,12 +147,6 @@ class FacultyController extends Controller implements HasMiddleware
                 'integer',
                 'min:1',
                 'max:24',
-            ],
-
-            // Qualification
-            'teaching_qualification' => [
-                'required',
-                'in:Major,Minor,Both',
             ],
 
             // Status
@@ -180,6 +193,14 @@ class FacultyController extends Controller implements HasMiddleware
      */
     public function update(Request $request, Faculty $faculty)
     {
+        // Same normalization as store() — General Education always
+        // clears the department, no matter what the client sent.
+        $request->merge([
+            'department_id' => $request->input('faculty_scope') === 'general'
+                ? null
+                : $request->input('department_id'),
+        ]);
+
         $validated = $request->validate([
 
             // Personal Information
@@ -225,8 +246,17 @@ class FacultyController extends Controller implements HasMiddleware
                 Rule::unique('faculties', 'email')->ignore($faculty->id),
             ],
 
-            // Department
+            // Faculty Scope
+            'faculty_scope' => [
+                'required',
+                'in:general,departmental,cross_department',
+            ],
+
+            // Department — required for Departmental and Cross
+            // Department scope, must be null for General Education.
             'department_id' => [
+                Rule::requiredIf(fn () => $request->input('faculty_scope') !== 'general'),
+                Rule::prohibitedIf(fn () => $request->input('faculty_scope') === 'general'),
                 'nullable',
                 'exists:departments,id',
             ],
@@ -243,12 +273,6 @@ class FacultyController extends Controller implements HasMiddleware
                 'integer',
                 'min:1',
                 'max:24',
-            ],
-
-            // Qualification
-            'teaching_qualification' => [
-                'required',
-                'in:Major,Minor,Both',
             ],
 
             // Status
