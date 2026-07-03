@@ -17,26 +17,26 @@ function submit() {
 <template>
     <DashboardLayout>
 
-        <div class="max-w-2xl">
-            <h1 class="text-3xl font-bold mb-6">
+        <div class="mx-auto max-w-2xl">
+            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
                 Add College
             </h1>
 
             <form
                 @submit.prevent="submit"
-                class="bg-white rounded-lg shadow p-6 space-y-5"
+                class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-5 transition-colors duration-300"
             >
 
                 <!-- College Name -->
                 <div>
-                    <label class="block mb-2 font-medium">
+                    <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
                         College Name
                     </label>
 
                     <input
                         v-model="form.name"
                         type="text"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         placeholder="College of Computer Studies"
                     />
 
@@ -50,14 +50,14 @@ function submit() {
 
                 <!-- Abbreviation -->
                 <div>
-                    <label class="block mb-2 font-medium">
+                    <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
                         Abbreviation
                     </label>
 
                     <input
                         v-model="form.abbreviation"
                         type="text"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         placeholder="CCS"
                     />
 
@@ -71,14 +71,14 @@ function submit() {
 
                 <!-- Description -->
                 <div>
-                    <label class="block mb-2 font-medium">
+                    <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
                         Description
                     </label>
 
                     <textarea
                         v-model="form.description"
                         rows="4"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         placeholder="Handles BSIT, BSCS, BSIS and other computer-related programs."
                     ></textarea>
 
@@ -92,13 +92,13 @@ function submit() {
 
                 <!-- Status -->
                 <div>
-                    <label class="block mb-2 font-medium">
+                    <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
                         Status
                     </label>
 
                     <select
                         v-model="form.active"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     >
                         <option :value="true">
                             Active
@@ -121,7 +121,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                    class="btn-save"
                 >
                     {{ form.processing ? 'Saving...' : 'Save College' }}
                 </button>

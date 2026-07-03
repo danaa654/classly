@@ -112,24 +112,24 @@ function finalizeDelete() {
 
         <div class="flex justify-between items-center mb-6">
 
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Academic Terms
             </h1>
 
             <Link
                 :href="route('academic-terms.create')"
-                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                class="btn-save"
             >
                 Add Academic Term
             </Link>
 
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden transition-colors duration-300">
 
             <table class="w-full">
 
-                <thead class="bg-gray-100">
+                <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
 
                     <tr>
                         <th class="p-4 text-left w-12">#</th>
@@ -151,7 +151,7 @@ function finalizeDelete() {
                     <tr
                         v-for="(term, index) in academicTerms"
                         :key="term.id"
-                        class="border-t hover:bg-gray-50"
+                        class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                     >
 
                         <td class="p-4">
@@ -212,7 +212,7 @@ function finalizeDelete() {
                                 <Link
                                     v-if="term.status !== 'Archived'"
                                     :href="route('academic-terms.edit', term.id)"
-                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                                    class="btn-edit"
                                 >
                                     Edit
                                 </Link>
@@ -220,7 +220,7 @@ function finalizeDelete() {
                                 <span
                                     v-else
                                     title="Archived Academic Terms are read-only."
-                                    class="bg-gray-200 text-gray-500 px-4 py-2 rounded cursor-not-allowed"
+                                    class="rounded-full bg-[var(--page-bg)] text-[var(--text-muted)] px-5 py-2 text-sm font-semibold cursor-not-allowed"
                                 >
                                     Edit
                                 </span>
@@ -231,10 +231,8 @@ function finalizeDelete() {
                                     :title="term.active
                                         ? 'Activate a different term before deleting this one.'
                                         : 'Delete this Academic Term'"
-                                    class="px-4 py-2 rounded text-white"
-                                    :class="term.active
-                                        ? 'bg-gray-300 cursor-not-allowed'
-                                        : 'bg-red-500 hover:bg-red-600'"
+                                    class="btn-delete"
+                                    :class="term.active && 'opacity-50 cursor-not-allowed'"
                                 >
                                     Delete
                                 </button>
@@ -249,7 +247,7 @@ function finalizeDelete() {
 
                         <td
                             colspan="8"
-                            class="text-center p-8 text-gray-500"
+                            class="text-center p-8 text-[var(--text-muted)]"
                         >
                             No academic terms found.
                         </td>
@@ -267,13 +265,13 @@ function finalizeDelete() {
             v-if="pendingTerm"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
 
-                <h3 class="text-lg font-semibold mb-2">
+                <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Delete Academic Term?
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-6">
+                <p class="text-[var(--text-secondary)] text-sm mb-6">
                     {{ pendingTerm.academic_year }} &bull; {{ pendingTerm.semester_label }} will be permanently removed. This cannot be undone.
                 </p>
 
@@ -282,7 +280,7 @@ function finalizeDelete() {
                     <button
                         type="button"
                         @click="cancelDelete"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </button>
@@ -290,7 +288,7 @@ function finalizeDelete() {
                     <button
                         type="button"
                         @click="proceedToTypedConfirm"
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                        class="btn-delete"
                     >
                         Continue
                     </button>
@@ -305,13 +303,13 @@ function finalizeDelete() {
             v-if="confirmingTerm"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
 
-                <h3 class="text-lg font-semibold mb-2">
+                <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Type DELETE to permanently delete this Academic Term.
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-4">
+                <p class="text-[var(--text-secondary)] text-sm mb-4">
                     {{ confirmingTerm.academic_year }} &bull; {{ confirmingTerm.semester_label }}
                 </p>
 
@@ -319,7 +317,7 @@ function finalizeDelete() {
                     v-model="deleteConfirmText"
                     type="text"
                     placeholder="DELETE"
-                    class="w-full border rounded p-2 mb-6 uppercase tracking-wide"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] p-2 mb-6 uppercase tracking-wide"
                     @keyup.enter="finalizeDelete"
                 >
 
@@ -328,7 +326,7 @@ function finalizeDelete() {
                     <button
                         type="button"
                         @click="cancelDelete"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </button>
@@ -337,7 +335,7 @@ function finalizeDelete() {
                         type="button"
                         @click="finalizeDelete"
                         :disabled="! deleteConfirmValid"
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="btn-delete"
                     >
                         Delete
                     </button>

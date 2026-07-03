@@ -147,18 +147,18 @@ function curriculumLabel(curriculum) {
         <div class="flex justify-between items-center mb-6">
 
             <div>
-                <h1 class="text-3xl font-bold">
+                <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                     Curriculums
                 </h1>
 
-                <p class="text-gray-500 mt-1">
+                <p class="text-[var(--text-muted)] mt-1">
                     Manage curriculums and their assigned subjects.
                 </p>
             </div>
 
             <Link
                 :href="route('curriculums.create')"
-                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                class="btn-save"
             >
                 + Add Curriculum
             </Link>
@@ -166,19 +166,19 @@ function curriculumLabel(curriculum) {
         </div>
 
         <!-- Toolbar with Filters -->
-        <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-col sm:flex-row gap-3">
+        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-4 mb-4 flex flex-col sm:flex-row gap-3 transition-colors duration-300">
 
             <input
                 v-model="search"
                 type="text"
                 placeholder="Search curriculum code or name..."
-                class="w-full sm:flex-1 border rounded p-2"
+                class="w-full sm:flex-1 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 @keyup.enter="applyFiltersNow"
             >
 
             <select
                 v-model="programId"
-                class="w-full sm:w-56 border rounded p-2"
+                class="w-full sm:w-56 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">All Programs</option>
                 <option
@@ -192,7 +192,7 @@ function curriculumLabel(curriculum) {
 
             <select
                 v-model="status"
-                class="w-full sm:w-40 border rounded p-2"
+                class="w-full sm:w-40 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">All</option>
                 <option value="Active">Active</option>
@@ -202,47 +202,47 @@ function curriculumLabel(curriculum) {
         </div>
 
         <!-- Table or Empty State -->
-        <div v-if="curricula.length === 0" class="bg-white rounded-lg shadow p-12 text-center">
+        <div v-if="curricula.length === 0" class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-12 text-center transition-colors duration-300">
 
-            <div class="text-gray-400 mb-3">
+            <div class="text-[var(--text-muted)] mb-3">
                 <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
             </div>
 
-            <h3 class="text-lg font-semibold text-gray-700 mb-2">
+            <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-2">
                 {{ hasActiveFilters ? 'No curriculums match your filters' : 'No curriculums found' }}
             </h3>
 
-            <p class="text-gray-500 mb-6">
+            <p class="text-[var(--text-muted)] mb-6">
                 {{ hasActiveFilters ? 'Try adjusting your search criteria.' : 'Create your first curriculum to get started.' }}
             </p>
 
             <Link
                 v-if="!hasActiveFilters"
                 :href="route('curriculums.create')"
-                class="inline-block bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                class="inline-block btn-save"
             >
                 + Add Curriculum
             </Link>
 
         </div>
 
-        <div v-else class="bg-white rounded-lg shadow overflow-x-auto">
+        <div v-else class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-x-auto transition-colors duration-300">
 
             <table class="w-full min-w-[800px]">
 
-                <thead class="bg-gray-100">
+                <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
 
                     <tr>
-                        <th class="p-4 text-left w-12">#</th>
-                        <th class="p-4 text-left">Code</th>
-                        <th class="p-4 text-left">Name</th>
-                        <th class="p-4 text-left">Program</th>
-                        <th class="p-4 text-left">Academic Year</th>
-                        <th class="p-4 text-center">Effective Year</th>
-                        <th class="p-4 text-center">Status</th>
-                        <th class="p-4 text-center whitespace-nowrap">Actions</th>
+                        <th class="p-4 text-left w-12 text-[var(--text-secondary)]">#</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Code</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Name</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Program</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Academic Year</th>
+                        <th class="p-4 text-center text-[var(--text-secondary)]">Effective Year</th>
+                        <th class="p-4 text-center text-[var(--text-secondary)]">Status</th>
+                        <th class="p-4 text-center whitespace-nowrap text-[var(--text-secondary)]">Actions</th>
                     </tr>
 
                 </thead>
@@ -252,33 +252,33 @@ function curriculumLabel(curriculum) {
                     <tr
                         v-for="(curriculum, index) in curricula"
                         :key="curriculum.id"
-                        class="border-t hover:bg-gray-50"
+                        class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                     >
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ index + 1 }}
                         </td>
 
-                        <td class="p-4 font-semibold">
+                        <td class="p-4 font-semibold text-[var(--text-primary)]">
                             {{ curriculum.code }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-primary)]">
                             {{ curriculum.name }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ curriculumLabel(curriculum) }}
-                            <span class="text-gray-400 text-xs block">
+                            <span class="text-[var(--text-muted)] text-xs block">
                                 {{ curriculum.program.department?.abbreviation }}
                             </span>
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ curriculum.academic_year }}
                         </td>
 
-                        <td class="p-4 text-center">
+                        <td class="p-4 text-center text-[var(--text-secondary)]">
                             {{ curriculum.effective_year }}
                         </td>
 
@@ -286,14 +286,14 @@ function curriculumLabel(curriculum) {
 
                             <span
                                 v-if="curriculum.active"
-                                class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm"
+                                class="inline-flex px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-sm font-medium"
                             >
                                 Active
                             </span>
 
                             <span
                                 v-else
-                                class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm"
+                                class="inline-flex px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-medium"
                             >
                                 Inactive
                             </span>
@@ -306,21 +306,21 @@ function curriculumLabel(curriculum) {
 
                                 <Link
                                     :href="route('curriculums.items.manage', curriculum.id)"
-                                    class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded text-sm"
+                                    class="btn-info"
                                 >
                                     Manage Subjects
                                 </Link>
 
                                 <Link
                                     :href="route('curriculums.edit', curriculum.id)"
-                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm"
+                                    class="btn-edit"
                                 >
                                     Edit
                                 </Link>
 
                                 <button
                                     @click="requestDelete(curriculum)"
-                                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm"
+                                    class="btn-delete"
                                 >
                                     Delete
                                 </button>
@@ -342,13 +342,13 @@ function curriculumLabel(curriculum) {
             v-if="pendingCurriculum"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
 
-                <h3 class="text-lg font-semibold mb-2">
+                <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Delete Curriculum?
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-6">
+                <p class="text-[var(--text-muted)] text-sm mb-6">
                     {{ pendingCurriculum.code }} ({{ pendingCurriculum.name }})
                     will be permanently removed.
                     <br><br>
@@ -360,7 +360,7 @@ function curriculumLabel(curriculum) {
                     <button
                         type="button"
                         @click="cancelDelete"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </button>
@@ -368,7 +368,7 @@ function curriculumLabel(curriculum) {
                     <button
                         type="button"
                         @click="proceedToTypedConfirm"
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                        class="btn-delete"
                     >
                         Continue
                     </button>
@@ -383,13 +383,13 @@ function curriculumLabel(curriculum) {
             v-if="blockedCurriculum"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
 
-                <h3 class="text-lg font-semibold mb-2">
+                <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Unable to Delete
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-6">
+                <p class="text-[var(--text-muted)] text-sm mb-6">
                     This curriculum is currently being used by the system.
                     <br><br>
                     Please remove all related sections and subjects before deleting this curriculum.
@@ -400,7 +400,7 @@ function curriculumLabel(curriculum) {
                     <button
                         type="button"
                         @click="cancelDelete"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         OK
                     </button>
@@ -415,19 +415,19 @@ function curriculumLabel(curriculum) {
             v-if="confirmingCurriculum"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
 
-                <h3 class="text-lg font-semibold mb-2">
+                <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Final Confirmation
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-4">
+                <p class="text-[var(--text-muted)] text-sm mb-4">
                     To prevent accidental deletion, please type the curriculum code.
                 </p>
 
-                <p class="text-sm text-gray-500 mb-2">
+                <p class="text-sm text-[var(--text-muted)] mb-2">
                     Type:
-                    <span class="font-mono font-semibold text-gray-800">
+                    <span class="font-mono font-semibold text-[var(--text-primary)]">
                         {{ confirmingCurriculum.code }}
                     </span>
                 </p>
@@ -438,7 +438,7 @@ function curriculumLabel(curriculum) {
                     :placeholder="confirmingCurriculum.code"
                     autocomplete="off"
                     spellcheck="false"
-                    class="w-full border rounded p-2 font-mono uppercase"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] font-mono uppercase transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     @keyup.enter="finalizeDelete"
                 >
 
@@ -451,7 +451,7 @@ function curriculumLabel(curriculum) {
                     <button
                         type="button"
                         @click="cancelDelete"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </button>
@@ -460,7 +460,7 @@ function curriculumLabel(curriculum) {
                         type="button"
                         @click="finalizeDelete"
                         :disabled="!deleteConfirmValid"
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="btn-delete"
                     >
                         Delete Curriculum
                     </button>

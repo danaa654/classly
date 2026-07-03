@@ -93,31 +93,33 @@ function confirmSave() {
 
         <Toast :toast="toast" />
 
-        <h1 class="text-3xl font-bold mb-6">
-            Add Curriculum
-        </h1>
+        <div class="mx-auto max-w-3xl">
 
-        <div class="bg-white rounded-lg shadow p-6 max-w-3xl">
+            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
+                Add Curriculum
+            </h1>
 
-            <form @submit.prevent="openConfirm">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 transition-colors duration-300">
+
+                <form @submit.prevent="openConfirm">
 
                 <!-- Program & Specialization -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Program & Specialization
                     </h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Program
                             </label>
 
                             <select
                                 v-model="form.program_id"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
                                 <option value="">
                                     Select Program
@@ -139,13 +141,13 @@ function confirmSave() {
                         </div>
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Specialization (Optional)
                             </label>
 
                             <select
                                 v-model="form.specialization_id"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
                                 <option value="">
                                     None
@@ -173,14 +175,14 @@ function confirmSave() {
                 <!-- Academic Period -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Academic Period
                     </h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Effective Year
                             </label>
 
@@ -189,7 +191,7 @@ function confirmSave() {
                                 type="number"
                                 min="2020"
                                 max="2099"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
 
                             <p v-if="form.errors.effective_year" class="text-red-500 text-sm mt-1">
@@ -198,15 +200,15 @@ function confirmSave() {
                         </div>
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Academic Year
                             </label>
 
-                            <div class="w-full border rounded p-2 bg-gray-50 text-gray-700">
+                            <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
                                 {{ form.academic_year || '—' }}
                             </div>
 
-                            <p class="text-gray-500 text-xs mt-1">
+                            <p class="text-[var(--text-muted)] text-xs mt-1">
                                 Auto-generated from Effective Year
                             </p>
                         </div>
@@ -218,36 +220,36 @@ function confirmSave() {
                 <!-- Generated Fields -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Generated Information
                     </h2>
 
                     <div class="space-y-4">
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Curriculum Code
                             </label>
 
-                            <div class="w-full border rounded p-2 bg-gray-50 font-mono text-gray-700">
+                            <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm font-mono text-[var(--text-secondary)]">
                                 {{ form.code || 'Complete fields above to generate' }}
                             </div>
 
-                            <p class="text-gray-500 text-xs mt-1">
+                            <p class="text-[var(--text-muted)] text-xs mt-1">
                                 Auto-generated from Program, Specialization, and Effective Year
                             </p>
                         </div>
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Curriculum Name
                             </label>
 
-                            <div class="w-full border rounded p-2 bg-gray-50 text-gray-700">
+                            <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
                                 {{ form.name || 'Complete fields above to generate' }}
                             </div>
 
-                            <p class="text-gray-500 text-xs mt-1">
+                            <p class="text-[var(--text-muted)] text-xs mt-1">
                                 Auto-generated from Program, Specialization, and Effective Year
                             </p>
                         </div>
@@ -259,12 +261,12 @@ function confirmSave() {
                 <!-- Status -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Status
                     </h2>
 
                     <div class="flex items-center gap-3">
-                        <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer">
+                        <label class="flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2 text-sm text-[var(--text-primary)] cursor-pointer transition-colors duration-150 hover:border-[#D4A62A]/40">
                             <input
                                 v-model="form.active"
                                 type="checkbox"
@@ -272,7 +274,7 @@ function confirmSave() {
                             <span class="font-medium">Active</span>
                         </label>
 
-                        <p class="text-gray-500 text-sm">
+                        <p class="text-[var(--text-muted)] text-sm">
                             Inactive curriculums will not be available for new sections.
                         </p>
                     </div>
@@ -286,7 +288,7 @@ function confirmSave() {
 
                     <Link
                         :href="route('curriculums.index')"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </Link>
@@ -294,7 +296,7 @@ function confirmSave() {
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded disabled:opacity-50"
+                        class="btn-save"
                     >
                         Save Curriculum
                     </button>
@@ -305,50 +307,52 @@ function confirmSave() {
 
         </div>
 
+        </div>
+
         <!-- Review Confirmation Modal -->
         <div
             v-if="showConfirm"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-md p-6">
 
-                <h3 class="text-lg font-semibold mb-1">
+                <h3 class="text-lg font-semibold mb-1 text-[var(--text-primary)]">
                     Review Curriculum
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-4">
+                <p class="text-[var(--text-muted)] text-sm mb-4">
                     Please review the curriculum details before saving.
                 </p>
 
                 <dl class="space-y-2 text-sm mb-6">
 
-                    <div class="flex justify-between border-b pb-2">
-                        <dt class="text-gray-500">Curriculum Code</dt>
+                    <div class="flex justify-between border-b border-[var(--card-border)] pb-2">
+                        <dt class="text-[var(--text-muted)]">Curriculum Code</dt>
                         <dd class="font-mono font-medium">{{ form.code }}</dd>
                     </div>
 
-                    <div class="flex justify-between border-b pb-2">
-                        <dt class="text-gray-500">Curriculum Name</dt>
+                    <div class="flex justify-between border-b border-[var(--card-border)] pb-2">
+                        <dt class="text-[var(--text-muted)]">Curriculum Name</dt>
                         <dd class="font-medium">{{ form.name }}</dd>
                     </div>
 
-                    <div class="flex justify-between border-b pb-2">
-                        <dt class="text-gray-500">Program</dt>
+                    <div class="flex justify-between border-b border-[var(--card-border)] pb-2">
+                        <dt class="text-[var(--text-muted)]">Program</dt>
                         <dd class="font-medium">{{ selectedProgram?.code }}</dd>
                     </div>
 
-                    <div class="flex justify-between border-b pb-2">
-                        <dt class="text-gray-500">Academic Year</dt>
+                    <div class="flex justify-between border-b border-[var(--card-border)] pb-2">
+                        <dt class="text-[var(--text-muted)]">Academic Year</dt>
                         <dd class="font-medium">{{ form.academic_year }}</dd>
                     </div>
 
-                    <div class="flex justify-between border-b pb-2">
-                        <dt class="text-gray-500">Effective Year</dt>
+                    <div class="flex justify-between border-b border-[var(--card-border)] pb-2">
+                        <dt class="text-[var(--text-muted)]">Effective Year</dt>
                         <dd class="font-medium">{{ form.effective_year }}</dd>
                     </div>
 
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Status</dt>
+                        <dt class="text-[var(--text-muted)]">Status</dt>
                         <dd class="font-medium">{{ form.active ? 'Active' : 'Inactive' }}</dd>
                     </div>
 
@@ -359,7 +363,7 @@ function confirmSave() {
                     <button
                         type="button"
                         @click="showConfirm = false"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </button>
@@ -368,7 +372,7 @@ function confirmSave() {
                         type="button"
                         @click="confirmSave"
                         :disabled="form.processing"
-                        class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                        class="btn-save"
                     >
                         Confirm Save
                     </button>

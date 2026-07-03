@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Link, useForm } from '@inertiajs/vue3'
 import { ArrowLeftIcon, EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
@@ -14,13 +14,22 @@ const form = useForm({
     name: props.user.name,
     email: props.user.email,
     password: '',
+    password_confirmation: '',
     role: props.user.roles[0]?.name ?? '',
     department_id: props.user.department_id ?? '',
 })
 
 const showPassword = ref(false)
+const showConfirmPassword = ref(false)
+
+// Only relevant if they're actually changing the password — leaving both
+// blank (the common case here) should never block the update.
+const passwordsMismatch = computed(() =>
+    form.password.length > 0 && form.password !== form.password_confirmation
+)
 
 function submit() {
+    if (passwordsMismatch.value) return
     form.put(`/users/${props.user.id}`)
 }
 
@@ -32,7 +41,7 @@ const errorClass = 'mt-1.5 text-xs text-rose-500'
 <template>
     <DashboardLayout>
 
-        <div class="max-w-2xl">
+        <div class="mx-auto flex max-w-2xl flex-col">
 
             <Link
                 href="/users"
@@ -90,6 +99,37 @@ const errorClass = 'mt-1.5 text-xs text-rose-500'
                     <p v-if="form.errors.password" :class="errorClass">{{ form.errors.password }}</p>
                 </div>
 
+                <!-- Confirm Password -->
+                <Transition
+                    enter-active-class="transition-all duration-200 ease-out"
+                    enter-from-class="opacity-0 -translate-y-1"
+                    enter-to-class="opacity-100 translate-y-0"
+                >
+                    <div v-if="form.password.length > 0">
+                        <label :class="labelClass">Confirm Password</label>
+                        <div class="relative">
+                            <input
+                                v-model="form.password_confirmation"
+                                :type="showConfirmPassword ? 'text' : 'password'"
+                                :class="inputClass"
+                                class="pr-11"
+                            />
+                            <button
+                                type="button"
+                                tabindex="-1"
+                                @click="showConfirmPassword = !showConfirmPassword"
+                                :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'"
+                                class="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-[var(--text-muted)] transition-colors duration-150 hover:text-[var(--text-primary)]"
+                            >
+                                <EyeSlashIcon v-if="showConfirmPassword" class="h-4 w-4" />
+                                <EyeIcon v-else class="h-4 w-4" />
+                            </button>
+                        </div>
+                        <p v-if="passwordsMismatch" :class="errorClass">Passwords do not match.</p>
+                        <p v-else-if="form.errors.password_confirmation" :class="errorClass">{{ form.errors.password_confirmation }}</p>
+                    </div>
+                </Transition>
+
                 <!-- Role -->
                 <div>
                     <label :class="labelClass">Role</label>
@@ -123,7 +163,7 @@ const errorClass = 'mt-1.5 text-xs text-rose-500'
                 <div class="flex items-center gap-3 pt-2">
                     <button
                         type="submit"
-                        :disabled="form.processing"
+                        :disabled="form.processing || passwordsMismatch"
                         class="rounded-full bg-[#D4A62A] px-6 py-2.5 text-sm font-semibold text-[#0B1220] shadow-lg shadow-[#D4A62A]/20 transition-all duration-200 hover:scale-[1.02] hover:bg-[#E8C766] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                     >
                         {{ form.processing ? 'Updating...' : 'Update User' }}

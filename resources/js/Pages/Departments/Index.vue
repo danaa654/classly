@@ -17,29 +17,29 @@ function destroy(id) {
     <DashboardLayout>
 
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Colleges
             </h1>
 
             <Link
                 href="/departments/create"
-                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                class="btn-save"
             >
                 Add College
             </Link>
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden transition-colors duration-300">
 
             <table class="w-full">
 
-                <thead class="bg-gray-100">
+                <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
                     <tr>
-                        <th class="text-left p-4">Abbreviation</th>
-                        <th class="text-left p-4">College Name</th>
-                        <th class="text-left p-4">Description</th>
-                        <th class="text-center p-4">Status</th>
-                        <th class="text-center p-4">Actions</th>
+                        <th class="text-left p-4 text-[var(--text-secondary)]">Abbreviation</th>
+                        <th class="text-left p-4 text-[var(--text-secondary)]">College Name</th>
+                        <th class="text-left p-4 text-[var(--text-secondary)]">Description</th>
+                        <th class="text-center p-4 text-[var(--text-secondary)]">Status</th>
+                        <th class="text-center p-4 text-[var(--text-secondary)]">Actions</th>
                     </tr>
                 </thead>
 
@@ -48,17 +48,17 @@ function destroy(id) {
                     <tr
                         v-for="department in departments"
                         :key="department.id"
-                        class="border-t hover:bg-gray-50"
+                        class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                     >
-                        <td class="p-4 font-semibold">
+                        <td class="p-4 font-semibold text-[var(--text-primary)]">
                             {{ department.abbreviation }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-primary)]">
                             {{ department.name }}
                         </td>
 
-                        <td class="p-4 text-gray-600">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ department.description || '—' }}
                         </td>
 
@@ -82,14 +82,14 @@ function destroy(id) {
 
                             <Link
                                 :href="`/departments/${department.id}/edit`"
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                                class="btn-edit"
                             >
                                 Edit
                             </Link>
 
                             <button
                                 @click="destroy(department.id)"
-                                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                                class="btn-delete"
                             >
                                 Delete
                             </button>
@@ -101,7 +101,7 @@ function destroy(id) {
                     <tr v-if="departments.length === 0">
                         <td
                             colspan="5"
-                            class="text-center p-6 text-gray-500"
+                            class="text-center p-6 text-[var(--text-muted)]"
                         >
                             No colleges found.
                         </td>

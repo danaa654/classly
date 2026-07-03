@@ -5,6 +5,18 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 
+/* ─── System-wide typefaces ─────────────────────────────────────
+   Matches Welcome.vue exactly: IBM Plex Sans is the base font for
+   everything (buttons, table headers, table content, labels — the
+   tagline, card titles, and card descriptions on Welcome.vue are
+   all this one font too). Fraunces is reserved for the big serif
+   page title, same treatment as "CLASSLY". IBM Plex Mono stays
+   available for small uppercase eyebrow labels like Welcome.vue's
+   "What Classly Handles", if you want that look somewhere else. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&display=swap');
+
 :root {
     --sidebar-collapsed-w: 64px;
     --sidebar-expanded-w: 240px;
@@ -13,12 +25,137 @@
     --sidebar-duration: 280ms;
     --sidebar-ease: cubic-bezier(0.4, 0, 0.2, 1);
     --blue-glow: rgba(59, 130, 246, 0.35);
+
+    /* ─── Theme tokens (light) ───────────────────────────────────
+       Same palette as Welcome.vue's light mode (#EAF6FF / #16213E)
+       so pages behind DashboardLayout match the public landing
+       page. DashboardLayout.vue, and the Users Index/Create/Edit
+       pages, already reference these vars — they just needed to
+       be defined somewhere. */
+    --page-bg: #EAF6FF;
+    --card-bg: #ffffff;
+    --card-border: rgba(22, 33, 62, 0.1);
+    --text-primary: #16213E;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+}
+
+/* ─── Theme tokens (dark) ─────────────────────────────────────
+   Matches Welcome.vue's dark mode (#0B1220 / #F3EFE6). The .dark
+   class is toggled on <html> by useAppShell() — the same
+   mechanism ThemeToggle.vue and Welcome.vue already rely on. */
+:root.dark {
+    --page-bg: #0B1220;
+    --card-bg: #151B2E;
+    --card-border: rgba(243, 239, 230, 0.1);
+    --text-primary: #F3EFE6;
+    --text-secondary: #C7CEDD;
+    --text-muted: #8B93A7;
 }
 
 /* ─── Brand font (topbar / logo wordmark) ────────────────────── */
 .brand-font,
 .brand-font * {
     font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── Body copy typeface ─────────────────────────────────────────
+   Actual <p> tags (subtitles, descriptions, error/empty-state text,
+   Welcome.vue's marketing copy, etc.) render in the editorial serif
+   instead of the sans default. Headings, buttons, labels, badges,
+   and table headers are untouched — they keep General Sans from
+   the html-level preflight in tailwind.config.js.
+/* ─── Page titles ─────────────────────────────────────────────
+   Every real <h1> (Academic Terms, Users, Colleges, etc.) gets
+   the same treatment as "CLASSLY" on Welcome.vue. Nothing else
+   changes — everything else in this app, including subtitles,
+   card titles, and descriptions, stays IBM Plex Sans (the base
+   font from tailwind.config.js), matching Welcome.vue's actual
+   design. `.font-sans-override` opts a specific h1 back to the
+   base font if a spot ever needs it. */
+h1 {
+    font-family: 'Fraunces', ui-serif, Georgia, serif;
+}
+h1.font-sans-override {
+    font-family: inherit;
+}
+
+/* ─── Table header row ────────────────────────────────────────
+   Same font as the rest of the UI (IBM Plex Sans — matches
+   "Your Friendly Class Scheduler" on Welcome.vue, which is just
+   the site's base font, not a special one). Sized up from the
+   browser default for readability, and forced to a light color
+   in dark mode since several table pages (e.g. Academic Terms)
+   don't yet use the --text-primary token and would otherwise stay
+   dark-on-dark. Pages that already set their own size/weight/color
+   via Tailwind classes keep working as before — class selectors
+   win over this element selector. */
+th {
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+/* ─── Table body content ─────────────────────────────────────── */
+td {
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.875rem;
+}
+
+/* Dark mode: force readable light text on every table, including
+   pages that don't reference --text-primary at all yet. */
+:root.dark th,
+:root.dark td {
+    color: var(--text-primary);
+}
+
+/* ─── Action buttons ─────────────────────────────────────────────
+   Same font as Login on Welcome.vue (IBM Plex Sans, semibold),
+   pill-shaped like Login's rounded-full, color-coded by action so
+   the meaning is consistent everywhere: blue = edit, green = save,
+   red = delete. Drop-in replacement for the old ad-hoc
+   `bg-blue-500 ... rounded` classes — swap those for `.btn-edit`
+   etc. and remove the color/radius utilities from the element. */
+.btn-edit,
+.btn-save,
+.btn-delete,
+.btn-info,
+.btn-neutral {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    padding: 0.5rem 1.25rem;
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #ffffff;
+    transition: background-color 150ms ease, transform 150ms ease, opacity 150ms ease;
+    border: none;
+    cursor: pointer;
+}
+.btn-edit { background: #2563eb; }
+.btn-edit:hover { background: #1d4ed8; }
+.btn-save { background: #16a34a; }
+.btn-save:hover { background: #15803d; }
+.btn-delete { background: #dc2626; }
+.btn-delete:hover { background: #b91c1c; }
+.btn-info { background: #6366f1; }
+.btn-info:hover { background: #4f46e5; }
+.btn-neutral {
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    border: 1px solid var(--card-border);
+}
+.btn-neutral:hover { color: var(--text-primary); }
+.btn-edit:disabled,
+.btn-save:disabled,
+.btn-delete:disabled,
+.btn-info:disabled,
+.btn-neutral:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* ─── Scrollbars ─────────────────────────────────────────────── */

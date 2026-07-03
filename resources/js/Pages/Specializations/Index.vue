@@ -18,48 +18,48 @@ function destroy(id) {
 
         <div class="flex justify-between items-center mb-6">
 
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Specializations
             </h1>
 
             <Link
                 :href="route('specializations.create')"
-                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                class="btn-save"
             >
                 Add Specialization
             </Link>
 
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden transition-colors duration-300">
 
             <table class="w-full">
 
-                <thead class="bg-gray-100">
+                <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
 
                     <tr>
 
-                        <th class="text-left p-4">
+                        <th class="text-left p-4 text-[var(--text-secondary)]">
                             College
                         </th>
 
-                        <th class="text-left p-4">
+                        <th class="text-left p-4 text-[var(--text-secondary)]">
                             Program
                         </th>
 
-                        <th class="text-left p-4">
+                        <th class="text-left p-4 text-[var(--text-secondary)]">
                             Code
                         </th>
 
-                        <th class="text-left p-4">
+                        <th class="text-left p-4 text-[var(--text-secondary)]">
                             Specialization
                         </th>
 
-                        <th class="text-left p-4">
+                        <th class="text-left p-4 text-[var(--text-secondary)]">
                             Status
                         </th>
 
-                        <th class="text-left p-4">
+                        <th class="text-left p-4 text-[var(--text-secondary)]">
                             Actions
                         </th>
 
@@ -72,22 +72,22 @@ function destroy(id) {
                     <tr
                         v-for="specialization in specializations"
                         :key="specialization.id"
-                        class="border-t"
+                        class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                     >
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ specialization.program.department.abbreviation }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ specialization.program.code }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 font-semibold text-[var(--text-primary)]">
                             {{ specialization.code }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-primary)]">
                             {{ specialization.name }}
                         </td>
 
@@ -95,14 +95,14 @@ function destroy(id) {
 
                             <span
                                 v-if="specialization.active"
-                                class="text-green-600 font-semibold"
+                                class="inline-flex px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-sm font-medium"
                             >
                                 Active
                             </span>
 
                             <span
                                 v-else
-                                class="text-red-600 font-semibold"
+                                class="inline-flex px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-medium"
                             >
                                 Inactive
                             </span>
@@ -113,14 +113,14 @@ function destroy(id) {
 
                             <Link
                                 :href="route('specializations.edit', specialization.id)"
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                                class="btn-edit"
                             >
                                 Edit
                             </Link>
 
                             <button
                                 @click="destroy(specialization.id)"
-                                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                                class="btn-delete"
                             >
                                 Delete
                             </button>
@@ -133,7 +133,7 @@ function destroy(id) {
 
                         <td
                             colspan="6"
-                            class="text-center p-6 text-gray-500"
+                            class="text-center p-6 text-[var(--text-muted)]"
                         >
                             No specializations found.
                         </td>

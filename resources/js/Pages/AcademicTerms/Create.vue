@@ -85,25 +85,27 @@ function confirmSave() {
 
         <Toast :toast="toast" />
 
-        <h1 class="text-3xl font-bold mb-6">
-            Add Academic Term
-        </h1>
+        <div class="mx-auto max-w-3xl">
 
-        <div class="bg-white rounded-lg shadow p-6 max-w-3xl">
+            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
+                Add Academic Term
+            </h1>
+
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 transition-colors duration-300">
 
             <form @submit.prevent="openConfirm">
 
                 <!-- Academic Period -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Academic Period
                     </h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Start Year
                             </label>
 
@@ -115,12 +117,12 @@ function confirmSave() {
                                 pattern="[0-9]*"
                                 maxlength="4"
                                 placeholder="e.g. 2026"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
 
                             <!-- Live "Academic Year: 2026-2027" preview -->
-                            <p v-if="academicYearPreview" class="text-gray-500 text-sm mt-1">
-                                Academic Year: <span class="font-medium text-gray-700">{{ academicYearPreview }}</span>
+                            <p v-if="academicYearPreview" class="text-[var(--text-muted)] text-sm mt-1">
+                                Academic Year: <span class="font-medium text-[var(--text-primary)]">{{ academicYearPreview }}</span>
                             </p>
 
                             <p v-if="form.errors.start_year" class="text-red-500 text-sm mt-1">
@@ -129,13 +131,13 @@ function confirmSave() {
                         </div>
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Semester
                             </label>
 
                             <select
                                 v-model="form.semester"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
                                 <option value="" disabled>
                                     Select a semester
@@ -161,14 +163,14 @@ function confirmSave() {
                 <!-- Class Period -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Class Period
                     </h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Class Start
                             </label>
 
@@ -177,7 +179,7 @@ function confirmSave() {
                                 type="date"
                                 :min="dateRange.min"
                                 :max="dateRange.max"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
 
                             <p v-if="form.errors.class_start_date" class="text-red-500 text-sm mt-1">
@@ -186,7 +188,7 @@ function confirmSave() {
                         </div>
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Class End
                             </label>
 
@@ -195,7 +197,7 @@ function confirmSave() {
                                 type="date"
                                 :min="dateRange.min"
                                 :max="dateRange.max"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
 
                             <p v-if="form.errors.class_end_date" class="text-red-500 text-sm mt-1">
@@ -215,21 +217,21 @@ function confirmSave() {
                 <!-- School Hours -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         School Hours
                     </h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 School Start Time
                             </label>
 
                             <input
                                 v-model="form.school_start_time"
                                 type="time"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
 
                             <p v-if="form.errors.school_start_time" class="text-red-500 text-sm mt-1">
@@ -238,14 +240,14 @@ function confirmSave() {
                         </div>
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 School End Time
                             </label>
 
                             <input
                                 v-model="form.school_end_time"
                                 type="time"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
 
                             <p v-if="form.errors.school_end_time" class="text-red-500 text-sm mt-1">
@@ -259,15 +261,15 @@ function confirmSave() {
                         </p>
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Lunch Start
-                                <span class="text-gray-400 font-normal">(optional)</span>
+                                <span class="text-[var(--text-muted)] font-normal">(optional)</span>
                             </label>
 
                             <input
                                 v-model="form.lunch_start_time"
                                 type="time"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
 
                             <p v-if="form.errors.lunch_start_time" class="text-red-500 text-sm mt-1">
@@ -276,15 +278,15 @@ function confirmSave() {
                         </div>
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Lunch End
-                                <span class="text-gray-400 font-normal">(optional)</span>
+                                <span class="text-[var(--text-muted)] font-normal">(optional)</span>
                             </label>
 
                             <input
                                 v-model="form.lunch_end_time"
                                 type="time"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
 
                             <p v-if="form.errors.lunch_end_time" class="text-red-500 text-sm mt-1">
@@ -310,12 +312,12 @@ function confirmSave() {
                 <!-- Scheduler Settings -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Scheduler Settings
                     </h2>
 
                     <div class="max-w-xs">
-                        <label class="block font-medium mb-1">
+                        <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                             Time Interval (minutes)
                         </label>
 
@@ -324,7 +326,7 @@ function confirmSave() {
                             type="number"
                             min="5"
                             max="120"
-                            class="w-full border rounded p-2"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
 
                         <p v-if="form.errors.time_interval" class="text-red-500 text-sm mt-1">
@@ -337,7 +339,7 @@ function confirmSave() {
                 <!-- Working Days -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Working Days
                     </h2>
 
@@ -346,7 +348,7 @@ function confirmSave() {
                         <label
                             v-for="day in DAYS"
                             :key="day.key"
-                            class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer"
+                            class="flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2 text-sm text-[var(--text-primary)] cursor-pointer transition-colors duration-150 hover:border-[#D4A62A]/40"
                         >
                             <input
                                 v-model="form[day.key]"
@@ -362,20 +364,20 @@ function confirmSave() {
                 <!-- Status & Activation -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3">
+                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
                         Status & Activation
                     </h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
 
                         <div>
-                            <label class="block font-medium mb-1">
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                                 Status
                             </label>
 
                             <select
                                 v-model="form.status"
-                                class="w-full border rounded p-2"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                             >
                                 <option value="Draft">Draft</option>
                                 <option value="Published">Published</option>
@@ -388,7 +390,7 @@ function confirmSave() {
                         </div>
 
                         <div>
-                            <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer mt-1">
+                            <label class="flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2 text-sm text-[var(--text-primary)] cursor-pointer transition-colors duration-150 hover:border-[#D4A62A]/40 mt-1">
                                 <input
                                     v-model="form.active"
                                     type="checkbox"
@@ -396,7 +398,7 @@ function confirmSave() {
                                 Set as the active Academic Term
                             </label>
 
-                            <p class="text-gray-400 text-sm mt-1">
+                            <p class="text-[var(--text-muted)] text-sm mt-1">
                                 Activating this term will automatically deactivate any other active term.
                             </p>
 
@@ -417,7 +419,7 @@ function confirmSave() {
 
                     <Link
                         :href="route('academic-terms.index')"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </Link>
@@ -425,7 +427,7 @@ function confirmSave() {
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded disabled:opacity-50"
+                        class="btn-save"
                     >
                         Save Academic Term
                     </button>
@@ -434,6 +436,8 @@ function confirmSave() {
 
             </form>
 
+            </div>
+
         </div>
 
         <!-- Review Confirmation Modal -->
@@ -441,36 +445,36 @@ function confirmSave() {
             v-if="showConfirm"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-md p-6">
 
-                <h3 class="text-lg font-semibold mb-1">
+                <h3 class="text-lg font-semibold mb-1 text-[var(--text-primary)]">
                     Review Academic Term
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-4">
+                <p class="text-[var(--text-secondary)] text-sm mb-4">
                     Please review the Academic Year, Semester and Class Dates before saving.
                 </p>
 
                 <dl class="space-y-2 text-sm mb-6">
 
-                    <div class="flex justify-between border-b pb-2">
-                        <dt class="text-gray-500">Academic Year</dt>
-                        <dd class="font-medium">{{ academicYearPreview ?? '—' }}</dd>
+                    <div class="flex justify-between border-b border-[var(--card-border)] pb-2">
+                        <dt class="text-[var(--text-secondary)]">Academic Year</dt>
+                        <dd class="font-medium text-[var(--text-primary)]">{{ academicYearPreview ?? '—' }}</dd>
                     </div>
 
-                    <div class="flex justify-between border-b pb-2">
-                        <dt class="text-gray-500">Semester</dt>
-                        <dd class="font-medium">{{ semesterLabel ?? '—' }}</dd>
+                    <div class="flex justify-between border-b border-[var(--card-border)] pb-2">
+                        <dt class="text-[var(--text-secondary)]">Semester</dt>
+                        <dd class="font-medium text-[var(--text-primary)]">{{ semesterLabel ?? '—' }}</dd>
                     </div>
 
-                    <div class="flex justify-between border-b pb-2">
-                        <dt class="text-gray-500">Class Start</dt>
-                        <dd class="font-medium">{{ form.class_start_date || '—' }}</dd>
+                    <div class="flex justify-between border-b border-[var(--card-border)] pb-2">
+                        <dt class="text-[var(--text-secondary)]">Class Start</dt>
+                        <dd class="font-medium text-[var(--text-primary)]">{{ form.class_start_date || '—' }}</dd>
                     </div>
 
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Class End</dt>
-                        <dd class="font-medium">{{ form.class_end_date || '—' }}</dd>
+                        <dt class="text-[var(--text-secondary)]">Class End</dt>
+                        <dd class="font-medium text-[var(--text-primary)]">{{ form.class_end_date || '—' }}</dd>
                     </div>
 
                 </dl>
@@ -480,7 +484,7 @@ function confirmSave() {
                     <button
                         type="button"
                         @click="showConfirm = false"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </button>
@@ -489,7 +493,7 @@ function confirmSave() {
                         type="button"
                         @click="confirmSave"
                         :disabled="form.processing"
-                        class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                        class="btn-save"
                     >
                         Confirm Save
                     </button>

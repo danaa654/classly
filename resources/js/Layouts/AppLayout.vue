@@ -10,10 +10,15 @@ import Topbar from '@/Components/Topbar.vue';
         <div id="layout-content">
             <Topbar />
 
-            <!-- Light gray scrollable content area — everything the page
+            <!-- Themed scrollable content area — everything the page
                  passes into the default slot renders here, below the dark
-                 sidebar/topbar shell. -->
-            <main class="flex-1 overflow-y-auto custom-scrollbar bg-gray-50">
+                 sidebar/topbar shell. Switches with light/dark mode via
+                 the --page-bg token (see app-shell.css), same palette
+                 Welcome.vue uses on the public landing page. -->
+            <main
+                class="flex-1 overflow-y-auto custom-scrollbar p-6 transition-colors duration-300"
+                style="background: var(--page-bg); color: var(--text-primary)"
+            >
                 <slot />
             </main>
         </div>

@@ -17,30 +17,30 @@ function destroy(id) {
     <DashboardLayout>
 
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Programs
             </h1>
 
             <Link
                 href="/programs/create"
-                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                class="btn-save"
             >
                 Add Program
             </Link>
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden transition-colors duration-300">
 
             <table class="w-full">
 
-                <thead class="bg-gray-100">
+                <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
                     <tr>
-                        <th class="text-left p-4">College</th>
-                        <th class="text-left p-4">Program Code</th>
-                        <th class="text-left p-4">Program Name</th>
-                        <th class="text-center p-4">Years</th>
-                        <th class="text-center p-4">Status</th>
-                        <th class="text-center p-4">Actions</th>
+                        <th class="text-left p-4 text-[var(--text-secondary)]">College</th>
+                        <th class="text-left p-4 text-[var(--text-secondary)]">Program Code</th>
+                        <th class="text-left p-4 text-[var(--text-secondary)]">Program Name</th>
+                        <th class="text-center p-4 text-[var(--text-secondary)]">Years</th>
+                        <th class="text-center p-4 text-[var(--text-secondary)]">Status</th>
+                        <th class="text-center p-4 text-[var(--text-secondary)]">Actions</th>
                     </tr>
                 </thead>
 
@@ -49,22 +49,22 @@ function destroy(id) {
                     <tr
                         v-for="program in programs"
                         :key="program.id"
-                        class="border-t hover:bg-gray-50"
+                        class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                     >
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ program.department?.abbreviation }}
                         </td>
 
-                        <td class="p-4 font-semibold">
+                        <td class="p-4 font-semibold text-[var(--text-primary)]">
                             {{ program.code }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-primary)]">
                             {{ program.name }}
                         </td>
 
-                        <td class="p-4 text-center">
+                        <td class="p-4 text-center text-[var(--text-secondary)]">
                             {{ program.years }}
                         </td>
 
@@ -90,14 +90,14 @@ function destroy(id) {
 
                             <Link
                                 :href="`/programs/${program.id}/edit`"
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                                class="btn-edit"
                             >
                                 Edit
                             </Link>
 
                             <button
                                 @click="destroy(program.id)"
-                                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                                class="btn-delete"
                             >
                                 Delete
                             </button>
@@ -107,7 +107,7 @@ function destroy(id) {
                     </tr>
 
                     <tr v-if="programs.length === 0">
-                        <td colspan="6" class="text-center p-6 text-gray-500">
+                        <td colspan="6" class="text-center p-6 text-[var(--text-muted)]">
                             No programs found.
                         </td>
                     </tr>

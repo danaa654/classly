@@ -41,19 +41,19 @@ use Illuminate\Database\Seeder;
  * 3. `required_room_group` (General/BSIT/BSED/BSHM/BSTM/BSCRIM) is
  *    derived per-source-method via `tag()` in run() — each private
  *    catalog method (bsitOnly, bshmOnly, etc.) is tagged with its
- *    program's room group when merged. Shared General Education/
- *    PATHFIT/NSTP subjects and the BSTM/BSHM tourism-hospitality
- *    bridge subjects (THC/FLT/BC) are tagged 'General' since they
- *    aren't tied to a single program's specialized rooms. NON-ABM1-5
- *    are the one exception in that same catalog: they set an explicit
- *    'group' => ['BSTM', 'BSHM'] array on the row (tag() only fills in
- *    a group when one isn't already set), since they're bridging
- *    courses specific to those two programs rather than a truly
- *    general subject — Pass 1 in run() inserts one pivot row per
- *    program in the array. All four BSCRIM majors (QD/FI/FAI/LD)
- *    collapse to the single 'BSCRIM' room group per the migration's
- *    own design (the scheduler just needs "a Criminalistics lab", not
- *    which specialization).
+ *    program's room group when merged. Only true General Education/
+ *    PATHFIT/NSTP subjects (generalEducationAndMinors()) fall through
+ *    to the 'General' tag, since they aren't tied to a single program's
+ *    specialized rooms. Every row in tourismHospitalityShared() —
+ *    BC1/BC2, THC1-10, FLT1-5, RESEARCH, and NON-ABM1-5 — sets an
+ *    explicit 'group' => ['BSTM', 'BSHM'] array instead (tag() only
+ *    fills in a group when one isn't already set), since the whole
+ *    method is BSTM/BSHM-specific major/bridging content, not general
+ *    subject matter — Pass 1 in run() inserts one pivot row per program
+ *    in the array. All four BSCRIM majors (QD/FI/FAI/LD) collapse to
+ *    the single 'BSCRIM' room group per the migration's own design (the
+ *    scheduler just needs "a Criminalistics lab", not which
+ *    specialization).
  *
  * 4. required_room_type derivation (mapRoomType()):
  *      - Practicum/OJT (any "PRAC*" code)              -> None
@@ -111,7 +111,13 @@ class SubjectSeeder extends Seeder
     {
         $subjects = array_merge(
             $this->tag($this->generalEducationAndMinors(), 'General'),
-            $this->tag($this->tourismHospitalityShared(), 'General'),
+            // Every row in tourismHospitalityShared() sets its own explicit
+            // 'group' => ['BSTM', 'BSHM'] now, so tag()'s fallback is never
+            // actually used here — passing null makes that intent explicit
+            // and surfaces loudly (via a missing 'group' key) if a future
+            // row is added without one, instead of silently defaulting to
+            // 'General'.
+            $this->tag($this->tourismHospitalityShared(), null),
             $this->tag($this->bstmOnly(), 'BSTM'),
             $this->tag($this->bshmOnly(), 'BSHM'),
             $this->tag($this->bsitOnly(), 'BSIT'),
@@ -184,10 +190,17 @@ class SubjectSeeder extends Seeder
      * NON-ABM1-5 below to opt into an array of programs instead of the
      * catalog's default single group).
      */
-    private function tag(array $rows, string $group): array
+    private function tag(array $rows, ?string $group): array
     {
         foreach ($rows as &$row) {
-            $row['group'] ??= $group;
+            if (!isset($row['group'])) {
+                if ($group === null) {
+                    throw new \RuntimeException(
+                        "Subject '{$row['code']}' has no explicit 'group' and no fallback was given to tag()."
+                    );
+                }
+                $row['group'] = $group;
+            }
         }
 
         return $rows;
@@ -274,31 +287,30 @@ class SubjectSeeder extends Seeder
     private function tourismHospitalityShared(): array
     {
         return [
-            ['code' => 'BC1',  'title' => 'Operation Management',                                            'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Any',     'prereq' => null],
-            ['code' => 'BC2',  'title' => 'Strategic Management',                                             'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => 'BC1'],
+            ['code' => 'BC1',  'title' => 'Operation Management',                                            'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Any',     'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'BC2',  'title' => 'Strategic Management',                                             'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => 'BC1'],
 
-            ['code' => 'THC1', 'title' => 'Micro Perspective of Tourism and Hospitality',                     'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'THC2', 'title' => 'Risk Management as Applied to Safety, Security and Sanitation',    'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'THC3', 'title' => 'Philippine Culture and Tourism Geography',                         'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'THC4', 'title' => 'Quality Service Management in Tourism',                            'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'THC5', 'title' => 'Professional Development and Applied Ethics',                      'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'THC6', 'title' => 'Entrepreneurship in Tourism and Hospitality',                      'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'THC7', 'title' => 'Legal Aspects in Tourism and Hospitality',                         'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'THC8', 'title' => 'Multi-cultural Diversity in Workplace for Tourism Professionals',  'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'THC9', 'title' => 'Macro Perspective of Tourism and Hospitality',                     'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => 'THC1'],
-            ['code' => 'THC10','title' => 'Tourism and Hospitality Marketing',                                'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'THC1', 'title' => 'Micro Perspective of Tourism and Hospitality',                     'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'THC2', 'title' => 'Risk Management as Applied to Safety, Security and Sanitation',    'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'THC3', 'title' => 'Philippine Culture and Tourism Geography',                         'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'THC4', 'title' => 'Quality Service Management in Tourism',                            'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'THC5', 'title' => 'Professional Development and Applied Ethics',                      'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'THC6', 'title' => 'Entrepreneurship in Tourism and Hospitality',                      'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'THC7', 'title' => 'Legal Aspects in Tourism and Hospitality',                         'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'THC8', 'title' => 'Multi-cultural Diversity in Workplace for Tourism Professionals',  'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'THC9', 'title' => 'Macro Perspective of Tourism and Hospitality',                     'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => 'THC1'],
+            ['code' => 'THC10','title' => 'Tourism and Hospitality Marketing',                                'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
 
-            ['code' => 'FLT1', 'title' => 'Aircraft Familiarization',                                          'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'FLT2', 'title' => 'Airport and Airline Operation Practices',                           'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => 'FLT1'],
-            ['code' => 'FLT3', 'title' => 'Emergency Procedures and Equipment',                                'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Any',     'prereq' => 'FLT2'],
-            ['code' => 'FLT4', 'title' => 'Air Laws and Regulations',                                          'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => 'FLT2'],
+            ['code' => 'FLT1', 'title' => 'Aircraft Familiarization',                                          'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'FLT2', 'title' => 'Airport and Airline Operation Practices',                           'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => 'FLT1'],
+            ['code' => 'FLT3', 'title' => 'Emergency Procedures and Equipment',                                'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Any',     'group' => ['BSTM', 'BSHM'], 'prereq' => 'FLT2'],
+            ['code' => 'FLT4', 'title' => 'Air Laws and Regulations',                                          'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => 'FLT2'],
             // FLT5 prerequisite is "FLT 3 & 4" (multiple) — left null, see comment rule.
-            ['code' => 'FLT5', 'title' => 'In-flight Food and Beverage Services / Food Menu Theory',           'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Any',     'prereq' => null],
+            ['code' => 'FLT5', 'title' => 'In-flight Food and Beverage Services / Food Menu Theory',           'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Any',     'group' => ['BSTM', 'BSHM'], 'prereq' => null],
 
             // Bridging courses for non-ABM (Accountancy/Business/Management) SHS graduates.
-            // Applicable to BSTM and BSHM only (not a General subject) — explicit 'group'
-            // array here overrides the tourismHospitalityShared() catalog's default
-            // 'General' tag, and Pass 1 in run() inserts one pivot row per program.
+            // Applicable to BSTM and BSHM only, same as the rest of this method — Pass 1
+            // in run() inserts one pivot row per program from the explicit 'group' array.
             // lec bumped to 3 (matching every other plain 3-unit Lecture subject in this
             // catalog) so total_hours lines up with the unit count.
             ['code' => 'NON-ABM1', 'title' => 'Business Marketing',              'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
@@ -309,7 +321,7 @@ class SubjectSeeder extends Seeder
 
             // BSTM's "RESEARCH" and BSHM's "RESEARCH" are the same subject; BSED uses "RES" and
             // BSCRIM uses "RESEARCH1"/"RESEARCH2" — different codes, so no collision.
-            ['code' => 'RESEARCH', 'title' => 'Methods of Research',             'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'RESEARCH', 'title' => 'Methods of Research',             'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
         ];
     }
 

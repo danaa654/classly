@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
             SubjectSeeder::class,
             SectionSeeder::class,
+            CurriculumItemSeeder::class,
         ]);
     }
 }
