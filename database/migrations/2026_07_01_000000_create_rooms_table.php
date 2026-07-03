@@ -15,45 +15,43 @@ return new class extends Migration
 
             $table->id();
 
-            $table->string('room_code')->unique();
+            /*
+            |--------------------------------------------------------------------------
+            | Room Identity
+            |--------------------------------------------------------------------------
+            |
+            | room_code is the sole display identifier everywhere (index,
+            | dropdowns, the future scheduler) — e.g. "Room 108",
+            | "Room 304 (ICT Workshop)", "Room 201 (Forensic BSCRIM Lab)".
+            | There is no separate room_name; a descriptive detail like
+            | "ICT Workshop" just goes in the code itself.
+            |
+            */
 
-            $table->string('room_name');
+            $table->string('room_code')->unique();
 
             $table->enum('room_type', [
                 'Lecture',
                 'Laboratory',
             ]);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Room Group
-            |--------------------------------------------------------------------------
-            |
-            | Mirrors Subject::required_room_group. Names the academic program
-            | whose lecture rooms / laboratories this room belongs to (General,
-            | BSIT, BSED, BSHM, BSTM, BSCRIM). Criminalistics specializations
-            | (FB / LD / QD / FI) collapse to BSCRIM — the scheduler picks
-            | whichever Criminalistics room is free.
-            |
-            | "General" is a Lecture-only value — Laboratory rooms must always
-            | belong to a specific program.
-            |
-            */
-
-            $table->enum('room_group', [
-                'General',
-                'BSIT',
-                'BSED',
-                'BSHM',
-                'BSTM',
-                'BSCRIM',
-            ]);
-
             $table->string('building');
 
             $table->string('floor')->nullable();
 
-            $table->unsignedInteger('capacity');
+            /*
+            |--------------------------------------------------------------------------
+            | Capacity
+            |--------------------------------------------------------------------------
+            |
+            | Defaults to 30. Business rule of "must be between 20 and 45"
+            | is enforced in RoomController::rules(), not here — this
+            | default is just the fallback for a column value, not the
+            | valid range.
+            |
+            */
+
+            $table->unsignedInteger('capacity')->default(30);
 
             $table->boolean('active')->default(true);
 

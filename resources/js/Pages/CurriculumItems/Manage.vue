@@ -130,11 +130,11 @@ function removeItem(item) {
 
         <div>
 
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Manage Items
             </h1>
 
-            <p class="text-gray-500 mt-1">
+            <p class="text-[var(--text-muted)] mt-1">
                 {{ curriculumLabel }}
             </p>
 
@@ -144,14 +144,14 @@ function removeItem(item) {
 
             <Link
                 :href="route('curriculums.index')"
-                class="text-gray-600 hover:underline"
+                class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline transition-colors duration-150"
             >
                 &larr; Back to Curriculums
             </Link>
 
             <Link
                 :href="route('curriculum-items.create', { curriculum_id: curriculum.id })"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg"
+                class="btn-save"
             >
                 + Add Item
             </Link>
@@ -164,7 +164,7 @@ function removeItem(item) {
 
     <div
         v-if="curriculumItems.length === 0"
-        class="bg-white rounded-lg shadow p-8 text-center text-gray-500"
+        class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-8 text-center text-[var(--text-muted)]"
     >
         No items have been added to this curriculum yet.
     </div>
@@ -176,7 +176,7 @@ function removeItem(item) {
         <div
             v-for="year in yearKeys"
             :key="year"
-            class="bg-white rounded-lg shadow overflow-hidden"
+            class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden"
         >
 
             <div class="bg-slate-900 text-white px-5 py-3">
@@ -188,16 +188,16 @@ function removeItem(item) {
             <div
                 v-for="semester in semesterKeysFor(year)"
                 :key="semester"
-                class="border-t"
+                class="border-t border-[var(--card-border)]"
             >
 
-                <div class="flex justify-between items-center px-5 py-3 bg-gray-50">
+                <div class="flex justify-between items-center px-5 py-3 bg-[var(--page-bg)]">
 
-                    <h3 class="font-semibold text-gray-700">
+                    <h3 class="font-semibold text-[var(--text-primary)]">
                         {{ semesterLabel(semester) }}
                     </h3>
 
-                    <span class="text-sm text-gray-500 space-x-3">
+                    <span class="text-sm text-[var(--text-muted)] space-x-3">
                         <span>{{ totalUnits(grouped[year][semester]) }} units</span>
                         <span v-if="totalOjtHours(grouped[year][semester]) > 0">
                             {{ totalOjtHours(grouped[year][semester]) }} Practicum hours
@@ -208,7 +208,7 @@ function removeItem(item) {
 
                 <table class="min-w-full">
 
-                    <thead class="bg-gray-100 text-xs uppercase text-gray-500">
+                    <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)] text-xs uppercase text-[var(--text-secondary)]">
 
                         <tr>
 
@@ -245,36 +245,36 @@ function removeItem(item) {
                         <tr
                             v-for="item in grouped[year][semester]"
                             :key="item.id"
-                            class="border-t hover:bg-gray-50"
+                            class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                         >
 
                             <td class="px-4 py-3">
 
                                 <span
                                     v-if="item.item_type === 'Subject'"
-                                    class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs"
+                                    class="inline-flex px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium"
                                 >
                                     Subject
                                 </span>
 
                                 <span
                                     v-else
-                                    class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs"
+                                    class="inline-flex px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium"
                                 >
                                     Practicum / OJT
                                 </span>
 
                             </td>
 
-                            <td class="px-4 py-3 font-semibold">
+                            <td class="px-4 py-3 font-semibold text-[var(--text-primary)]">
                                 {{ displayCode(item) ?? '—' }}
                             </td>
 
-                            <td class="px-4 py-3">
+                            <td class="px-4 py-3 text-[var(--text-primary)]">
                                 {{ displayTitle(item) }}
                             </td>
 
-                            <td class="px-4 py-3 text-center">
+                            <td class="px-4 py-3 text-center text-[var(--text-secondary)]">
                                 {{ item.item_type === 'Subject' ? item.subject?.units : `${item.ojt_hours} hrs` }}
                             </td>
 
@@ -282,35 +282,39 @@ function removeItem(item) {
 
                                 <span
                                     v-if="item.active"
-                                    class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs"
+                                    class="inline-flex px-2 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium"
                                 >
                                     Active
                                 </span>
 
                                 <span
                                     v-else
-                                    class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs"
+                                    class="inline-flex px-2 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium"
                                 >
                                     Inactive
                                 </span>
 
                             </td>
 
-                            <td class="px-4 py-3 text-center">
+                            <td class="px-4 py-3 text-center whitespace-nowrap">
 
-                                <Link
-                                    :href="route('curriculum-items.edit', item.id)"
-                                    class="text-blue-600 hover:underline mr-3"
-                                >
-                                    Edit
-                                </Link>
+                                <div class="flex justify-center gap-2">
 
-                                <button
-                                    @click="removeItem(item)"
-                                    class="text-red-600 hover:underline"
-                                >
-                                    Remove
-                                </button>
+                                    <Link
+                                        :href="route('curriculum-items.edit', item.id)"
+                                        class="btn-edit"
+                                    >
+                                        Edit
+                                    </Link>
+
+                                    <button
+                                        @click="removeItem(item)"
+                                        class="btn-delete"
+                                    >
+                                        Remove
+                                    </button>
+
+                                </div>
 
                             </td>
 

@@ -300,11 +300,11 @@ function submit() {
 
         <div>
 
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Add Curriculum Item
             </h1>
 
-            <p class="text-gray-500 mt-1">
+            <p class="text-[var(--text-muted)] mt-1">
                 Attach one or more Subjects, or a single Practicum/OJT item, to a curriculum's prospectus.
             </p>
 
@@ -312,7 +312,7 @@ function submit() {
 
         <Link
             :href="backHref"
-            class="text-gray-600 hover:underline"
+            class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline transition-colors duration-150"
         >
             &larr; Back
         </Link>
@@ -323,20 +323,20 @@ function submit() {
 
     <form
         @submit.prevent="submit"
-        class="bg-white rounded-lg shadow p-6 space-y-6"
+        class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-6"
     >
 
         <!-- Item Type -->
 
         <div>
 
-            <label class="block text-sm font-medium text-gray-700 mb-1">
+            <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                 Item Type
             </label>
 
             <select
                 v-model="form.item_type"
-                class="w-full border-gray-300 rounded-lg md:w-1/3"
+                class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg md:w-1/3 transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="Subject">Subject</option>
                 <option value="OJT">Practicum / OJT</option>
@@ -354,14 +354,14 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Curriculum
                 </label>
 
                 <select
                     v-model="form.curriculum_id"
                     :disabled="curriculumLocked"
-                    class="w-full border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg disabled:bg-[var(--page-bg)] disabled:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option value="" disabled>Select curriculum</option>
 
@@ -382,13 +382,13 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Year Level
                 </label>
 
                 <select
                     v-model.number="form.year_level"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option :value="1">1st Year</option>
                     <option :value="2">2nd Year</option>
@@ -405,13 +405,13 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Semester
                 </label>
 
                 <select
                     v-model.number="form.semester"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option :value="1">First Semester</option>
                     <option :value="2">Second Semester</option>
@@ -430,7 +430,7 @@ function submit() {
 
         <div v-if="isSubject">
 
-            <p class="text-xs text-gray-400 mb-2">
+            <p class="text-xs text-[var(--text-muted)] mb-2">
                 All subjects you check below get placed into this same Year Level / Semester.
                 Need different subjects in a different term? Submit this batch first, then run
                 Add Item again for the next term.
@@ -440,7 +440,7 @@ function submit() {
 
             <div
                 v-if="!form.curriculum_id"
-                class="border border-dashed border-gray-300 rounded-lg px-4 py-6 text-center text-sm text-gray-400"
+                class="border border-dashed border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg px-4 py-6 text-center text-sm text-[var(--text-muted)]"
             >
                 Select a curriculum above to see the subjects available for it.
             </div>
@@ -455,12 +455,12 @@ function submit() {
                         v-model="subjectSearch"
                         type="text"
                         placeholder="Search by subject code or title..."
-                        class="w-full sm:flex-1 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
+                        class="w-full sm:flex-1 border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg text-sm focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
                     />
 
                     <select
                         v-model="classificationFilter"
-                        class="w-full sm:w-44 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500"
+                        class="w-full sm:w-44 border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg text-sm focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
                     >
                         <option value="All">All Classifications</option>
                         <option value="Minor">Minor</option>
@@ -471,7 +471,7 @@ function submit() {
                         v-if="subjectSearch || classificationFilter !== 'All'"
                         type="button"
                         @click="resetSubjectFilters"
-                        class="text-sm text-gray-500 hover:underline whitespace-nowrap sm:px-2"
+                        class="text-sm text-[var(--text-muted)] hover:underline whitespace-nowrap sm:px-2"
                     >
                         Clear filters
                     </button>
@@ -482,9 +482,9 @@ function submit() {
 
                 <div class="flex justify-between items-center mb-2">
 
-                    <label class="block text-sm font-medium text-gray-700">
+                    <label class="block text-sm font-medium text-[var(--text-primary)]">
                         Subjects
-                        <span class="text-gray-400 font-normal">
+                        <span class="text-[var(--text-muted)] font-normal">
                             ({{ shownCount }} shown &bull; {{ selectedCount }} selected)
                         </span>
                     </label>
@@ -493,40 +493,40 @@ function submit() {
                         type="button"
                         @click="toggleSelectAll"
                         :disabled="visibleSubjects.length === 0"
-                        class="text-sm text-blue-600 hover:underline disabled:text-gray-300 disabled:no-underline"
+                        class="text-sm text-blue-500 hover:underline disabled:text-[var(--text-muted)] disabled:no-underline"
                     >
                         {{ allVisibleSelected ? 'Clear shown' : 'Select all shown' }}
                     </button>
 
                 </div>
 
-                <div class="border border-gray-300 rounded-lg max-h-96 overflow-y-auto">
+                <div class="border border-[var(--card-border)] rounded-lg max-h-96 overflow-y-auto">
 
                     <!-- General Education (Minors) -->
 
                     <div v-if="visibleMinorSubjects.length > 0">
 
-                        <p class="sticky top-0 bg-gray-50 text-xs font-semibold uppercase text-gray-500 px-4 py-1.5 border-b">
+                        <p class="sticky top-0 bg-[var(--page-bg)] text-xs font-semibold uppercase text-[var(--text-muted)] px-4 py-1.5 border-b border-[var(--card-border)]">
                             General Education
                         </p>
 
-                        <div class="divide-y">
+                        <div class="divide-y divide-[var(--card-border)]">
 
                             <label
                                 v-for="subject in visibleMinorSubjects"
                                 :key="subject.id"
-                                class="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer"
+                                class="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--page-bg)] cursor-pointer transition-colors duration-150"
                             >
                                 <input
                                     type="checkbox"
                                     :value="subject.id"
                                     v-model="form.subject_ids"
-                                    class="rounded"
+                                    class="rounded accent-[#D4A62A]"
                                 />
-                                <span class="text-sm text-gray-700">
+                                <span class="text-sm text-[var(--text-primary)]">
                                     {{ subject.subject_code }} &mdash; {{ subject.descriptive_title }}
                                 </span>
-                                <span class="ml-auto shrink-0 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs">
+                                <span class="ml-auto shrink-0 inline-flex px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
                                     Minor
                                 </span>
                             </label>
@@ -539,27 +539,27 @@ function submit() {
 
                     <div v-if="visibleMajorSubjects.length > 0">
 
-                        <p class="sticky top-0 bg-gray-50 text-xs font-semibold uppercase text-gray-500 px-4 py-1.5 border-b border-t">
+                        <p class="sticky top-0 bg-[var(--page-bg)] text-xs font-semibold uppercase text-[var(--text-muted)] px-4 py-1.5 border-b border-t border-[var(--card-border)]">
                             Major Subjects
                         </p>
 
-                        <div class="divide-y">
+                        <div class="divide-y divide-[var(--card-border)]">
 
                             <label
                                 v-for="subject in visibleMajorSubjects"
                                 :key="subject.id"
-                                class="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer"
+                                class="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--page-bg)] cursor-pointer transition-colors duration-150"
                             >
                                 <input
                                     type="checkbox"
                                     :value="subject.id"
                                     v-model="form.subject_ids"
-                                    class="rounded"
+                                    class="rounded accent-[#D4A62A]"
                                 />
-                                <span class="text-sm text-gray-700">
+                                <span class="text-sm text-[var(--text-primary)]">
                                     {{ subject.subject_code }} &mdash; {{ subject.descriptive_title }}
                                 </span>
-                                <span class="ml-auto shrink-0 bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs">
+                                <span class="ml-auto shrink-0 inline-flex px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium">
                                     Major
                                 </span>
                             </label>
@@ -572,7 +572,7 @@ function submit() {
 
                     <p
                         v-if="visibleSubjects.length === 0"
-                        class="px-4 py-6 text-center text-sm text-gray-400"
+                        class="px-4 py-6 text-center text-sm text-[var(--text-muted)]"
                     >
                         No subjects match your search/filter.
                     </p>
@@ -581,22 +581,22 @@ function submit() {
 
                     <div
                         v-if="alreadyAssignedSubjects.length > 0"
-                        class="bg-gray-50 border-t"
+                        class="bg-[var(--page-bg)] border-t border-[var(--card-border)]"
                     >
 
-                        <p class="text-xs font-semibold uppercase text-gray-400 px-4 py-1.5">
+                        <p class="text-xs font-semibold uppercase text-[var(--text-muted)] px-4 py-1.5">
                             Already Assigned
                         </p>
 
                         <div
                             v-for="subject in alreadyAssignedSubjects"
                             :key="subject.id"
-                            class="flex items-center gap-3 px-4 py-2.5 text-gray-400"
+                            class="flex items-center gap-3 px-4 py-2.5 text-[var(--text-muted)]"
                         >
                             <span class="text-sm">
                                 {{ subject.subject_code }} &mdash; {{ subject.descriptive_title }}
                             </span>
-                            <span class="ml-auto shrink-0 text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">
+                            <span class="ml-auto shrink-0 text-xs bg-[var(--card-border)] text-[var(--text-muted)] px-2 py-0.5 rounded-full">
                                 Already assigned
                             </span>
                         </div>
@@ -621,7 +621,7 @@ function submit() {
 
             <div
                 v-if="!form.curriculum_id"
-                class="border border-dashed border-gray-300 rounded-lg px-4 py-6 text-center text-sm text-gray-400"
+                class="border border-dashed border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg px-4 py-6 text-center text-sm text-[var(--text-muted)]"
             >
                 Select a curriculum above to see the practicum subjects available for its program.
             </div>
@@ -632,13 +632,13 @@ function submit() {
 
                     <div>
 
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                             Practicum Subject
                         </label>
 
                         <select
                             v-model="form.subject_id"
-                            class="w-full border-gray-300 rounded-lg"
+                            class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="" disabled>Select practicum subject</option>
 
@@ -653,7 +653,7 @@ function submit() {
 
                         <p
                             v-if="filteredPracticumSubjects.length === 0"
-                            class="text-gray-400 text-xs mt-1"
+                            class="text-[var(--text-muted)] text-xs mt-1"
                         >
                             No practicum subjects are set up yet for this curriculum's program.
                         </p>
@@ -666,7 +666,7 @@ function submit() {
 
                     <div>
 
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                             Hours
                         </label>
 
@@ -675,7 +675,7 @@ function submit() {
                             type="number"
                             min="1"
                             placeholder="e.g. 486"
-                            class="w-full border-gray-300 rounded-lg"
+                            class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         />
 
                         <p v-if="form.errors.ojt_hours" class="text-red-600 text-sm mt-1">
@@ -690,12 +690,12 @@ function submit() {
 
                 <div
                     v-if="selectedPracticumSubject"
-                    class="mt-4 flex justify-between items-center rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm"
+                    class="mt-4 flex justify-between items-center rounded-lg bg-[var(--page-bg)] border border-[var(--card-border)] px-4 py-3 text-sm"
                 >
-                    <span class="font-semibold text-gray-700">
+                    <span class="font-semibold text-[var(--text-primary)]">
                         {{ selectedPracticumSubject.subject_code }}
                     </span>
-                    <span class="text-gray-500">
+                    <span class="text-[var(--text-muted)]">
                         {{ selectedPracticumSubject.descriptive_title }}
                     </span>
                 </div>
@@ -709,19 +709,19 @@ function submit() {
         <div class="flex items-center gap-8">
 
             <label class="flex items-center gap-2">
-                <input type="checkbox" v-model="form.active" class="rounded" />
-                <span class="text-sm text-gray-700">Active</span>
+                <input type="checkbox" v-model="form.active" class="rounded accent-[#D4A62A]" />
+                <span class="text-sm text-[var(--text-primary)]">Active</span>
             </label>
 
         </div>
 
         <!-- Actions -->
 
-        <div class="flex justify-end gap-3 pt-4 border-t">
+        <div class="flex justify-end gap-3 pt-4 border-t border-[var(--card-border)]">
 
             <Link
                 :href="backHref"
-                class="px-5 py-2 rounded-lg border text-gray-600 hover:bg-gray-50"
+                class="btn-neutral"
             >
                 Cancel
             </Link>
@@ -731,7 +731,7 @@ function submit() {
                 :disabled="form.processing
                     || (isSubject && form.subject_ids.length === 0)
                     || (isOjt && (!form.subject_id || !form.ojt_hours || form.ojt_hours < 1))"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg disabled:opacity-50"
+                class="btn-save"
             >
                 <template v-if="isSubject">
                     Add

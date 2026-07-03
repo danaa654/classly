@@ -162,15 +162,17 @@ function submit() {
 <template>
     <DashboardLayout>
 
-        <h1 class="text-3xl font-bold mb-6">
-            Edit Section
-        </h1>
+        <div class="mx-auto max-w-2xl">
 
-        <div class="bg-white rounded-lg shadow p-6 max-w-2xl">
+            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
+                Edit Section
+            </h1>
+
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 transition-colors duration-300">
 
             <p
                 v-if="needsNormalization"
-                class="mb-4 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded p-3"
+                class="mb-4 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 rounded-xl p-3"
             >
                 This section was created before automatic Section Codes.
                 Please select its Year Level and Section Letter below —
@@ -180,13 +182,13 @@ function submit() {
             <form @submit.prevent="submit">
 
                 <div class="mb-4">
-                    <label class="block font-medium mb-1">
+                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                         Program
                     </label>
 
                     <select
                         v-model="form.program_id"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     >
                         <option value="" disabled>
                             Select a program
@@ -206,13 +208,13 @@ function submit() {
                 </div>
 
                 <div v-if="isBscrim" class="mb-4">
-                    <label class="block font-medium mb-1">
+                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                         Specialization
                     </label>
 
                     <select
                         v-model="form.specialization_id"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     >
                         <option value="" disabled>
                             Select a specialization
@@ -234,14 +236,14 @@ function submit() {
                 <div class="mb-4 grid grid-cols-2 gap-4">
 
                     <div>
-                        <label class="block font-medium mb-1">
+                        <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                             Year Level
                         </label>
 
                         <select
                             v-model="form.year_level"
                             :disabled="!selectedProgram"
-                            class="w-full border rounded p-2 disabled:bg-gray-100"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:bg-[var(--card-border)]/30 disabled:text-[var(--text-muted)]"
                         >
                             <option value="" disabled>
                                 Select year level
@@ -261,14 +263,14 @@ function submit() {
                     </div>
 
                     <div>
-                        <label class="block font-medium mb-1">
+                        <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                             Section Letter
                         </label>
 
                         <select
                             v-model="form.section_letter"
                             :disabled="!scopeReady"
-                            class="w-full border rounded p-2 disabled:bg-gray-100"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:bg-[var(--card-border)]/30 disabled:text-[var(--text-muted)]"
                         >
                             <option value="" disabled>
                                 Select letter
@@ -292,24 +294,24 @@ function submit() {
 
                 <p
                     v-if="scopeFull"
-                    class="mb-4 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded p-3"
+                    class="mb-4 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 rounded-xl p-3"
                 >
                     All available sections (A–E) have already been created for this year level.
                 </p>
 
                 <div class="mb-4">
-                    <label class="block font-medium mb-1">
+                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                         Generated Section Code
                     </label>
 
-                    <div class="w-full border rounded p-2 bg-gray-50 font-mono text-gray-700">
+                    <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm font-mono text-[var(--text-secondary)]">
                         {{ generatedCode ?? section.section_code }}
                     </div>
                 </div>
 
                 <div class="mb-4">
                     <div class="flex items-center justify-between mb-1">
-                        <label class="block font-medium">
+                        <label class="block font-medium text-sm text-[var(--text-secondary)]">
                             Section Name
                         </label>
 
@@ -317,7 +319,7 @@ function submit() {
                             v-if="generatedName"
                             type="button"
                             @click="useAutoName"
-                            class="text-sm text-blue-600 hover:underline"
+                            class="text-sm text-blue-500 hover:underline"
                         >
                             Use auto-generated name
                         </button>
@@ -328,7 +330,7 @@ function submit() {
                         @input="onSectionNameInput"
                         type="text"
                         placeholder="e.g. BS Information Technology - 1A"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     >
 
                     <p v-if="form.errors.section_name" class="text-red-500 text-sm mt-1">
@@ -337,7 +339,7 @@ function submit() {
                 </div>
 
                 <div class="mb-4">
-                    <label class="block font-medium mb-1">
+                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                         Capacity
                     </label>
 
@@ -347,10 +349,10 @@ function submit() {
                         type="number"
                         min="20"
                         max="45"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     >
 
-                    <p class="text-gray-500 text-sm mt-1">
+                    <p class="text-[var(--text-muted)] text-sm mt-1">
                         Must be between 20 and 45 students.
                     </p>
 
@@ -360,13 +362,13 @@ function submit() {
                 </div>
 
                 <div class="mb-6">
-                    <label class="block font-medium mb-1">
+                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                         Status
                     </label>
 
                     <select
                         v-model="form.status"
-                        class="w-full border rounded p-2"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     >
                         <option value="Active">Active</option>
                         <option value="Inactive">Inactive</option>
@@ -381,7 +383,7 @@ function submit() {
 
                     <Link
                         :href="route('sections.index')"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </Link>
@@ -389,7 +391,7 @@ function submit() {
                     <button
                         type="submit"
                         :disabled="form.processing || scopeFull"
-                        class="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded disabled:opacity-50"
+                        class="btn-save"
                     >
                         Update Section
                     </button>
@@ -397,6 +399,8 @@ function submit() {
                 </div>
 
             </form>
+
+        </div>
 
         </div>
 

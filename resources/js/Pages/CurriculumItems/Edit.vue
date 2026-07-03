@@ -120,11 +120,11 @@ function submit() {
 
         <div>
 
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Edit Curriculum Item
             </h1>
 
-            <p class="text-gray-500 mt-1">
+            <p class="text-[var(--text-muted)] mt-1">
                 Update {{ curriculumItem.display_title ?? curriculumItem.title ?? curriculumItem.subject?.subject_code }}
             </p>
 
@@ -132,7 +132,7 @@ function submit() {
 
         <Link
             :href="backHref"
-            class="text-gray-600 hover:underline"
+            class="text-[var(--text-secondary)] hover:underline"
         >
             &larr; Back
         </Link>
@@ -143,20 +143,20 @@ function submit() {
 
     <form
         @submit.prevent="submit"
-        class="bg-white rounded-lg shadow p-6 space-y-6"
+        class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-6"
     >
 
         <!-- Item Type -->
 
         <div>
 
-            <label class="block text-sm font-medium text-gray-700 mb-1">
+            <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                 Item Type
             </label>
 
             <select
                 v-model="form.item_type"
-                class="w-full border-gray-300 rounded-lg md:w-1/3"
+                class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg md:w-1/3 transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="Subject">Subject</option>
                 <option value="OJT">Practicum / OJT</option>
@@ -174,13 +174,13 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Curriculum
                 </label>
 
                 <select
                     v-model="form.curriculum_id"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option
                         v-for="curriculum in curricula"
@@ -199,13 +199,13 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Year Level
                 </label>
 
                 <select
                     v-model.number="form.year_level"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option :value="1">1st Year</option>
                     <option :value="2">2nd Year</option>
@@ -223,13 +223,13 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Semester
                 </label>
 
                 <select
                     v-model.number="form.semester"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option :value="1">First Semester</option>
                     <option :value="2">Second Semester</option>
@@ -248,13 +248,13 @@ function submit() {
 
         <div v-if="isSubject">
 
-            <label class="block text-sm font-medium text-gray-700 mb-1">
+            <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                 Subject
             </label>
 
             <select
                 v-model="form.subject_id"
-                class="w-full border-gray-300 rounded-lg"
+                class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="" disabled>Select subject</option>
 
@@ -283,13 +283,13 @@ function submit() {
 
                 <div>
 
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                         Practicum Subject
                     </label>
 
                     <select
                         v-model="form.subject_id"
-                        class="w-full border-gray-300 rounded-lg"
+                        class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     >
                         <option value="" disabled>Select practicum subject</option>
 
@@ -304,7 +304,7 @@ function submit() {
 
                     <p
                         v-if="filteredPracticumSubjects.length === 0"
-                        class="text-gray-400 text-xs mt-1"
+                        class="text-[var(--text-muted)] text-xs mt-1"
                     >
                         No practicum subjects are set up yet for this curriculum's program.
                     </p>
@@ -317,7 +317,7 @@ function submit() {
 
                 <div>
 
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                    <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                         Hours
                     </label>
 
@@ -326,7 +326,7 @@ function submit() {
                         type="number"
                         min="1"
                         placeholder="e.g. 486"
-                        class="w-full border-gray-300 rounded-lg"
+                        class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     />
 
                     <p v-if="form.errors.ojt_hours" class="text-red-600 text-sm mt-1">
@@ -341,12 +341,12 @@ function submit() {
 
             <div
                 v-if="selectedPracticumSubject"
-                class="mt-4 flex justify-between items-center rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm"
+                class="mt-4 flex justify-between items-center rounded-lg bg-[var(--page-bg)] border border-[var(--card-border)] px-4 py-3 text-sm"
             >
-                <span class="font-semibold text-gray-700">
+                <span class="font-semibold text-[var(--text-primary)]">
                     {{ selectedPracticumSubject.subject_code }}
                 </span>
-                <span class="text-gray-500">
+                <span class="text-[var(--text-muted)]">
                     {{ selectedPracticumSubject.descriptive_title }}
                 </span>
             </div>
@@ -359,7 +359,7 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Sort Order
                 </label>
 
@@ -367,7 +367,7 @@ function submit() {
                     v-model.number="form.sort_order"
                     type="number"
                     min="0"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
                 <p v-if="form.errors.sort_order" class="text-red-600 text-sm mt-1">
@@ -377,19 +377,19 @@ function submit() {
             </div>
 
             <label class="flex items-center gap-2 pb-2.5">
-                <input type="checkbox" v-model="form.active" class="rounded" />
-                <span class="text-sm text-gray-700">Active</span>
+                <input type="checkbox" v-model="form.active" class="rounded accent-[#D4A62A]" />
+                <span class="text-sm text-[var(--text-primary)]">Active</span>
             </label>
 
         </div>
 
         <!-- Actions -->
 
-        <div class="flex justify-end gap-3 pt-4 border-t">
+        <div class="flex justify-end gap-3 pt-4 border-t border-[var(--card-border)]">
 
             <Link
                 :href="backHref"
-                class="px-5 py-2 rounded-lg border text-gray-600 hover:bg-gray-50"
+                class="btn-neutral"
             >
                 Cancel
             </Link>
@@ -398,7 +398,7 @@ function submit() {
                 type="submit"
                 :disabled="form.processing
                     || (isOjt && (!form.subject_id || !form.ojt_hours || form.ojt_hours < 1))"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg disabled:opacity-50"
+                class="btn-save"
             >
                 Update Item
             </button>

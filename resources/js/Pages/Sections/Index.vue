@@ -149,32 +149,32 @@ function finalizeDelete() {
 
         <div class="flex justify-between items-center mb-6">
 
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Sections
             </h1>
 
             <Link
                 :href="route('sections.create')"
-                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                class="btn-save"
             >
                 Add Section
             </Link>
 
         </div>
 
-        <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-col sm:flex-row gap-3">
+        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-4 mb-4 flex flex-col sm:flex-row gap-3 transition-colors duration-300">
 
             <input
                 v-model="search"
                 type="text"
                 placeholder="Search section code or section name..."
-                class="w-full sm:flex-1 border rounded p-2"
+                class="w-full sm:flex-1 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 @keyup.enter="applyFiltersNow"
             >
 
             <select
                 v-model="programId"
-                class="w-full sm:w-56 border rounded p-2"
+                class="w-full sm:w-56 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">All Programs</option>
                 <option
@@ -188,7 +188,7 @@ function finalizeDelete() {
 
             <select
                 v-model="status"
-                class="w-full sm:w-40 border rounded p-2"
+                class="w-full sm:w-40 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">All</option>
                 <option value="Active">Active</option>
@@ -197,19 +197,19 @@ function finalizeDelete() {
 
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-x-auto">
+        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-x-auto transition-colors duration-300">
 
             <table class="w-full min-w-[640px]">
 
-                <thead class="bg-gray-100">
+                <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
 
                     <tr>
-                        <th class="p-4 text-left w-12">#</th>
-                        <th class="p-4 text-left">Section Code</th>
-                        <th class="p-4 text-left">Section Name</th>
-                        <th class="p-4 text-left">Capacity</th>
-                        <th class="p-4 text-left">Status</th>
-                        <th class="p-4 text-center whitespace-nowrap">
+                        <th class="p-4 text-left w-12 text-[var(--text-secondary)]">#</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Section Code</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Section Name</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Capacity</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Status</th>
+                        <th class="p-4 text-center whitespace-nowrap text-[var(--text-secondary)]">
                             Actions
                         </th>
                     </tr>
@@ -221,22 +221,22 @@ function finalizeDelete() {
                     <tr
                         v-for="(section, index) in sections"
                         :key="section.id"
-                        class="border-t hover:bg-gray-50"
+                        class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                     >
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ index + 1 }}
                         </td>
 
-                        <td class="p-4 font-medium">
+                        <td class="p-4 font-medium text-[var(--text-primary)]">
                             {{ section.section_code }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-primary)]">
                             {{ section.section_name }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ section.capacity }}
                         </td>
 
@@ -244,14 +244,14 @@ function finalizeDelete() {
 
                             <span
                                 v-if="section.status === 'Active'"
-                                class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm"
+                                class="inline-flex px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-sm font-medium"
                             >
                                 Active
                             </span>
 
                             <span
                                 v-else
-                                class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm"
+                                class="inline-flex px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-medium"
                             >
                                 Inactive
                             </span>
@@ -264,14 +264,14 @@ function finalizeDelete() {
 
                                 <Link
                                     :href="route('sections.edit', section.id)"
-                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                                    class="btn-edit"
                                 >
                                     Edit
                                 </Link>
 
                                 <button
                                     @click="requestDelete(section)"
-                                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                                    class="btn-delete"
                                 >
                                     Delete
                                 </button>
@@ -286,7 +286,7 @@ function finalizeDelete() {
 
                         <td
                             colspan="6"
-                            class="text-center p-8 text-gray-500"
+                            class="text-center p-8 text-[var(--text-muted)]"
                         >
                             {{ hasActiveFilters ? 'No sections match your filters.' : 'No sections found.' }}
                         </td>
@@ -304,13 +304,13 @@ function finalizeDelete() {
             v-if="pendingSection"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
 
-                <h3 class="text-lg font-semibold mb-2">
+                <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Delete Section?
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-6">
+                <p class="text-[var(--text-muted)] text-sm mb-6">
                     {{ pendingSection.section_code }} ({{ pendingSection.section_name }})
                     will be permanently removed.
                     <br><br>
@@ -322,7 +322,7 @@ function finalizeDelete() {
                     <button
                         type="button"
                         @click="cancelDelete"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </button>
@@ -330,7 +330,7 @@ function finalizeDelete() {
                     <button
                         type="button"
                         @click="proceedToTypedConfirm"
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                        class="btn-delete"
                     >
                         Continue
                     </button>
@@ -345,13 +345,13 @@ function finalizeDelete() {
             v-if="blockedSection"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
 
-                <h3 class="text-lg font-semibold mb-2">
+                <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Unable to Delete
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-6">
+                <p class="text-[var(--text-muted)] text-sm mb-6">
                     This section is currently being used by the system.
                     <br><br>
                     Please remove all related records before deleting this section.
@@ -362,7 +362,7 @@ function finalizeDelete() {
                     <button
                         type="button"
                         @click="cancelDelete"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         OK
                     </button>
@@ -377,19 +377,19 @@ function finalizeDelete() {
             v-if="confirmingSection"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
 
-                <h3 class="text-lg font-semibold mb-2">
+                <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Final Confirmation
                 </h3>
 
-                <p class="text-gray-500 text-sm mb-4">
+                <p class="text-[var(--text-muted)] text-sm mb-4">
                     To prevent accidental deletion, please type the section code.
                 </p>
 
-                <p class="text-sm text-gray-500 mb-2">
+                <p class="text-sm text-[var(--text-muted)] mb-2">
                     Type:
-                    <span class="font-mono font-semibold text-gray-800">
+                    <span class="font-mono font-semibold text-[var(--text-primary)]">
                         {{ confirmingSection.section_code }}
                     </span>
                 </p>
@@ -400,7 +400,7 @@ function finalizeDelete() {
                     :placeholder="confirmingSection.section_code"
                     autocomplete="off"
                     spellcheck="false"
-                    class="w-full border rounded p-2 font-mono"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] font-mono transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     @keyup.enter="finalizeDelete"
                 >
 
@@ -413,7 +413,7 @@ function finalizeDelete() {
                     <button
                         type="button"
                         @click="cancelDelete"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </button>
@@ -422,7 +422,7 @@ function finalizeDelete() {
                         type="button"
                         @click="finalizeDelete"
                         :disabled="! deleteConfirmValid"
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="btn-delete"
                     >
                         Delete Section
                     </button>
