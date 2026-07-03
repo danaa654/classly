@@ -355,10 +355,11 @@ class SubjectController extends Controller implements HasMiddleware
                 'max:10',
             ],
 
-            // Classification is purely descriptive now — it no longer
-            // drives any default for room_groups. Major and Minor subjects
-            // both support any combination of programs (see room_groups
-            // below), assigned independently of this value.
+            // Classification no longer drives a *default* for room_groups,
+            // but it does constrain what's allowed: Major and Minor
+            // subjects both support any combination of the academic
+            // programs (BSIT, BSED, BSHM, BSTM, BSCRIM), but "General" is
+            // Minor-only — see the room_groups rule below.
             'is_major' => [
                 'required',
                 'boolean',
@@ -378,6 +379,12 @@ class SubjectController extends Controller implements HasMiddleware
             | Criminalistics specializations (FB / LD / QD / FI) still all
             | collapse to BSCRIM upstream of this list; the scheduler picks
             | whichever Criminalistics lab is free.
+            |
+            | "General" is a Lecture-only AND Minor-only program: it's
+            | rejected below when required_room_type is Laboratory or when
+            | is_major is true. The frontend mirrors both checks by hiding
+            | the option from the checklist, but this validation is the
+            | real source of truth.
             |
             | required_room_type is still validated against its full
             | allowed list even when is_practicum is true —
@@ -426,6 +433,18 @@ class SubjectController extends Controller implements HasMiddleware
 
                     if ($roomType === 'Laboratory' && in_array('General', $roomGroups, true)) {
                         $fail('General is a Lecture-only program. Laboratory subjects must select one or more specific programs (BSIT, BSED, BSHM, BSTM, or BSCRIM).');
+
+                        return;
+                    }
+
+                    // "General" is a Minor-only program — mirrors the
+                    // Laboratory check above (Lecture/Laboratory <->
+                    // Minor/Major). The frontend already hides/unchecks
+                    // General as soon as Classification is set to Major,
+                    // so this only fires against a bypassed or tampered
+                    // request.
+                    if ($request->boolean('is_major') && in_array('General', $roomGroups, true)) {
+                        $fail('General cannot be selected for Major subjects.');
                     }
 
                 },

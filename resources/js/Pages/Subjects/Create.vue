@@ -40,12 +40,13 @@ const totalHours = computed(() => {
 // Programs only make sense when the subject actually needs a room.
 const roomGroupsDisabled = computed(() => form.required_room_type === 'None')
 
-// "General" is a Lecture-only program — Laboratory subjects must pick one
-// or more specific programs, so General is hidden from the checklist
-// whenever Room Type is Laboratory (enforced server-side too, this is
-// just UX).
+// "General" is a Lecture-only, Minor-only program — it's hidden from the
+// checklist whenever Room Type is Laboratory OR Classification is Major
+// (enforced server-side too, this is just UX). Mirrors the Required Room
+// Type logic: Lecture -> General available, Laboratory -> General hidden;
+// likewise Minor -> General available, Major -> General hidden.
 const roomGroupChoices = computed(() => {
-    if (form.required_room_type === 'Laboratory') {
+    if (form.required_room_type === 'Laboratory' || form.is_major) {
         return props.roomGroupOptions.filter(option => option !== 'General')
     }
 
@@ -87,6 +88,18 @@ watch(() => form.required_room_type, (roomType) => {
         form.room_groups = form.room_groups.filter(option => option !== 'General')
     }
 })
+
+// Keeps the program selection in sync with Classification, the same way
+// the watcher above keeps it in sync with Room Type. "General" only makes
+// sense for Minor subjects, so switching Classification to Major drops it
+// from whatever was already selected. immediate: true also runs this once
+// on mount, so a Major subject seeded with a stale "General" (from before
+// this rule existed) gets cleaned up as soon as the form loads.
+watch(() => form.is_major, (isMajor) => {
+    if (isMajor) {
+        form.room_groups = form.room_groups.filter(option => option !== 'General')
+    }
+}, { immediate: true })
 
 function submit() {
     form.post(route('subjects.store'))

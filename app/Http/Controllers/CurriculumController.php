@@ -31,17 +31,48 @@ class CurriculumController extends Controller implements HasMiddleware
     }
 
     /**
-     * Display a listing of the resource.
+     * Display a listing of the resource with filtering support.
+     * 
+     * Supports optional Search / Program / Status filtering via query
+     * params (?search=&program_id=&status=), all combinable. Filters are
+     * echoed back in the `filters` prop so the Index page can preload
+     * its inputs from the URL.
      */
-    public function index()
+    public function index(Request $request)
     {
-        return Inertia::render('Curriculums/Index', [
-            'curricula' => Curriculum::with([
+        $search = trim((string) $request->input('search', ''));
+        $programId = $request->input('program_id');
+        $status = $request->input('status');
+
+        $curricula = Curriculum::with([
                 'program.department',
                 'specialization',
             ])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('code', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%");
+                });
+            })
+            ->when($programId, function ($query) use ($programId) {
+                $query->where('program_id', $programId);
+            })
+            ->when(in_array($status, ['Active', 'Inactive'], true), function ($query) use ($status) {
+                $query->where('active', $status === 'Active');
+            })
             ->orderBy('effective_year', 'desc')
-            ->get(),
+            ->get();
+
+        return Inertia::render('Curriculums/Index', [
+            'curricula' => $curricula,
+            'programs' => Program::where('active', true)
+                ->orderBy('name')
+                ->get(['id', 'code', 'name']),
+            'filters' => [
+                'search' => $search,
+                'program_id' => $programId ? (int) $programId : null,
+                'status' => in_array($status, ['Active', 'Inactive'], true) ? $status : null,
+            ],
         ]);
     }
 
@@ -127,18 +158,12 @@ class CurriculumController extends Controller implements HasMiddleware
     }
 
     /**
-     * Display the specified resource.
-     */
-    public function show(Curriculum $curriculum)
-    {
-        //
-    }
-
-    /**
      * Show the form for editing the specified resource.
      */
     public function edit(Curriculum $curriculum)
     {
+        $curriculum->load(['program.department', 'specialization']);
+
         return Inertia::render('Curriculums/Edit', [
 
             'curriculum' => $curriculum,
@@ -222,13 +247,32 @@ class CurriculumController extends Controller implements HasMiddleware
 
     /**
      * Remove the specified resource.
+     * 
+     * Prevents deletion if curriculum has sections or curriculum items.
      */
     public function destroy(Curriculum $curriculum)
     {
-        $curriculum->delete();
+        // Check if curriculum is in use
+        if ($curriculum->sections()->exists() || $curriculum->curriculumItems()->exists()) {
+            return redirect()
+                ->route('curriculums.index')
+                ->with('error', 'Unable to delete this curriculum. It has associated sections or subjects.');
+        }
+
+        $code = $curriculum->code;
+
+        try {
+            $curriculum->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('curriculums.index')
+                ->with('error', 'Unable to delete the selected curriculum.');
+        }
 
         return redirect()
             ->route('curriculums.index')
-            ->with('success', 'Curriculum deleted successfully.');
+            ->with('success', "Curriculum {$code} deleted successfully.");
     }
 }

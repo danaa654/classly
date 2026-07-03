@@ -43,11 +43,17 @@ use Illuminate\Database\Seeder;
  *    catalog method (bsitOnly, bshmOnly, etc.) is tagged with its
  *    program's room group when merged. Shared General Education/
  *    PATHFIT/NSTP subjects and the BSTM/BSHM tourism-hospitality
- *    bridge subjects are tagged 'General' since they aren't tied to a
- *    single program's specialized rooms. All four BSCRIM majors
- *    (QD/FI/FAI/LD) collapse to the single 'BSCRIM' room group per the
- *    migration's own design (the scheduler just needs "a Criminalistics
- *    lab", not which specialization).
+ *    bridge subjects (THC/FLT/BC) are tagged 'General' since they
+ *    aren't tied to a single program's specialized rooms. NON-ABM1-5
+ *    are the one exception in that same catalog: they set an explicit
+ *    'group' => ['BSTM', 'BSHM'] array on the row (tag() only fills in
+ *    a group when one isn't already set), since they're bridging
+ *    courses specific to those two programs rather than a truly
+ *    general subject — Pass 1 in run() inserts one pivot row per
+ *    program in the array. All four BSCRIM majors (QD/FI/FAI/LD)
+ *    collapse to the single 'BSCRIM' room group per the migration's
+ *    own design (the scheduler just needs "a Criminalistics lab", not
+ *    which specialization).
  *
  * 4. required_room_type derivation (mapRoomType()):
  *      - Practicum/OJT (any "PRAC*" code)              -> None
@@ -139,14 +145,19 @@ class SubjectSeeder extends Seeder
 
             // required_room_group no longer lives on the subjects table —
             // it moved to the room_group_subject pivot table
-            // (Subject::roomGroups()). $s['group'] is a single program
-            // string per row (set by tag()), so each subject gets exactly
-            // one pivot row here. updateOrCreate() keeps this safe to
-            // re-run without duplicate pivot rows.
-            SubjectRoomGroup::updateOrCreate([
-                'subject_id' => $subject->id,
-                'room_group' => $s['group'],
-            ]);
+            // (Subject::roomGroups()). $s['group'] is normally a single
+            // program string per row (set by tag()), giving one pivot row.
+            // A handful of rows (e.g. NON-ABM1-5) instead set $s['group']
+            // to an array of programs — e.g. ['BSTM', 'BSHM'] — because
+            // they're applicable to more than one program; loop over it
+            // so each program gets its own pivot row. updateOrCreate()
+            // keeps this safe to re-run without duplicate pivot rows.
+            foreach ((array) $s['group'] as $group) {
+                SubjectRoomGroup::updateOrCreate([
+                    'subject_id' => $subject->id,
+                    'room_group' => $group,
+                ]);
+            }
         }
 
         // ---------------------------------------------------------------
@@ -169,7 +180,9 @@ class SubjectSeeder extends Seeder
 
     /**
      * Stamps every row in a catalog array with the required_room_group
-     * it belongs to (unless a row already sets one explicitly).
+     * it belongs to (unless a row already sets one explicitly — used by
+     * NON-ABM1-5 below to opt into an array of programs instead of the
+     * catalog's default single group).
      */
     private function tag(array $rows, string $group): array
     {
@@ -282,12 +295,17 @@ class SubjectSeeder extends Seeder
             // FLT5 prerequisite is "FLT 3 & 4" (multiple) — left null, see comment rule.
             ['code' => 'FLT5', 'title' => 'In-flight Food and Beverage Services / Food Menu Theory',           'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Any',     'prereq' => null],
 
-            // Zero-hour bridging courses for non-ABM (Accountancy/Business/Management) SHS graduates.
-            ['code' => 'NON-ABM1', 'title' => 'Business Marketing',              'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'NON-ABM2', 'title' => 'Organization and Management',     'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'NON-ABM3', 'title' => 'Fundamentals of Accounting',      'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'NON-ABM4', 'title' => 'Business Finance',                'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
-            ['code' => 'NON-ABM5', 'title' => 'Applied Economics',               'lec' => 0, 'lab' => 0, 'units' => 0, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
+            // Bridging courses for non-ABM (Accountancy/Business/Management) SHS graduates.
+            // Applicable to BSTM and BSHM only (not a General subject) — explicit 'group'
+            // array here overrides the tourismHospitalityShared() catalog's default
+            // 'General' tag, and Pass 1 in run() inserts one pivot row per program.
+            // lec bumped to 3 (matching every other plain 3-unit Lecture subject in this
+            // catalog) so total_hours lines up with the unit count.
+            ['code' => 'NON-ABM1', 'title' => 'Business Marketing',              'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'NON-ABM2', 'title' => 'Organization and Management',     'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'NON-ABM3', 'title' => 'Fundamentals of Accounting',      'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'NON-ABM4', 'title' => 'Business Finance',                'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
+            ['code' => 'NON-ABM5', 'title' => 'Applied Economics',               'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'group' => ['BSTM', 'BSHM'], 'prereq' => null],
 
             // BSTM's "RESEARCH" and BSHM's "RESEARCH" are the same subject; BSED uses "RES" and
             // BSCRIM uses "RESEARCH1"/"RESEARCH2" — different codes, so no collision.
@@ -368,9 +386,10 @@ class SubjectSeeder extends Seeder
             ['code' => 'CC103',  'title' => 'Computer Programming 2',                              'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'CC102'],
             ['code' => 'HCI101', 'title' => 'Introduction to Human Computer Interaction',          'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'CC102'],
 
-            // Bridging courses for non-ICT SHS graduates.
-            ['code' => 'NON-ICT1', 'title' => 'Introduction to Computer Systems Servicing',  'lec' => 2, 'lab' => 3, 'units' => 0, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => null],
-            ['code' => 'NON-ICT2', 'title' => 'Installing and Configuring Computer Systems', 'lec' => 2, 'lab' => 3, 'units' => 0, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'NON-ICT1'],
+            // Bridging courses for non-ICT SHS graduates. Units bumped to 3 (matching
+            // every other lec=2/lab=3 subject in this catalog, e.g. CC101/CC102).
+            ['code' => 'NON-ICT1', 'title' => 'Introduction to Computer Systems Servicing',  'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => null],
+            ['code' => 'NON-ICT2', 'title' => 'Installing and Configuring Computer Systems', 'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'NON-ICT1'],
 
             ['code' => 'CC104', 'title' => 'Data Structures and Algorithms',        'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'CC103'],
             ['code' => 'CC105', 'title' => 'Information Management',                'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'CC103'],

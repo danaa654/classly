@@ -73,7 +73,6 @@ class SectionController extends Controller implements HasMiddleware
             // Powers Section::is_in_use on the frontend, so the
             // delete-confirmation modal can block deletion instantly
             // without a round trip. See Section::getIsInUseAttribute().
-            ->withCount('teachingAssignments')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($inner) use ($search) {
                     $inner->where('section_code', 'like', "%{$search}%")
@@ -223,7 +222,7 @@ class SectionController extends Controller implements HasMiddleware
     {
         if ($section->isInUse()) {
             return redirect()
-                ->route('sections.index')
+                ->back()
                 ->with('error', 'Unable to delete the selected section.');
         }
 
@@ -238,13 +237,13 @@ class SectionController extends Controller implements HasMiddleware
             report($e);
 
             return redirect()
-                ->route('sections.index')
+                ->back()
                 ->with('error', 'Unable to delete the selected section.');
 
         }
 
         return redirect()
-            ->route('sections.index')
+            ->back()
             ->with('success', "Section {$sectionCode} deleted successfully.");
     }
 

@@ -24,6 +24,13 @@ class Curriculum extends Model
 
     ];
 
+    protected $casts = [
+        'active' => 'boolean',
+    ];
+
+    // Append these attributes when converting to array/JSON
+    protected $appends = ['has_sections', 'has_items', 'display_name'];
+
     /*
     |--------------------------------------------------------------------------
     | Relationships
@@ -92,7 +99,7 @@ class Curriculum extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Accessor
+    | Accessors & Attributes
     |--------------------------------------------------------------------------
     */
 
@@ -103,5 +110,15 @@ class Curriculum extends Model
         }
 
         return "{$this->program->code} ({$this->effective_year})";
+    }
+
+    public function getHasSectionsAttribute()
+    {
+        return $this->sections()->exists();
+    }
+
+    public function getHasItemsAttribute()
+    {
+        return $this->curriculumItems()->exists();
     }
 }
