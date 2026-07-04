@@ -36,20 +36,20 @@ const submit = () => {
         <div class="mx-auto max-w-2xl px-8 py-8">
             <div class="mb-6 flex items-center justify-between">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900">New Faculty Load Assignment</h1>
-                    <p class="mt-1 text-sm text-gray-500">
+                    <h1 class="text-3xl font-bold text-[var(--text-primary)]">New Faculty Load Assignment</h1>
+                    <p class="mt-1 text-sm text-[var(--text-muted)]">
                         Assign a faculty member to teach a subject for a section this term. For the usual workflow,
                         use the Assign Subject button on the Faculty Loading workspace instead.
                     </p>
                 </div>
-                <Link :href="route('teaching-assignments.index')" class="text-sm text-gray-500 hover:text-gray-900">
+                <Link :href="route('teaching-assignments.index')" class="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                     ← Back
                 </Link>
             </div>
 
             <form
                 @submit.prevent="submit"
-                class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+                class="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-sm"
             >
                 <Form
                     :form="form"
@@ -63,14 +63,14 @@ const submit = () => {
                 <div class="mt-8 flex justify-end gap-3">
                     <Link
                         :href="route('teaching-assignments.index')"
-                        class="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900"
+                        class="btn-neutral"
                     >
                         Cancel
                     </Link>
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="btn-save"
                     >
                         {{ form.processing ? 'Saving...' : 'Create Assignment' }}
                     </button>

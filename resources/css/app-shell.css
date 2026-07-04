@@ -165,6 +165,16 @@ td {
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 99px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #334155; }
 
+/* ─── Theme-aware scrollbar ───────────────────────────────────
+   Same thin treatment as .custom-scrollbar, but for panels that
+   actually switch between light/dark (roster lists, modals, main
+   content areas) rather than the always-dark sidebar — a fixed
+   dark thumb would go nearly invisible against a dark page bg. */
+.custom-scrollbar-theme::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar-theme::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar-theme::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 99px; }
+.custom-scrollbar-theme::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
 /* ─── Layout shell ───────────────────────────────────────────── */
 #layout-shell {
     display: flex;

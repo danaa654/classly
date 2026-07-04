@@ -81,8 +81,10 @@ class TeachingAssignmentService
     /**
      * Faculty Scope Rules
      * --------------------------------------------------------------
-     * Departmental       -> subject must belong to the faculty's own
-     *                       department (Major and Minor alike).
+     * Departmental       -> Major subjects only, and only within the
+     *                       faculty's own department. Minor subjects
+     *                       are never assigned to Departmental faculty,
+     *                       even ones in their own department.
      * Cross Department   -> Major subjects must belong to the
      *                       faculty's own department; Minor subjects
      *                       are allowed from any department.
@@ -108,8 +110,8 @@ class TeachingAssignmentService
             'general' => $isMajor
                 ? 'General Education faculty can only be assigned Minor subjects.'
                 : null,
-            'departmental' => $offeringDepartmentId !== $faculty->department_id
-                ? 'Departmental faculty can only be assigned subjects within their own department.'
+            'departmental' => (! $isMajor || $offeringDepartmentId !== $faculty->department_id)
+                ? 'Departmental faculty can only be assigned Major subjects within their own department.'
                 : null,
             'cross_department' => ($isMajor && $offeringDepartmentId !== $faculty->department_id)
                 ? 'Cross Department faculty can only be assigned Major subjects within their own department.'

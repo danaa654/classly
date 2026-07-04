@@ -27,7 +27,7 @@ const colorClass = computed(() => {
                 :cy="size / 2"
                 :r="radius"
                 fill="none"
-                class="stroke-gray-200"
+                class="stroke-[var(--card-border)]"
                 :stroke-width="strokeWidth"
             />
             <circle
@@ -44,6 +44,6 @@ const colorClass = computed(() => {
                 stroke="currentColor"
             />
         </svg>
-        <span class="absolute text-[10px] font-semibold text-gray-600">{{ Math.round(percent) }}%</span>
+        <span class="absolute text-[10px] font-semibold text-[var(--text-secondary)]">{{ Math.round(percent) }}%</span>
     </div>
 </template>
