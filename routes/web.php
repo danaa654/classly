@@ -7,7 +7,6 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FacultyController;
-use App\Http\Controllers\FacultySubjectController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\SpecializationController;
 use App\Http\Controllers\CurriculumController;
@@ -147,7 +146,9 @@ Route::middleware(['auth'])->group(function () {
         |
         | No resource route here on purpose — there is no store/update/
         | destroy for a single offering. "create"/"store" below are the
-        | Generate form, not a manual record form.
+        | Generate form, not a manual record form. Faculty assignment
+        | for an offering happens in Faculty Loading (Teaching
+        | Assignments), not here.
         |
         */
 
@@ -173,27 +174,33 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('faculty', FacultyController::class);
         Route::resource('subjects', SubjectController::class);
 
-        // Faculty Subject Assignment — which subjects a faculty member is
-        // allowed to teach.
-        Route::resource('faculty-subjects', FacultySubjectController::class)
-            ->except(['show']);
-
         // Rooms — master list only (no schedules/availability here).
         Route::resource('rooms', RoomController::class);
 
         /*
         |--------------------------------------------------------------------------
-        | Teaching Assignments (Faculty Loading)
+        | Faculty Loading (Teaching Assignments)
         |--------------------------------------------------------------------------
         |
-        | Assigns which faculty member teaches each curriculum item, for
-        | which section, in a given academic term. This is NOT the final
-        | room/time schedule — it only prepares the data the future
-        | Greedy Scheduler will consume.
+        | Assigns which faculty member teaches each Subject Offering
+        | for the active academic term. This is NOT the final room/time
+        | schedule — Subject Offerings stay unscheduled here; the
+        | future Greedy Scheduler is what will assign room and time
+        | slots later, checking conflicts at that stage.
+        |
+        | Only index/store/destroy are registered — this module has no
+        | standalone create/edit pages. Assigning happens via the
+        | "Assign Subject" modal on the index page (POST straight to
+        | store); removing a load is a destroy from the same page.
+        | Faculty Subject "qualification" no longer exists anywhere in
+        | this system — eligibility is decided purely by Faculty Scope
+        | + Department + Subject Category (see
+        | TeachingAssignmentService).
         |
         */
 
-        Route::resource('teaching-assignments', TeachingAssignmentController::class);
+        Route::resource('teaching-assignments', TeachingAssignmentController::class)
+            ->only(['index', 'store', 'destroy']);
 
         // Future Modules
         // Route::resource('schedules', ScheduleController::class);

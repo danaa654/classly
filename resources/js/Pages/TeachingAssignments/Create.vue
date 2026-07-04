@@ -31,14 +31,15 @@ const submit = () => {
 
 <template>
     <AppLayout>
-        <Head title="New Teaching Assignment" />
+        <Head title="New Faculty Load Assignment" />
 
         <div class="mx-auto max-w-2xl px-8 py-8">
             <div class="mb-6 flex items-center justify-between">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900">New Teaching Assignment</h1>
+                    <h1 class="text-3xl font-bold text-gray-900">New Faculty Load Assignment</h1>
                     <p class="mt-1 text-sm text-gray-500">
-                        Assign a faculty member to teach a subject for a section this term.
+                        Assign a faculty member to teach a subject for a section this term. For the usual workflow,
+                        use the Assign Subject button on the Faculty Loading workspace instead.
                     </p>
                 </div>
                 <Link :href="route('teaching-assignments.index')" class="text-sm text-gray-500 hover:text-gray-900">

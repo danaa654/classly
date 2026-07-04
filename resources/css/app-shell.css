@@ -59,12 +59,13 @@
     font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 }
 
-/* ─── Body copy typeface ─────────────────────────────────────────
+/* ─── Body copy note ──────────────────────────────────────────
    Actual <p> tags (subtitles, descriptions, error/empty-state text,
-   Welcome.vue's marketing copy, etc.) render in the editorial serif
-   instead of the sans default. Headings, buttons, labels, badges,
-   and table headers are untouched — they keep General Sans from
-   the html-level preflight in tailwind.config.js.
+   Welcome.vue's marketing copy, etc.) stay IBM Plex Sans — headings,
+   buttons, labels, badges, and table headers are also IBM Plex Sans
+   from the html-level preflight in tailwind.config.js. Only h1 gets
+   the serif treatment below. */
+
 /* ─── Page titles ─────────────────────────────────────────────
    Every real <h1> (Academic Terms, Users, Colleges, etc.) gets
    the same treatment as "CLASSLY" on Welcome.vue. Nothing else

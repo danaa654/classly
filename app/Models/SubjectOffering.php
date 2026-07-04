@@ -95,6 +95,16 @@ class SubjectOffering extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /**
+     * The Faculty Loading assignment for this Offering, if one exists.
+     * A Subject Offering can have at most one — enforced by the unique
+     * index on teaching_assignments.subject_offering_id.
+     */
+    public function teachingAssignment()
+    {
+        return $this->hasOne(TeachingAssignment::class);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Scopes

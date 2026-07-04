@@ -132,14 +132,14 @@ function finalizeDelete() {
                 <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
 
                     <tr>
-                        <th class="p-4 text-left w-12">#</th>
-                        <th class="p-4 text-left">Academic Year</th>
-                        <th class="p-4 text-left">Semester</th>
-                        <th class="p-4 text-left">Class Dates</th>
-                        <th class="p-4 text-left">School Hours</th>
-                        <th class="p-4 text-left">Status</th>
-                        <th class="p-4 text-left">Active</th>
-                        <th class="p-4 text-center whitespace-nowrap">
+                        <th class="p-4 text-left w-12 text-[var(--text-secondary)]">#</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Academic Year</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Semester</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Class Dates</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">School Hours</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Status</th>
+                        <th class="p-4 text-left text-[var(--text-secondary)]">Active</th>
+                        <th class="p-4 text-center whitespace-nowrap text-[var(--text-secondary)]">
                             Actions
                         </th>
                     </tr>
@@ -154,25 +154,25 @@ function finalizeDelete() {
                         class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                     >
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ index + 1 }}
                         </td>
 
-                        <td class="p-4 font-medium">
+                        <td class="p-4 font-medium text-[var(--text-primary)]">
                             {{ term.academic_year }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4 text-[var(--text-secondary)]">
                             {{ term.semester_label }}
                         </td>
 
-                        <td class="p-4 whitespace-nowrap">
+                        <td class="p-4 whitespace-nowrap text-[var(--text-secondary)]">
                             {{ formatDate(term.class_start_date) }}
                             &ndash;
                             {{ formatDate(term.class_end_date) }}
                         </td>
 
-                        <td class="p-4 whitespace-nowrap">
+                        <td class="p-4 whitespace-nowrap text-[var(--text-secondary)]">
                             {{ formatTime(term.school_start_time) }}
                             &ndash;
                             {{ formatTime(term.school_end_time) }}

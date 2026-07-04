@@ -18,35 +18,41 @@ function destroy(id) {
 
         <div class="flex justify-between items-center mb-6">
 
-            <h1 class="text-3xl font-bold">
+            <h1
+                class="text-3xl font-bold"
+                style="color: var(--text-primary)"
+            >
                 Faculty Members
             </h1>
 
             <Link
                 :href="route('faculty.create')"
-                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded"
+                class="btn-save"
             >
                 Add Faculty
             </Link>
 
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div
+            class="rounded-lg shadow overflow-hidden border"
+            style="background: var(--card-bg); border-color: var(--card-border)"
+        >
 
             <table class="w-full">
 
-                <thead class="bg-gray-100">
+                <thead style="background: var(--page-bg)">
 
                     <tr>
-                        <th class="p-4 text-left w-12">#</th>
-                        <th class="p-4 text-left">Faculty Name</th>
-                        <th class="p-4 text-left">Email</th>
-                        <th class="p-4 text-left">Department</th>
-                        <th class="p-4 text-left">Employment</th>
-                        <th class="p-4 text-left">Max Units</th>
-                        <th class="p-4 text-left">Faculty Scope</th>
-                        <th class="p-4 text-left">Status</th>
-                        <th class="p-4 text-center whitespace-nowrap">
+                        <th class="p-4 text-left w-12" style="color: var(--text-secondary)">#</th>
+                        <th class="p-4 text-left" style="color: var(--text-secondary)">Faculty Name</th>
+                        <th class="p-4 text-left" style="color: var(--text-secondary)">Email</th>
+                        <th class="p-4 text-left" style="color: var(--text-secondary)">Department</th>
+                        <th class="p-4 text-left" style="color: var(--text-secondary)">Employment</th>
+                        <th class="p-4 text-left" style="color: var(--text-secondary)">Max Units</th>
+                        <th class="p-4 text-left" style="color: var(--text-secondary)">Faculty Scope</th>
+                        <th class="p-4 text-left" style="color: var(--text-secondary)">Status</th>
+                        <th class="p-4 text-center whitespace-nowrap" style="color: var(--text-secondary)">
                             Actions
                         </th>
                     </tr>
@@ -58,22 +64,23 @@ function destroy(id) {
                     <tr
                         v-for="(faculty, index) in faculties"
                         :key="faculty.id"
-                        class="border-t hover:bg-gray-50"
+                        class="border-t hover:bg-black/[0.02]"
+                        style="border-color: var(--card-border)"
                     >
 
-                        <td class="p-4">
+                        <td class="p-4" style="color: var(--text-secondary)">
                             {{ index + 1 }}
                         </td>
 
-                        <td class="p-4 font-medium">
+                        <td class="p-4 font-medium" style="color: var(--text-primary)">
                             {{ faculty.full_name }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4" style="color: var(--text-secondary)">
                             {{ faculty.email || '-' }}
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4" style="color: var(--text-secondary)">
                             {{ faculty.department?.abbreviation ?? 'N/A' }}
                         </td>
 
@@ -95,7 +102,7 @@ function destroy(id) {
 
                         </td>
 
-                        <td class="p-4">
+                        <td class="p-4" style="color: var(--text-secondary)">
                             {{ faculty.max_units }}
                         </td>
 
@@ -148,14 +155,14 @@ function destroy(id) {
 
                                 <Link
                                     :href="route('faculty.edit', faculty.id)"
-                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                                    class="btn-edit"
                                 >
                                     Edit
                                 </Link>
 
                                 <button
                                     @click="destroy(faculty.id)"
-                                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                                    class="btn-delete"
                                 >
                                     Delete
                                 </button>
@@ -170,7 +177,8 @@ function destroy(id) {
 
                         <td
                             colspan="9"
-                            class="text-center p-8 text-gray-500"
+                            class="text-center p-8"
+                            style="color: var(--text-muted)"
                         >
                             No faculty members found.
                         </td>

@@ -118,11 +118,11 @@ function submit() {
 
         <div>
 
-            <h1 class="text-3xl font-bold">
+            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
                 Add Subject
             </h1>
 
-            <p class="text-gray-500 mt-1">
+            <p class="text-[var(--text-muted)] mt-1">
                 Create a new subject in the master list.
             </p>
 
@@ -130,7 +130,7 @@ function submit() {
 
         <Link
             :href="route('subjects.index')"
-            class="text-gray-600 hover:underline"
+            class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline transition-colors duration-150"
         >
             &larr; Back to Subjects
         </Link>
@@ -141,7 +141,7 @@ function submit() {
 
     <form
         @submit.prevent="submit"
-        class="bg-white rounded-lg shadow p-6 space-y-6"
+        class="mx-auto max-w-3xl bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-6"
     >
 
         <!-- Subject Code / Descriptive Title -->
@@ -150,7 +150,7 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Subject Code
                 </label>
 
@@ -158,7 +158,7 @@ function submit() {
                     v-model="form.subject_code"
                     type="text"
                     placeholder="e.g. IT101"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
                 <p v-if="form.errors.subject_code" class="text-red-600 text-sm mt-1">
@@ -169,14 +169,14 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Descriptive Title
                 </label>
 
                 <input
                     v-model="form.descriptive_title"
                     type="text"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
                 <p v-if="form.errors.descriptive_title" class="text-red-600 text-sm mt-1">
@@ -193,7 +193,7 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Units
                 </label>
 
@@ -202,7 +202,7 @@ function submit() {
                     type="number"
                     min="1"
                     max="6"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
                 <p v-if="form.errors.units" class="text-red-600 text-sm mt-1">
@@ -213,7 +213,7 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Lecture Hours
                 </label>
 
@@ -222,7 +222,7 @@ function submit() {
                     type="number"
                     min="0"
                     max="10"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
                 <p v-if="form.errors.lecture_hours" class="text-red-600 text-sm mt-1">
@@ -233,7 +233,7 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Laboratory Hours
                 </label>
 
@@ -242,7 +242,7 @@ function submit() {
                     type="number"
                     min="0"
                     max="10"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
                 <p v-if="form.errors.laboratory_hours" class="text-red-600 text-sm mt-1">
@@ -253,7 +253,7 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Total Hours
                 </label>
 
@@ -261,7 +261,7 @@ function submit() {
                     :value="totalHours"
                     type="number"
                     disabled
-                    class="w-full border-gray-300 rounded-lg bg-gray-100 text-gray-500"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg bg-[var(--page-bg)] text-[var(--text-muted)]"
                 />
 
             </div>
@@ -274,13 +274,13 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Classification
                 </label>
 
                 <select
                     v-model="form.is_major"
-                    class="w-full border-gray-300 rounded-lg"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option :value="true">Major</option>
                     <option :value="false">Minor</option>
@@ -294,14 +294,14 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                     Required Room Type
                 </label>
 
                 <select
                     v-model="form.required_room_type"
                     :disabled="form.is_practicum"
-                    class="w-full border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500"
+                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg disabled:bg-[var(--page-bg)] disabled:text-[var(--text-muted)]"
                 >
                     <option value="Lecture">Lecture</option>
                     <option value="Laboratory">Laboratory</option>
@@ -326,35 +326,35 @@ function submit() {
 
         <div>
 
-            <label class="block text-sm font-medium text-gray-700 mb-1">
+            <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                 Programs
             </label>
 
-            <p class="text-xs text-gray-500 mb-2">
+            <p class="text-xs text-[var(--text-muted)] mb-2">
                 Select every program this subject applies to. A subject is
                 considered applicable if it belongs to any of its assigned
                 programs.
             </p>
 
             <div
-                class="flex flex-wrap gap-2 border rounded-lg p-3"
-                :class="roomGroupsDisabled ? 'bg-gray-100 border-gray-200' : 'border-gray-300'"
+                class="flex flex-wrap gap-2 rounded-xl border p-3 transition-colors duration-200"
+                :class="roomGroupsDisabled ? 'bg-[var(--page-bg)]/50 border-[var(--card-border)]' : 'bg-[var(--page-bg)] border-[var(--card-border)]'"
             >
 
                 <label
                     v-for="option in roomGroupChoices"
                     :key="option"
-                    class="flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none transition-colors duration-150"
                     :class="[
                         form.room_groups.includes(option)
-                            ? 'bg-blue-50 border-blue-400 text-blue-700'
-                            : 'bg-white border-gray-300 text-gray-700',
-                        roomGroupsDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50',
+                            ? 'bg-blue-500/10 border-blue-400 text-blue-600 dark:text-blue-400'
+                            : 'bg-[var(--card-bg)] border-[var(--card-border)] text-[var(--text-secondary)]',
+                        roomGroupsDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#D4A62A]/40',
                     ]"
                 >
                     <input
                         type="checkbox"
-                        class="rounded"
+                        class="rounded accent-[#D4A62A]"
                         :checked="form.room_groups.includes(option)"
                         :disabled="roomGroupsDisabled"
                         @change="toggleRoomGroup(option)"
@@ -362,7 +362,7 @@ function submit() {
                     {{ option }}
                 </label>
 
-                <p v-if="roomGroupsDisabled" class="text-xs text-gray-500 w-full">
+                <p v-if="roomGroupsDisabled" class="text-xs text-[var(--text-muted)] w-full">
                     Practicum/OJT subjects (Room Type: None) don't get a program assignment.
                 </p>
 
@@ -378,13 +378,13 @@ function submit() {
 
         <div>
 
-            <label class="block text-sm font-medium text-gray-700 mb-1">
+            <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
                 Prerequisite (optional)
             </label>
 
             <select
                 v-model="form.prerequisite_id"
-                class="w-full border-gray-300 rounded-lg"
+                class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">None</option>
 
@@ -408,29 +408,29 @@ function submit() {
         <div class="flex items-center gap-8">
 
             <label class="flex items-center gap-2">
-                <input type="checkbox" v-model="form.allow_split_schedule" class="rounded" />
-                <span class="text-sm text-gray-700">Allow Split Schedule</span>
+                <input type="checkbox" v-model="form.allow_split_schedule" class="rounded accent-[#D4A62A]" />
+                <span class="text-sm text-[var(--text-primary)]">Allow Split Schedule</span>
             </label>
 
             <label class="flex items-center gap-2">
-                <input type="checkbox" v-model="form.active" class="rounded" />
-                <span class="text-sm text-gray-700">Active</span>
+                <input type="checkbox" v-model="form.active" class="rounded accent-[#D4A62A]" />
+                <span class="text-sm text-[var(--text-primary)]">Active</span>
             </label>
 
             <label class="flex items-center gap-2">
-                <input type="checkbox" v-model="form.is_practicum" class="rounded" />
-                <span class="text-sm text-gray-700">Practicum/OJT</span>
+                <input type="checkbox" v-model="form.is_practicum" class="rounded accent-[#D4A62A]" />
+                <span class="text-sm text-[var(--text-primary)]">Practicum/OJT</span>
             </label>
 
         </div>
 
         <!-- Actions -->
 
-        <div class="flex justify-end gap-3 pt-4 border-t">
+        <div class="flex justify-end gap-3 pt-4 border-t border-[var(--card-border)]">
 
             <Link
                 :href="route('subjects.index')"
-                class="px-5 py-2 rounded-lg border text-gray-600 hover:bg-gray-50"
+                class="btn-neutral"
             >
                 Cancel
             </Link>
@@ -438,7 +438,7 @@ function submit() {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg disabled:opacity-50"
+                class="btn-save"
             >
                 Save Subject
             </button>

@@ -33,9 +33,7 @@ const form = useForm({
 watch(
     () => form.employment_type,
     (value) => {
-        if (value === 'Full-Time') {
-            form.max_units = 24
-        }
+        form.max_units = value === 'Full-Time' ? 24 : 18
     }
 )
 
@@ -58,13 +56,14 @@ function submit() {
 
         <div class="max-w-5xl">
 
-            <h1 class="text-3xl font-bold mb-6">
+            <h1 class="text-3xl font-bold mb-6" style="color: var(--text-primary)">
                 Edit Faculty Member
             </h1>
 
             <form
                 @submit.prevent="submit"
-                class="bg-white rounded-lg shadow p-6 space-y-6"
+                class="rounded-lg shadow p-6 space-y-6 border"
+                style="background: var(--card-bg); border-color: var(--card-border); color: var(--text-primary)"
             >
 
                 <!-- Personal Information -->
@@ -381,14 +380,14 @@ function submit() {
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded"
+                        class="btn-save"
                     >
                         {{ form.processing ? 'Updating...' : 'Update Faculty' }}
                     </button>
 
                     <Link
                         :href="route('faculty.index')"
-                        class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded"
+                        class="btn-neutral"
                     >
                         Cancel
                     </Link>

@@ -147,12 +147,21 @@ function destroy(id, name) {
                                 </Link>
 
                                 <button
+                                    v-if="!user.is_protected"
                                     @click="destroy(user.id, user.name)"
                                     :aria-label="`Delete ${user.name}`"
                                     class="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600 transition-colors duration-150 hover:bg-rose-500/20 dark:text-rose-300"
                                 >
                                     <TrashIcon class="h-4 w-4" />
                                 </button>
+
+                                <span
+                                    v-else
+                                    :title="user.protected_reason"
+                                    class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--page-bg)] text-[var(--text-muted)] cursor-not-allowed"
+                                >
+                                    <TrashIcon class="h-4 w-4" />
+                                </span>
 
                             </div>
                         </td>

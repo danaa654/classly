@@ -25,6 +25,8 @@ class DatabaseSeeder extends Seeder
             SubjectSeeder::class,
             SectionSeeder::class,
             CurriculumItemSeeder::class,
+            FacultySeeder::class,
+            RoomSeeder::class,
         ]);
     }
 }

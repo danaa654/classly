@@ -28,14 +28,14 @@ const submit = () => {
 
 <template>
     <AppLayout>
-        <Head title="Edit Teaching Assignment" />
+        <Head title="Configure Faculty Load" />
 
         <div class="mx-auto max-w-2xl px-8 py-8">
             <div class="mb-6 flex items-center justify-between">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Edit Teaching Assignment</h1>
+                    <h1 class="text-3xl font-bold text-gray-900">Configure Faculty Load</h1>
                     <p class="mt-1 text-sm text-gray-500">
-                        Update the faculty loading for this section's subject.
+                        Update the assigned faculty, section, or remarks for this subject load.
                     </p>
                 </div>
                 <Link :href="route('teaching-assignments.index')" class="text-sm text-gray-500 hover:text-gray-900">

@@ -82,7 +82,7 @@ const unreadNotifications = computed(() => page.props.unreadNotificationsCount >
             </div>
 
             <!-- Theme toggle -->
-            <ThemeToggle class="hidden sm:block" />
+            <ThemeToggle />
 
             <!-- Notifications -->
             <button

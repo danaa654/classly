@@ -38,7 +38,15 @@ class UserController extends Controller implements HasMiddleware
             ->orderBy('name')
             ->get();
 
-        $users->each(function ($user) {
+        // The system must always keep at least one Admin able to log in,
+        // so once there's only one left, that account can't be deleted —
+        // regardless of which Admin it happens to be (not hardcoded to
+        // the seeded admin@classly.test specifically, so this still holds
+        // even if that account gets renamed or a second Admin is added
+        // and later removed).
+        $adminCount = User::role('Admin')->count();
+
+        $users->each(function ($user) use ($adminCount) {
 
             $user->department_name = $user->hasRole([
                 'Admin',
@@ -47,6 +55,16 @@ class UserController extends Controller implements HasMiddleware
             ])
                 ? 'All Departments'
                 : optional($user->department)->abbreviation;
+
+            $isLastAdmin = $user->hasRole('Admin') && $adminCount <= 1;
+
+            $user->is_protected = auth()->id() === $user->id || $isLastAdmin;
+
+            $user->protected_reason = match (true) {
+                auth()->id() === $user->id => 'You cannot delete your own account.',
+                $isLastAdmin => 'This is the last remaining Admin account and cannot be deleted.',
+                default => null,
+            };
 
         });
 
@@ -175,6 +193,13 @@ class UserController extends Controller implements HasMiddleware
             return back()->with(
                 'error',
                 'You cannot delete your own account.'
+            );
+        }
+
+        if ($user->hasRole('Admin') && User::role('Admin')->count() <= 1) {
+            return back()->with(
+                'error',
+                'You cannot delete the last remaining Admin account.'
             );
         }
 

@@ -57,7 +57,7 @@ const navConfig = [
             // Kept from the original menu — not in the requested list, but removing it
             // would hide an existing page. Delete this line if it's no longer needed.
             { label: 'Subjects', route: 'subjects.index', icon: '📚' },
-            { label: 'Faculty Subjects', route: 'faculty-subjects.index', icon: '🔗' },
+           
             { label: 'Rooms', route: 'rooms.index', icon: '🏢' },
             // Admin + Registrar only — Dean/Assistant Dean/OIC don't get
             // this link (matches SubjectOfferingController::middleware()
@@ -65,7 +65,7 @@ const navConfig = [
             // route directly anyway). Other items in this group have no
             // `roles` and stay visible to the whole group as before.
             { label: 'Subject Offerings', route: 'subject-offerings.index', icon: '🧾', roles: ['Admin', 'Registrar'] },
-            { label: 'Teaching Assignments', route: 'teaching-assignments.index', icon: '📋' },
+            { label: 'Faculty Loading', route: 'teaching-assignments.index', icon: '📋' },
             { label: 'Schedule', href: '#', icon: '🗓️', soon: true },
         ],
     },

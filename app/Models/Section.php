@@ -34,9 +34,16 @@ class Section extends Model
         return $this->belongsTo(Curriculum::class);
     }
 
-    public function teachingAssignments()
+    /**
+     * Subject Offerings generated for this Section. Teaching
+     * Assignments no longer carry a direct section_id — a Teaching
+     * Assignment's section is only ever reached through
+     * subject_offering_id -> subject_offerings.section_id, so this
+     * relationship is the path isInUse() below has to go through.
+     */
+    public function subjectOfferings()
     {
-        return $this->hasMany(TeachingAssignment::class);
+        return $this->hasMany(SubjectOffering::class);
     }
 
     /*
@@ -51,10 +58,17 @@ class Section extends Model
     }
 
     /**
-     * Check if this section is currently in use (has teaching assignments).
+     * Check if this section is currently in use — i.e. at least one of
+     * its Subject Offerings already has a faculty member assigned via
+     * Faculty Loading. A Section having generated (but still
+     * unassigned) Offerings does NOT count as "in use" — those are
+     * safe to regenerate/adjust freely; it's an actual Teaching
+     * Assignment that makes deleting the Section unsafe.
      */
     public function isInUse()
     {
-        return $this->teachingAssignments()->exists();
+        return $this->subjectOfferings()
+            ->whereHas('teachingAssignment')
+            ->exists();
     }
 }

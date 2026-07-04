@@ -203,8 +203,12 @@ class SubjectOfferingController extends Controller implements HasMiddleware
 
         $message = "{$summary['created']} Subject Offering(s) generated for {$academicTerm->display_name}.";
 
-        if ($summary['skipped'] > 0) {
-            $message .= " {$summary['skipped']} item(s) were skipped (missing Specialization code).";
+        if ($summary['skipped_existing'] > 0) {
+            $message .= " {$summary['skipped_existing']} item(s) already had an Offering and were left untouched.";
+        }
+
+        if ($summary['skipped_unresolved'] > 0) {
+            $message .= " {$summary['skipped_unresolved']} item(s) were skipped (missing Specialization code).";
         }
 
         return redirect()
