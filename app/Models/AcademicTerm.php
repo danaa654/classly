@@ -107,6 +107,16 @@ class AcademicTerm extends Model
         'Archived',
     ];
 
+    /**
+     * Allowed Time Interval values (minutes) for the scheduling engine.
+     * The greedy scheduler will slice the school day into blocks of this
+     * size, so arbitrary values aren't safe to allow — 15/30/60 are the
+     * only granularities the engine is built to support. This is the
+     * authoritative list; AcademicTermRequest validates against it and
+     * useAcademicTermForm.js mirrors it for the <select> options.
+     */
+    public const TIME_INTERVALS = [15, 30, 60];
+
     /*
     |--------------------------------------------------------------------------
     | Academic Year Date Range (Single Source of Truth)
@@ -169,6 +179,18 @@ class AcademicTerm extends Model
     public function scopeActive($query)
     {
         return $query->where('active', true);
+    }
+
+    /**
+     * Terms that have been committed to (Published or Archived) — i.e.
+     * everything except Draft. Used by AcademicTermOverlapService: a
+     * Draft is just a tentative sketch and shouldn't block another Draft
+     * from tentatively using the same dates, but nothing may ever
+     * overlap a term that has actually been published.
+     */
+    public function scopeNotDraft($query)
+    {
+        return $query->where('status', '!=', 'Draft');
     }
 
     /*

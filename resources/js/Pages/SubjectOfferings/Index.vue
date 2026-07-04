@@ -8,16 +8,14 @@ const props = defineProps({
     academicTerms: Array,
     programs: Array,
     sections: Array,
-    specializations: Array,
+    statuses: Array,
     filters: Object,
 })
-
-const STATUSES = ['Pending', 'Confirmed', 'Cancelled']
 
 const form = reactive({
     academic_term_id: props.filters.academic_term_id ?? '',
     program_id: props.filters.program_id ?? '',
-    specialization_id: props.filters.specialization_id ?? '',
+    year_level: props.filters.year_level ?? '',
     section_id: props.filters.section_id ?? '',
     status: props.filters.status ?? '',
     search: props.filters.search ?? '',
@@ -38,34 +36,9 @@ watch(() => form.search, () => {
     searchTimeout = setTimeout(applyFilters, 350)
 })
 
-// Changing Program invalidates whatever Specialization/Section was
-// selected before (they belonged to the previous Program's list), so
-// clear both — the combined watch below then reloads with the fresh
-// (empty) values alongside the new program_id.
-watch(() => form.program_id, () => {
-    form.specialization_id = ''
-    form.section_id = ''
-})
-
-// Changing Specialization invalidates the selected Section the same way.
-watch(() => form.specialization_id, () => {
-    form.section_id = ''
-})
-
 watch(
-    () => [form.academic_term_id, form.program_id, form.specialization_id, form.section_id, form.status],
+    () => [form.academic_term_id, form.program_id, form.year_level, form.section_id, form.status],
     applyFilters
-)
-
-// The Specialization filter only makes sense for BSCRIM today (the one
-// Program with active Specializations that actually split its Sections
-// up further). Every other Program hides it completely.
-const selectedProgram = computed(() =>
-    props.programs.find(p => p.id === form.program_id) ?? null
-)
-
-const showSpecializationFilter = computed(() =>
-    selectedProgram.value?.code === 'BSCRIM'
 )
 
 const activeTermLabel = computed(() => {
@@ -75,10 +48,41 @@ const activeTermLabel = computed(() => {
 
 function statusBadgeClass(status) {
     return {
-        Pending: 'bg-amber-100 text-amber-800 border-amber-200',
-        Confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-        Cancelled: 'bg-rose-100 text-rose-800 border-rose-200',
+        Draft: 'bg-gray-100 text-gray-700 border-gray-200',
+        Generated: 'bg-sky-100 text-sky-800 border-sky-200',
+        'Faculty Assigned': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+        'Room Assigned': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+        'Ready for Scheduling': 'bg-violet-100 text-violet-800 border-violet-200',
+        Scheduled: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        Completed: 'bg-teal-100 text-teal-800 border-teal-200',
+        Archived: 'bg-rose-100 text-rose-800 border-rose-200',
     }[status] ?? 'bg-gray-100 text-gray-700 border-gray-200'
+}
+
+// Overall Status is fully derived — this tooltip is just a reminder of
+// *why*, since there's no dropdown here to click through anymore.
+function statusHint(status) {
+    return {
+        Generated: 'No Faculty or Room assigned yet.',
+        'Faculty Assigned': 'Faculty is assigned; Room is not.',
+        'Room Assigned': 'Room is assigned; Faculty is not.',
+        'Ready for Scheduling': 'Faculty and Room are both assigned.',
+        Scheduled: 'A day/time has been assigned by the Scheduler.',
+        Completed: "The Academic Term's class end date has passed.",
+        Archived: 'The Academic Term has been Archived.',
+    }[status] ?? ''
+}
+
+function assignmentBadgeClass(value) {
+    return value === 'Assigned'
+        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+        : 'bg-amber-100 text-amber-800 border-amber-200'
+}
+
+function destroy(offering) {
+    if (! confirm(`Delete Subject Offering ${offering.edp_code}?`)) return
+
+    router.delete(route('subject-offerings.destroy', offering.id), { preserveScroll: true })
 }
 </script>
 
@@ -95,7 +99,8 @@ function statusBadgeClass(status) {
                         Subject Offerings
                     </h1>
                     <p class="text-sm" style="color: var(--text-secondary)">
-                        Classes generated from Sections + Curriculum for a selected Academic Term.
+                        Classes imported from a Curriculum into an Academic Term. No
+                        Faculty, Room, or schedule is assigned here.
                         <span v-if="activeTermLabel"> Showing: <strong>{{ activeTermLabel }}</strong></span>
                     </p>
                 </div>
@@ -113,10 +118,7 @@ function statusBadgeClass(status) {
                 class="rounded-xl border p-4"
                 style="background: var(--card-bg); border-color: var(--card-border)"
             >
-                <div
-                    class="grid grid-cols-1 gap-3 sm:grid-cols-2"
-                    :class="showSpecializationFilter ? 'lg:grid-cols-6' : 'lg:grid-cols-5'"
-                >
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
                     <div>
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Academic Term
@@ -149,19 +151,17 @@ function statusBadgeClass(status) {
                         </select>
                     </div>
 
-                    <div v-if="showSpecializationFilter">
+                    <div>
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
-                            Specialization
+                            Year Level
                         </label>
                         <select
-                            v-model="form.specialization_id"
+                            v-model="form.year_level"
                             class="w-full rounded-lg border px-3 py-2 text-sm"
                             style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
                         >
-                            <option value="">All</option>
-                            <option v-for="specialization in specializations" :key="specialization.id" :value="specialization.id">
-                                {{ specialization.code }}
-                            </option>
+                            <option value="">All Years</option>
+                            <option v-for="y in [1, 2, 3, 4]" :key="y" :value="y">Year {{ y }}</option>
                         </select>
                     </div>
 
@@ -191,7 +191,7 @@ function statusBadgeClass(status) {
                             style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
                         >
                             <option value="">All Statuses</option>
-                            <option v-for="status in STATUSES" :key="status" :value="status">
+                            <option v-for="status in statuses" :key="status" :value="status">
                                 {{ status }}
                             </option>
                         </select>
@@ -221,12 +221,17 @@ function statusBadgeClass(status) {
                     <thead>
                         <tr class="border-b" style="border-color: var(--card-border)">
                             <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">EDP Code</th>
+                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Program</th>
+                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Year</th>
                             <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Section</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Subject Code</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Subject Title</th>
+                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Subject</th>
                             <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Units</th>
+                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Hours</th>
+                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Classification</th>
                             <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Faculty</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Status</th>
+                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Room</th>
+                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Overall Status</th>
+                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -240,35 +245,68 @@ function statusBadgeClass(status) {
                                 {{ offering.edp_code }}
                             </td>
                             <td class="px-4 py-3" style="color: var(--text-primary)">
+                                {{ offering.program?.code }}
+                            </td>
+                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                                {{ offering.year_level }}
+                            </td>
+                            <td class="px-4 py-3" style="color: var(--text-primary)">
                                 {{ offering.section?.section_code }}
                             </td>
                             <td class="px-4 py-3" style="color: var(--text-primary)">
-                                {{ offering.subject?.subject_code }}
+                                <div class="font-medium">{{ offering.subject?.subject_code }}</div>
+                                <div class="text-xs" style="color: var(--text-muted)">{{ offering.subject?.descriptive_title }}</div>
                             </td>
                             <td class="px-4 py-3" style="color: var(--text-primary)">
-                                {{ offering.subject?.descriptive_title }}
+                                {{ offering.units ?? '—' }}
                             </td>
                             <td class="px-4 py-3" style="color: var(--text-primary)">
-                                {{ offering.subject?.units }}
+                                {{ offering.hours ?? '—' }}
                             </td>
-                            <td class="px-4 py-3" style="color: var(--text-secondary)">
-                                {{ offering.faculty?.full_name ?? '— Unassigned —' }}
+                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                                {{ offering.classification ?? '—' }}
                             </td>
                             <td class="px-4 py-3">
                                 <span
                                     class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
-                                    :class="statusBadgeClass(offering.status)"
+                                    :class="assignmentBadgeClass(offering.faculty_status)"
                                 >
-                                    {{ offering.status }}
+                                    {{ offering.faculty_status }}
                                 </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span
+                                    class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                                    :class="assignmentBadgeClass(offering.room_status)"
+                                >
+                                    {{ offering.room_status }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span
+                                    class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                                    :class="statusBadgeClass(offering.overall_status)"
+                                    :title="statusHint(offering.overall_status)"
+                                >
+                                    {{ offering.overall_status }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <button
+                                    @click="destroy(offering)"
+                                    class="text-xs font-semibold underline"
+                                    style="color: var(--text-muted)"
+                                >
+                                    Delete
+                                </button>
                             </td>
                         </tr>
 
                         <tr v-if="offerings.data.length === 0">
-                            <td colspan="7" class="px-4 py-10 text-center" style="color: var(--text-muted)">
+                            <td colspan="12" class="px-4 py-10 text-center" style="color: var(--text-muted)">
                                 No Subject Offerings found. Try adjusting your filters, or
                                 <Link :href="route('subject-offerings.create')" class="underline">generate offerings</Link>
-                                for an Academic Term.
+                                for a Curriculum.
                             </td>
                         </tr>
                     </tbody>

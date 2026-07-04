@@ -90,11 +90,13 @@ class AcademicTermRequest extends FormRequest
                 'after:lunch_start_time',
             ],
 
+            // Restricted to the granularities the scheduling engine can
+            // actually slice the school day into — see
+            // AcademicTerm::TIME_INTERVALS for the authoritative list.
             'time_interval' => [
                 'required',
                 'integer',
-                'min:5',
-                'max:120',
+                Rule::in(AcademicTerm::TIME_INTERVALS),
             ],
 
             'monday' => ['boolean'],
@@ -125,6 +127,7 @@ class AcademicTermRequest extends FormRequest
             $this->validateLunchWithinSchoolHours($validator);
             $this->validateNoOverlap($validator);
             $this->validateActiveRequiresPublished($validator);
+            $this->validateAtLeastOneWorkingDay($validator);
         });
     }
 
@@ -224,6 +227,28 @@ class AcademicTermRequest extends FormRequest
             $validator->errors()->add(
                 'active',
                 'Only a Published Academic Term can be set as Active.'
+            );
+        }
+    }
+
+    /**
+     * At least one Working Day must be selected — an Academic Term with
+     * every day off has no days for the scheduler to place classes on at
+     * all, which would make every future Subject Offering unschedulable.
+     */
+    private function validateAtLeastOneWorkingDay(Validator $validator): void
+    {
+        $days = [
+            'monday', 'tuesday', 'wednesday', 'thursday',
+            'friday', 'saturday', 'sunday',
+        ];
+
+        $anySelected = collect($days)->contains(fn ($day) => $this->boolean($day));
+
+        if (! $anySelected) {
+            $validator->errors()->add(
+                'monday',
+                'At least one Working Day must be selected.'
             );
         }
     }

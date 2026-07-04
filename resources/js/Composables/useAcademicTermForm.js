@@ -16,6 +16,15 @@ export const DAYS = [
     { key: 'sunday', label: 'Sunday' },
 ]
 
+// Mirrors App\Models\AcademicTerm::TIME_INTERVALS — the only granularities
+// the (future) greedy scheduler can slice the school day into. Keep both
+// lists in sync if this ever changes.
+export const TIME_INTERVALS = [
+    { value: 15, label: '15 minutes' },
+    { value: 30, label: '30 minutes' },
+    { value: 60, label: '60 minutes' },
+]
+
 /**
  * Shared reactive logic for the Academic Term Create/Edit forms.
  *
@@ -106,6 +115,33 @@ export function useAcademicTermForm(form) {
     })
 
     /**
+     * At least one Working Day must stay checked — mirrors
+     * AcademicTermRequest::validateAtLeastOneWorkingDay(). Without this,
+     * every future Subject Offering under this term would have no day
+     * left for the scheduler to place it on.
+     */
+    const workingDaysInvalid = computed(() => {
+        return ! DAYS.some(day => !!form[day.key])
+    })
+
+    /**
+     * Aggregates every client-side validation flag above. Used purely to
+     * disable the Save button so the user isn't sent to the server with a
+     * form that's already known to fail — the server-side rules in
+     * AcademicTermRequest remain the actual source of truth and are
+     * re-checked on every submit regardless.
+     */
+    const hasBlockingErrors = computed(() => {
+        return classDatesInvalid.value ||
+            schoolHoursInvalid.value ||
+            lunchIncomplete.value ||
+            lunchOrderInvalid.value ||
+            lunchOutsideSchoolHours.value ||
+            activeRequiresPublished.value ||
+            workingDaysInvalid.value
+    })
+
+    /**
      * Sanitizes the Start Year input (digits only, max 4 chars) and clears
      * Class Start / Class End if they fall outside the newly-typed year's
      * range — prevents stale dates from a previously-typed year silently
@@ -143,6 +179,8 @@ export function useAcademicTermForm(form) {
         lunchOrderInvalid,
         lunchOutsideSchoolHours,
         activeRequiresPublished,
+        workingDaysInvalid,
+        hasBlockingErrors,
         onStartYearInput,
     }
 }

@@ -3,7 +3,7 @@ import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import Toast from '@/Components/Toast.vue'
 import { Link, useForm } from '@inertiajs/vue3'
 import { ref } from 'vue'
-import { useAcademicTermForm, SEMESTERS, DAYS } from '@/Composables/useAcademicTermForm'
+import { useAcademicTermForm, SEMESTERS, DAYS, TIME_INTERVALS } from '@/Composables/useAcademicTermForm'
 import { useFlashToast } from '@/Composables/useFlashToast'
 
 const props = defineProps({
@@ -59,6 +59,8 @@ const {
     lunchOrderInvalid,
     lunchOutsideSchoolHours,
     activeRequiresPublished,
+    workingDaysInvalid,
+    hasBlockingErrors,
     onStartYearInput,
 } = useAcademicTermForm(form)
 
@@ -336,13 +338,22 @@ function confirmSave() {
                             Time Interval (minutes)
                         </label>
 
-                        <input
+                        <select
                             v-model="form.time_interval"
-                            type="number"
-                            min="5"
-                            max="120"
                             class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
+                            <option
+                                v-for="interval in TIME_INTERVALS"
+                                :key="interval.value"
+                                :value="interval.value"
+                            >
+                                {{ interval.label }}
+                            </option>
+                        </select>
+
+                        <p class="text-[var(--text-muted)] text-sm mt-1">
+                            Controls how finely the scheduler can slice the school day.
+                        </p>
 
                         <p v-if="form.errors.time_interval" class="text-red-500 text-sm mt-1">
                             {{ form.errors.time_interval }}
@@ -373,6 +384,14 @@ function confirmSave() {
                         </label>
 
                     </div>
+
+                    <!-- Inline hint, in addition to any server-side error -->
+                    <p v-if="workingDaysInvalid" class="text-red-500 text-sm mt-2">
+                        At least one Working Day must be selected.
+                    </p>
+                    <p v-else-if="form.errors.monday" class="text-red-500 text-sm mt-2">
+                        {{ form.errors.monday }}
+                    </p>
 
                 </div>
 
@@ -441,7 +460,7 @@ function confirmSave() {
 
                     <button
                         type="submit"
-                        :disabled="form.processing || isLocked"
+                        :disabled="form.processing || isLocked || hasBlockingErrors"
                         class="btn-save"
                     >
                         Update Academic Term
@@ -508,7 +527,7 @@ function confirmSave() {
                     <button
                         type="button"
                         @click="confirmSave"
-                        :disabled="form.processing"
+                        :disabled="form.processing || hasBlockingErrors"
                         class="btn-save"
                     >
                         Confirm Save

@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('subject_offerings', function (Blueprint $table) {
@@ -17,65 +14,90 @@ return new class extends Migration
 
             /*
             |--------------------------------------------------------------------------
-            | Academic Term
+            | Academic Term / Curriculum
             |--------------------------------------------------------------------------
             |
-            | Every offering belongs to exactly one Academic Term — this is
-            | what "Generate Subject Offerings" is scoped to. Cascade on
-            | delete: an Academic Term should generally be Archived rather
-            | than deleted once it has offerings (see AcademicTerm::
-            | hasSchedulingData()), but if it ever is force-deleted, its
-            | generated offerings go with it rather than being orphaned.
+            | Every offering is generated FROM one Curriculum, INTO one
+            | Academic Term. Cascade on academic_term_id: an Academic Term
+            | force-deleted takes its generated offerings with it.
+            | restrictOnDelete on curriculum_id: a Curriculum that already
+            | has generated offerings should never be silently deletable.
             */
 
             $table->foreignId('academic_term_id')
                 ->constrained()
                 ->cascadeOnDelete();
 
-            /*
-            |--------------------------------------------------------------------------
-            | Curriculum / Curriculum Item / Subject
-            |--------------------------------------------------------------------------
-            |
-            | curriculum_id and subject_id are denormalized copies of what
-            | curriculum_item_id already implies — kept as real columns
-            | (rather than reached through the relation every time) because
-            | the Index page's Program filter and the EDP Code generator
-            | both need to query/group by them directly and cheaply.
-            |
-            | restrictOnDelete on curriculum_id/subject_id: a Curriculum or
-            | Subject that already has generated offerings sitting against
-            | it should never be silently deletable out from under them.
-            | curriculum_item_id cascades — if a specific item is removed
-            | from a curriculum's prospectus, any offering generated from
-            | it no longer has a placement to point to.
-            */
-
             $table->foreignId('curriculum_id')
                 ->constrained()
                 ->restrictOnDelete();
 
+            /*
+            |--------------------------------------------------------------------------
+            | Curriculum Item / Program / Subject / Section
+            |--------------------------------------------------------------------------
+            |
+            | curriculum_item_id, program_id, and subject_id are all
+            | denormalized so the Index page's filters and the EDP Code
+            | generator can query/group by them directly and cheaply,
+            | without reaching through curriculum_id every time.
+            |
+            | curriculum_item_id is nullable and cascades — if the item is
+            | ever removed from the Curriculum's prospectus, this link
+            | (not the offering) goes with it. program_id/subject_id
+            | restrictOnDelete for the same "never orphan history" reason
+            | as curriculum_id.
+            */
+
             $table->foreignId('curriculum_item_id')
+                ->nullable()
                 ->constrained()
                 ->cascadeOnDelete();
+
+            $table->foreignId('program_id')
+                ->constrained()
+                ->restrictOnDelete();
 
             $table->foreignId('subject_id')
                 ->constrained()
                 ->restrictOnDelete();
 
-            /*
-            |--------------------------------------------------------------------------
-            | Section
-            |--------------------------------------------------------------------------
-            |
-            | The Section this class is being offered to. Cascade on
-            | delete mirrors curriculum_item_id — a deleted Section takes
-            | its generated offerings with it.
-            */
-
             $table->foreignId('section_id')
                 ->constrained()
                 ->cascadeOnDelete();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Placement
+            |--------------------------------------------------------------------------
+            */
+
+            $table->unsignedTinyInteger('year_level');
+
+            // 1 = First Semester, 2 = Second Semester, 3 = Summer
+            $table->unsignedTinyInteger('semester');
+
+            /*
+            |--------------------------------------------------------------------------
+            | Subject Snapshot (as of generation time)
+            |--------------------------------------------------------------------------
+            |
+            | Units / Hours / Classification / Room Type are copied from
+            | the Subject at the moment this offering is generated. This
+            | is a deliberate snapshot, not a live lookup — if the Subject
+            | master record is edited later (e.g. units changed for a
+            | future curriculum revision), an already-generated offering
+            | should keep reflecting what it was actually generated with.
+            */
+
+            $table->unsignedTinyInteger('units')->nullable();
+            $table->unsignedSmallInteger('hours')->nullable();
+
+            // 'Major' | 'Minor' — mirrors Subject::is_major at generation time.
+            $table->string('classification', 10)->nullable();
+
+            // Mirrors Subject::required_room_type at generation time.
+            $table->string('room_type', 50)->nullable();
 
             /*
             |--------------------------------------------------------------------------
@@ -91,53 +113,22 @@ return new class extends Migration
 
             /*
             |--------------------------------------------------------------------------
-            | Placement (denormalized from the Curriculum Item)
-            |--------------------------------------------------------------------------
-            */
-
-            $table->unsignedTinyInteger('year_level');
-
-            // 1 = First Semester, 2 = Second Semester, 3 = Summer
-            $table->unsignedTinyInteger('semester');
-
-            /*
-            |--------------------------------------------------------------------------
-            | Faculty / Room (assigned later — never at generation time)
+            | Status — deliberately NOT a column
             |--------------------------------------------------------------------------
             |
-            | Both nullable and intentionally left empty by the generator.
-            | Faculty Loading / Scheduling modules are what populate these
-            | going forward — this module only ever writes null here.
-            */
-
-            $table->foreignId('faculty_id')
-                ->nullable()
-                ->constrained()
-                ->nullOnDelete();
-
-            $table->foreignId('room_id')
-                ->nullable()
-                ->constrained()
-                ->nullOnDelete();
-
-            /*
-            |--------------------------------------------------------------------------
-            | Status
-            |--------------------------------------------------------------------------
+            | Overall Status is fully derived (see
+            | SubjectOffering::getOverallStatusAttribute()) from real
+            | data — the Academic Term's own status/class_end_date,
+            | whether a Teaching Assignment exists, whether a Room is
+            | assigned, and whether the future Scheduler has written a
+            | schedule row. Storing it as an editable column would let
+            | it drift out of sync with the very facts it's supposed to
+            | summarize, so there is nothing to store here.
             |
-            | Every offering is generated as Pending. Confirmed/Cancelled
-            | exist as the two other states a future Faculty Loading /
-            | Scheduling module will transition an offering through —
-            | nothing in this module ever sets anything but Pending.
-            */
-
-            $table->enum('status', ['Pending', 'Confirmed', 'Cancelled'])
-                ->default('Pending');
-
-            /*
-            |--------------------------------------------------------------------------
-            | Generated By
-            |--------------------------------------------------------------------------
+            | NOTE: this table has NO faculty_id, room_id, day, or time
+            | column, and never will. Those belong entirely to later
+            | modules; every derived status is read from those modules'
+            | own tables, never written by this one.
             */
 
             $table->foreignId('created_by')
@@ -151,35 +142,29 @@ return new class extends Migration
             | Prevent Duplicate Generation
             |--------------------------------------------------------------------------
             |
-            | A given Curriculum Item can only ever produce one offering
-            | for a given Section. Re-generating for an Academic Term that
-            | already has offerings is handled at the application layer
-            | (replace-or-cancel prompt) — this index is the DB-level
-            | backstop against that ever producing duplicate rows.
+            | Academic Term + Program + Year Level + Section + Subject may
+            | only ever exist once. Generation is additive: re-running it
+            | for a Curriculum only fills in whatever's missing (a newly
+            | checked Section, a newly added Curriculum Item) — this index
+            | is the DB-level backstop against that ever producing a
+            | duplicate row regardless of how generate() is called.
             */
 
             $table->unique(
-                ['section_id', 'curriculum_item_id'],
-                'subject_offerings_section_item_unique'
+                ['academic_term_id', 'program_id', 'year_level', 'section_id', 'subject_id'],
+                'subject_offerings_duplicate_unique'
             );
 
             /*
             |--------------------------------------------------------------------------
             | Lookup Indexes
             |--------------------------------------------------------------------------
-            |
-            | Every read path (Index filters, EDP sequence lookups) filters
-            | by these column groups.
             */
 
-            $table->index(['academic_term_id', 'status']);
             $table->index(['curriculum_id', 'year_level', 'semester']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('subject_offerings');

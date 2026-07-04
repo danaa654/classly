@@ -155,11 +155,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('subject-offerings', [SubjectOfferingController::class, 'index'])
             ->name('subject-offerings.index');
 
-        Route::get('subject-offerings/generate', [SubjectOfferingController::class, 'create'])
+        Route::get('subject-offerings/create', [SubjectOfferingController::class, 'create'])
             ->name('subject-offerings.create');
 
-        Route::post('subject-offerings/generate', [SubjectOfferingController::class, 'store'])
+        Route::post('subject-offerings', [SubjectOfferingController::class, 'store'])
             ->name('subject-offerings.store');
+
+        Route::delete('subject-offerings/{subjectOffering}', [SubjectOfferingController::class, 'destroy'])
+            ->name('subject-offerings.destroy');
 
     });
 
