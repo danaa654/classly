@@ -176,8 +176,22 @@ class SubjectOffering extends Model
             return 'Assigned';
         }
 
-        // Future "Preferred Rooms" module, if it lands as its own table
-        // keyed by subject_offering_id.
+        // Room Preferences module (Rooms > Manage Subjects) — a Room
+        // preferring this Offering via the room_subject_offering pivot
+        // (see Room::preferredSubjectOfferings()) counts as a Room
+        // assignment here, the same way a Teaching Assignment counts as
+        // a Faculty assignment above. No day/time has been decided yet
+        // either way — this is still a preference, not a schedule.
+        if (
+            Schema::hasTable('room_subject_offering')
+            && DB::table('room_subject_offering')->where('subject_offering_id', $this->id)->exists()
+        ) {
+            return 'Assigned';
+        }
+
+        // Legacy/forward-compatible check for a possible future
+        // dedicated room_assignments table, kept in case that ever
+        // replaces the pivot above.
         if (
             Schema::hasTable('room_assignments')
             && Schema::hasColumn('room_assignments', 'subject_offering_id')

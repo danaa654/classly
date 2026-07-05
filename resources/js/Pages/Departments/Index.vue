@@ -1,10 +1,16 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import Toast from '@/Components/Toast.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { useFlashToast } from '@/Composables/useFlashToast'
 
 defineProps({
     departments: Array,
 })
+
+// Create/Update/Delete all redirect back to this index page, so this is
+// the one place in the Colleges module that needs to render the flash.
+const { toast } = useFlashToast()
 
 function destroy(id) {
     if (confirm('Are you sure you want to delete this college?')) {
@@ -15,6 +21,8 @@ function destroy(id) {
 
 <template>
     <DashboardLayout>
+
+        <Toast :toast="toast" />
 
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold text-[var(--text-primary)]">

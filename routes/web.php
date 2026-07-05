@@ -129,31 +129,26 @@ Route::middleware(['auth'])->group(function () {
 
         /*
         |--------------------------------------------------------------------------
-        | Subject Offerings
+        | Subject Offerings — Generate / Delete (Admin + Registrar only)
         |--------------------------------------------------------------------------
         |
-        | The actual classes offered for a selected Academic Term —
-        | generated (never manually created) from active Sections +
-        | their Curriculum's Curriculum Items. Admin + Registrar only:
-        | Dean/Assistant Dean/OIC have no access to this module at all
-        | (no Sidebar link, and a direct hit on any of these routes
-        | 403s via SubjectOfferingController::middleware() /
-        | SubjectOfferingPolicy). "generate" (Create/Store below) is
-        | additionally checked per-action against
-        | SubjectOfferingPolicy::generate() — currently the same
-        | Admin|Registrar set, kept separate so it can be narrowed on
-        | its own later without touching view access.
+        | Viewing the list (index) is registered further down, in the
+        | Admin|Registrar|Dean|Assistant Dean|OIC group — Dean/Assistant
+        | Dean/OIC need to see what's been offered to make sense of
+        | Faculty Loading, but they never generate or delete an
+        | offering. Generating/deleting stay here, Admin + Registrar
+        | only, and are additionally checked per-action in
+        | SubjectOfferingController (SubjectOfferingPolicy::generate()
+        | for create/store, an explicit role check for destroy) so a
+        | direct hit still 403s even if this route grouping is ever
+        | rearranged later.
         |
-        | No resource route here on purpose — there is no store/update/
-        | destroy for a single offering. "create"/"store" below are the
-        | Generate form, not a manual record form. Faculty assignment
-        | for an offering happens in Faculty Loading (Teaching
-        | Assignments), not here.
-        |
+        | No resource route here on purpose — there is no update for a
+        | single offering (Overall Status is fully derived, not
+        | editable). "create"/"store" are the Generate form, not a
+        | manual record form. Faculty assignment for an offering
+        | happens in Faculty Loading (Teaching Assignments), not here.
         */
-
-        Route::get('subject-offerings', [SubjectOfferingController::class, 'index'])
-            ->name('subject-offerings.index');
 
         Route::get('subject-offerings/create', [SubjectOfferingController::class, 'create'])
             ->name('subject-offerings.create');
@@ -179,6 +174,39 @@ Route::middleware(['auth'])->group(function () {
 
         // Rooms — master list only (no schedules/availability here).
         Route::resource('rooms', RoomController::class);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Room Preferences ("Manage Subjects")
+        |--------------------------------------------------------------------------
+        |
+        | Per-room workspace for selecting which active-term Subject
+        | Offerings a room PREFERS to host. This stores preferences only
+        | (see room_subject_offering) — no day/time/faculty is assigned
+        | here. That belongs to the future Scheduling module.
+        |
+        */
+
+        Route::get('rooms/{room}/manage-subjects', [RoomController::class, 'manageSubjects'])
+            ->name('rooms.manage-subjects');
+
+        Route::put('rooms/{room}/manage-subjects', [RoomController::class, 'syncPreferredSubjects'])
+            ->name('rooms.manage-subjects.update');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Subject Offerings — View only
+        |--------------------------------------------------------------------------
+        |
+        | Dean/Assistant Dean/OIC can see what classes exist for the
+        | term (they need this to make sense of Faculty Loading below),
+        | but never generate or delete an offering — those actions live
+        | in the Admin|Registrar group above, out of reach here even by
+        | a direct route hit.
+        */
+
+        Route::get('subject-offerings', [SubjectOfferingController::class, 'index'])
+            ->name('subject-offerings.index');
 
         /*
         |--------------------------------------------------------------------------

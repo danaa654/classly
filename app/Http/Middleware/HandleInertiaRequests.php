@@ -41,6 +41,18 @@ class HandleInertiaRequests extends Middleware
             // is currently marked active.
             'activeAcademicTerm' => fn () => AcademicTerm::active()->first(),
 
+            // Relayed from session flash data set by controller redirect()
+            // ->with('success'|'warning'|'error', $message) calls. Read by
+            // useFlashToast.js on the frontend — without this key being
+            // shared, that composable's watcher never has anything to
+            // react to, and toasts never appear no matter what the
+            // controller flashes.
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'error' => fn () => $request->session()->get('error'),
+            ],
+
             'auth' => [
                 'user' => $user
                     ? [

@@ -273,10 +273,10 @@ class SubjectSeeder extends Seeder
             //   PATHFIT3 -> BSED: "Physical Activities Towards Health and Fitness in Dance" | BSCRIM: "First Aid and Water Survival" (no prereq in BSCRIM)
             //   PATHFIT4 -> BSED: "Physical Activities Towards Health and Fitness in Sports" | BSCRIM: "Fundamentals of Marksmanship" (no prereq in BSCRIM)
             // Confirm with your adviser whether these should be split into per-program subjects instead.
-            ['code' => 'PATHFIT1', 'title' => 'Movement Competency Training',                'lec' => 2, 'lab' => 0, 'units' => 2, 'major' => false, 'room' => 'PE Area', 'prereq' => null],
-            ['code' => 'PATHFIT2', 'title' => 'Exercise-based Fitness Activities',            'lec' => 2, 'lab' => 0, 'units' => 2, 'major' => false, 'room' => 'PE Area', 'prereq' => 'PATHFIT1'],
-            ['code' => 'PATHFIT3', 'title' => 'Individual and Dual Sports',                   'lec' => 2, 'lab' => 0, 'units' => 2, 'major' => false, 'room' => 'PE Area', 'prereq' => 'PATHFIT2'],
-            ['code' => 'PATHFIT4', 'title' => 'Team Sports',                                  'lec' => 2, 'lab' => 0, 'units' => 2, 'major' => false, 'room' => 'PE Area', 'prereq' => 'PATHFIT3'],
+            ['code' => 'PATHFIT1', 'title' => 'Movement Competency Training',                'lec' => 2, 'lab' => 0, 'units' => 2, 'major' => false, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'PATHFIT2', 'title' => 'Exercise-based Fitness Activities',            'lec' => 2, 'lab' => 0, 'units' => 2, 'major' => false, 'room' => 'Lecture', 'prereq' => 'PATHFIT1'],
+            ['code' => 'PATHFIT3', 'title' => 'Individual and Dual Sports',                   'lec' => 2, 'lab' => 0, 'units' => 2, 'major' => false, 'room' => 'Lecture', 'prereq' => 'PATHFIT2'],
+            ['code' => 'PATHFIT4', 'title' => 'Team Sports',                                  'lec' => 2, 'lab' => 0, 'units' => 2, 'major' => false, 'room' => 'Lecture', 'prereq' => 'PATHFIT3'],
         ];
     }
 

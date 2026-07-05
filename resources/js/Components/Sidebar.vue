@@ -59,12 +59,16 @@ const navConfig = [
             { label: 'Subjects', route: 'subjects.index', icon: '📚' },
            
             { label: 'Rooms', route: 'rooms.index', icon: '🏢' },
-            // Admin + Registrar only — Dean/Assistant Dean/OIC don't get
-            // this link (matches SubjectOfferingController::middleware()
-            // / SubjectOfferingPolicy, which 403 them if they hit the
-            // route directly anyway). Other items in this group have no
-            // `roles` and stay visible to the whole group as before.
-            { label: 'Subject Offerings', route: 'subject-offerings.index', icon: '🧾', roles: ['Admin', 'Registrar'] },
+            // Visible to the whole group (Admin, Registrar, Dean,
+            // Assistant Dean, OIC) — Dean/Assistant Dean/OIC need to
+            // see what's been offered to make sense of Faculty
+            // Loading below it. Generating and deleting are still
+            // Admin + Registrar only — enforced by web.php's route
+            // grouping and SubjectOfferingController, and the
+            // Generate/Delete buttons on the page itself only render
+            // for users the backend actually authorizes (see the
+            // `can` prop on SubjectOfferings/Index.vue).
+            { label: 'Subject Offerings', route: 'subject-offerings.index', icon: '🧾' },
             { label: 'Faculty Loading', route: 'teaching-assignments.index', icon: '📋' },
             { label: 'Schedule', href: '#', icon: '🗓️', soon: true },
         ],

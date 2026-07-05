@@ -7,14 +7,17 @@ const props = defineProps({
     offerings: Object,
     academicTerms: Array,
     programs: Array,
+    specializations: Array,
     sections: Array,
     statuses: Array,
     filters: Object,
+    can: Object,
 })
 
 const form = reactive({
     academic_term_id: props.filters.academic_term_id ?? '',
     program_id: props.filters.program_id ?? '',
+    specialization_id: props.filters.specialization_id ?? '',
     year_level: props.filters.year_level ?? '',
     section_id: props.filters.section_id ?? '',
     status: props.filters.status ?? '',
@@ -37,9 +40,47 @@ watch(() => form.search, () => {
 })
 
 watch(
-    () => [form.academic_term_id, form.program_id, form.year_level, form.section_id, form.status],
+    () => [form.academic_term_id, form.program_id, form.specialization_id, form.year_level, form.section_id, form.status],
     applyFilters
 )
+
+// Specializations that belong to the selected Program (e.g. BSCRIM's
+// FB/LD/QD/FI). Empty for single-track programs like BSIT, which is
+// what hides the Specialization filter for them below.
+const specializationsForProgram = computed(() => {
+    if (! form.program_id) return []
+
+    return props.specializations.filter(s => s.program_id === form.program_id)
+})
+
+// Sections narrowed to the selected Program and (if applicable)
+// Specialization — this is what actually fixes "picked BSIT, still
+// see every Section." Each Section carries program_id/specialization_id
+// denormalized off its Curriculum (see SubjectOfferingController::index()).
+const filteredSections = computed(() => {
+    return props.sections.filter(section => {
+        if (form.program_id && section.program_id !== form.program_id) return false
+
+        if (form.specialization_id && section.specialization_id !== form.specialization_id) return false
+
+        if (form.year_level && section.year_level !== form.year_level) return false
+
+        return true
+    })
+})
+
+// Changing Program invalidates any previously chosen Specialization/
+// Section that no longer applies — otherwise a stale section_id from
+// e.g. BSIT could keep silently filtering a BSCRIM query into an empty
+// table with no visible reason why.
+watch(() => form.program_id, () => {
+    form.specialization_id = ''
+    form.section_id = ''
+})
+
+watch(() => form.specialization_id, () => {
+    form.section_id = ''
+})
 
 const activeTermLabel = computed(() => {
     const term = props.academicTerms.find(t => t.id === form.academic_term_id)
@@ -106,6 +147,7 @@ function destroy(offering) {
                 </div>
 
                 <Link
+                    v-if="can.generate"
                     :href="route('subject-offerings.create')"
                     class="btn-info inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white"
                 >
@@ -118,7 +160,7 @@ function destroy(offering) {
                 class="rounded-xl border p-4"
                 style="background: var(--card-bg); border-color: var(--card-border)"
             >
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
                     <div>
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Academic Term
@@ -151,6 +193,25 @@ function destroy(offering) {
                         </select>
                     </div>
 
+                    <!-- Only shows once a Program with multiple tracks (e.g.
+                         BSCRIM's FB/LD/QD/FI) is selected — single-track
+                         Programs like BSIT never trigger this. -->
+                    <div v-if="specializationsForProgram.length > 0">
+                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+                            Specialization
+                        </label>
+                        <select
+                            v-model="form.specialization_id"
+                            class="w-full rounded-lg border px-3 py-2 text-sm"
+                            style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
+                        >
+                            <option value="">All Specializations</option>
+                            <option v-for="spec in specializationsForProgram" :key="spec.id" :value="spec.id">
+                                {{ spec.code ?? spec.name }}
+                            </option>
+                        </select>
+                    </div>
+
                     <div>
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Year Level
@@ -175,7 +236,7 @@ function destroy(offering) {
                             style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
                         >
                             <option value="">All Sections</option>
-                            <option v-for="section in sections" :key="section.id" :value="section.id">
+                            <option v-for="section in filteredSections" :key="section.id" :value="section.id">
                                 {{ section.section_code }}
                             </option>
                         </select>
@@ -293,6 +354,7 @@ function destroy(offering) {
                             </td>
                             <td class="px-4 py-3 text-right">
                                 <button
+                                    v-if="can.delete"
                                     @click="destroy(offering)"
                                     class="text-xs font-semibold underline"
                                     style="color: var(--text-muted)"
@@ -304,9 +366,9 @@ function destroy(offering) {
 
                         <tr v-if="offerings.data.length === 0">
                             <td colspan="12" class="px-4 py-10 text-center" style="color: var(--text-muted)">
-                                No Subject Offerings found. Try adjusting your filters, or
+                                No Subject Offerings found. Try adjusting your filters<template v-if="can.generate">, or
                                 <Link :href="route('subject-offerings.create')" class="underline">generate offerings</Link>
-                                for a Curriculum.
+                                for a Curriculum</template>.
                             </td>
                         </tr>
                     </tbody>

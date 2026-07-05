@@ -74,6 +74,24 @@ class Room extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | Room Preference Capacity
+    |--------------------------------------------------------------------------
+    |
+    | Provisional weekly-hours denominator used purely to display a
+    | "X / Y hrs" utilization readout on the Manage Subjects workspace
+    | (see RoomController::manageSubjects()). This is NOT a scheduling
+    | constraint — no day/time slots exist yet, nothing here blocks a
+    | preference from being saved past this number. The real capacity
+    | (derived from the Academic Term's school hours/days) belongs to the
+    | future Scheduling module; this constant exists only so Room
+    | Preferences has a stable, sensible number to show in the meantime.
+    |
+    */
+
+    public const WEEKLY_CAPACITY_HOURS = 60;
+
+    /*
+    |--------------------------------------------------------------------------
     | Casts
     |--------------------------------------------------------------------------
     | Matches the column types defined in the rooms migration so values come
@@ -102,6 +120,23 @@ class Room extends Model
     public function roomGroups()
     {
         return $this->hasMany(RoomGroupRoom::class);
+    }
+
+    /**
+     * Subject Offerings this room PREFERS to host, via the
+     * room_subject_offering pivot (see the Manage Subjects workspace).
+     *
+     * This is a preference only — it carries no day/time/faculty
+     * information and does not represent a schedule. Since every Subject
+     * Offering already belongs to one Academic Term, filter by
+     * ->where('academic_term_id', ...) wherever only the active term's
+     * preferences should count (e.g. utilization totals), rather than
+     * assuming every row here is current.
+     */
+    public function preferredSubjectOfferings()
+    {
+        return $this->belongsToMany(SubjectOffering::class, 'room_subject_offering')
+            ->withTimestamps();
     }
 
     /**

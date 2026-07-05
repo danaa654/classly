@@ -7,6 +7,7 @@ use App\Models\AcademicTerm;
 use App\Models\Curriculum;
 use App\Models\Program;
 use App\Models\Section;
+use App\Models\Specialization;
 use App\Models\SubjectOffering;
 use App\Services\SubjectOfferingGeneratorService;
 use Illuminate\Http\Request;
@@ -22,17 +23,27 @@ class SubjectOfferingController extends Controller implements HasMiddleware
     }
 
     /**
-     * Subject Offerings (view + generate) are Admin + Registrar only.
-     * Dean/Assistant Dean/OIC have no access here — they get a 403 if
-     * they hit this controller directly, and the Sidebar hides the
-     * "Subject Offerings" link for them entirely.
+     * Everyone with any stake in scheduling can VIEW Subject Offerings
+     * — Admin, Registrar, Dean, Assistant Dean, OIC. Generating and
+     * Deleting are each gated separately, further down: Generate via
+     * SubjectOfferingPolicy::generate() in create()/store() (Admin +
+     * Registrar only, unchanged), Delete via an explicit role check
+     * in destroy() (Admin + Registrar only). Dean/Assistant Dean/OIC
+     * hitting create/store/destroy directly still get a clean 403 —
+     * this middleware only clears them past the front door.
      */
     public static function middleware(): array
     {
         return [
             new Middleware(function ($request, $next) {
                 abort_unless(
-                    auth()->user()->hasAnyRole(['Admin', 'Registrar']),
+                    auth()->user()->hasAnyRole([
+                        'Admin',
+                        'Registrar',
+                        'Dean',
+                        'Assistant Dean',
+                        'OIC',
+                    ]),
                     403,
                     'Unauthorized.'
                 );
@@ -61,6 +72,7 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             ?: AcademicTerm::where('active', true)->value('id');
 
         $programId = $request->input('program_id');
+        $specializationId = $request->input('specialization_id');
         $yearLevel = $request->input('year_level');
         $sectionId = $request->input('section_id');
         $status = $request->input('status');
@@ -77,6 +89,14 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             ])
             ->when($academicTermId, fn ($q) => $q->where('academic_term_id', $academicTermId))
             ->when($programId, fn ($q) => $q->where('program_id', $programId))
+            // Specialization isn't denormalized onto subject_offerings
+            // (only curriculum_id/program_id are) — reach through the
+            // Curriculum to filter Offerings for a specific
+            // specialization (e.g. BSCRIM-FB vs BSCRIM-LD).
+            ->when($specializationId, fn ($q) => $q->whereHas(
+                'curriculum',
+                fn ($c) => $c->where('specialization_id', $specializationId)
+            ))
             ->when($yearLevel, fn ($q) => $q->where('year_level', $yearLevel))
             ->when($sectionId, fn ($q) => $q->where('section_id', $sectionId))
             ->when($search !== '', function ($query) use ($search) {
@@ -116,19 +136,50 @@ class SubjectOfferingController extends Controller implements HasMiddleware
 
             'programs' => Program::where('active', true)->orderBy('name')->get(['id', 'code', 'name']),
 
-            'sections' => Section::where('status', 'Active')
+            // Every active Program's Specializations (e.g. BSCRIM's FB/
+            // LD/QD/FI) — the frontend only shows this as a filter once
+            // a Program that actually has any is selected.
+            'specializations' => Specialization::where('active', true)
+                ->orderBy('name')
+                ->get(['id', 'program_id', 'code', 'name']),
+
+            // program_id/specialization_id are denormalized here (read
+            // off each Section's Curriculum) purely so the Index page
+            // can narrow the Section dropdown to the selected Program/
+            // Specialization client-side, without a round trip.
+            'sections' => Section::with('curriculum:id,program_id,specialization_id')
+                ->where('status', 'Active')
                 ->orderBy('section_code')
-                ->get(['id', 'section_code', 'section_name']),
+                ->get(['id', 'section_code', 'section_name', 'curriculum_id', 'year_level'])
+                ->map(fn ($section) => [
+                    'id' => $section->id,
+                    'section_code' => $section->section_code,
+                    'section_name' => $section->section_name,
+                    'year_level' => $section->year_level,
+                    'program_id' => $section->curriculum?->program_id,
+                    'specialization_id' => $section->curriculum?->specialization_id,
+                ])
+                ->values(),
 
             'statuses' => SubjectOffering::STATUSES,
 
             'filters' => [
                 'academic_term_id' => $academicTermId ? (int) $academicTermId : null,
                 'program_id' => $programId ? (int) $programId : null,
+                'specialization_id' => $specializationId ? (int) $specializationId : null,
                 'year_level' => $yearLevel ? (int) $yearLevel : null,
                 'section_id' => $sectionId ? (int) $sectionId : null,
                 'status' => in_array($status, SubjectOffering::STATUSES, true) ? $status : null,
                 'search' => $search,
+            ],
+
+            // Computed once here, same as UserController's
+            // is_protected/protected_reason pattern — the Vue page
+            // just reads booleans, it never has to know or guess
+            // which role names map to which permission.
+            'can' => [
+                'generate' => auth()->user()->can('generate', SubjectOffering::class),
+                'delete' => auth()->user()->hasAnyRole(['Admin', 'Registrar']),
             ],
 
         ]);
@@ -189,7 +240,35 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             $request->user()
         );
 
-        $message = "{$summary['created']} Subject Offering(s) generated for {$curriculum->display_name} — {$academicTerm->display_name}.";
+        $label = "{$curriculum->display_name} — {$academicTerm->display_name}";
+
+        // Nothing new was created. Two distinct reasons why, each with
+        // its own toast so the registrar isn't told "0 generated" with
+        // no explanation:
+        //   1. Every matching pair already existed — this Curriculum
+        //      (for these Sections) was already generated earlier.
+        //   2. Nothing matched at all, or every match was unresolved
+        //      (e.g. missing Specialization code) — a real problem,
+        //      not just a harmless re-run.
+        if ($summary['created'] === 0) {
+            if ($summary['skipped_existing'] > 0 && $summary['skipped_unresolved'] === 0) {
+                return redirect()
+                    ->route('subject-offerings.index', ['academic_term_id' => $academicTerm->id])
+                    ->with('warning', "{$label} has already been generated — no new Subject Offerings were created.");
+            }
+
+            $message = "No Subject Offerings were generated for {$label}.";
+
+            if ($summary['skipped_unresolved'] > 0) {
+                $message .= " {$summary['skipped_unresolved']} item(s) could not be generated (missing Specialization code).";
+            }
+
+            return redirect()
+                ->route('subject-offerings.index', ['academic_term_id' => $academicTerm->id])
+                ->with('error', $message);
+        }
+
+        $message = "{$summary['created']} Subject Offering(s) generated for {$label}.";
 
         if ($summary['skipped_existing'] > 0) {
             $message .= " {$summary['skipped_existing']} already existed and were left untouched.";
@@ -208,9 +287,21 @@ class SubjectOfferingController extends Controller implements HasMiddleware
      * Blocked once Faculty Loading has touched this offering — mirrors
      * Section::isInUse()'s guard.
      */
+    /**
+     * Deleting is its own permission, separate from Generate — Admin
+     * + Registrar only. Dean/Assistant Dean/OIC can view this page
+     * (see middleware() above) but hitting this action directly still
+     * 403s for them; the Delete button is hidden for them in the UI
+     * via the 'can.delete' prop from index(), this check is what
+     * actually enforces it.
+     */
     public function destroy(SubjectOffering $subjectOffering)
     {
-        abort_unless(auth()->user()->can('generate', SubjectOffering::class), 403, 'Unauthorized.');
+        abort_unless(
+            auth()->user()->hasAnyRole(['Admin', 'Registrar']),
+            403,
+            'You do not have permission to delete Subject Offerings.'
+        );
 
         if ($subjectOffering->teachingAssignment()->exists()) {
             return back()->with('error', "{$subjectOffering->edp_code} already has a Faculty assignment and cannot be deleted.");

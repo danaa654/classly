@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AcademicTerm;
 use App\Models\Room;
+use App\Models\SubjectOffering;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -50,7 +53,25 @@ class RoomController extends Controller implements HasMiddleware
      */
     public function index(Request $request)
     {
+        $activeTerm = AcademicTerm::where('active', true)->first();
+
         $query = Room::with('roomGroups')->orderBy('room_code');
+
+        // Total Preferred Hours AND count for the ACTIVE Academic Term
+        // only — two aggregate queries (not one query per room) so the
+        // list view can show utilization + subject count without an
+        // N+1. Aliased so they land on the model as $room->preferred_hours
+        // / $room->preferred_count; null (no active term, or nothing
+        // preferred yet) is treated as 0 on the frontend.
+        if ($activeTerm) {
+            $query->withSum(['preferredSubjectOfferings as preferred_hours' => function ($query) use ($activeTerm) {
+                $query->where('subject_offerings.academic_term_id', $activeTerm->id);
+            }], 'hours');
+
+            $query->withCount(['preferredSubjectOfferings as preferred_count' => function ($query) use ($activeTerm) {
+                $query->where('subject_offerings.academic_term_id', $activeTerm->id);
+            }]);
+        }
 
         if ($search = $request->input('search')) {
             $query->where(function ($query) use ($search) {
@@ -87,6 +108,8 @@ class RoomController extends Controller implements HasMiddleware
                 ->pluck('floor'),
 
             'filters' => $request->only(['search', 'room_type', 'floor', 'room_group']),
+
+            'weeklyCapacityHours' => Room::WEEKLY_CAPACITY_HOURS,
 
         ]);
     }
@@ -197,6 +220,216 @@ class RoomController extends Controller implements HasMiddleware
         return redirect()
             ->route('rooms.index')
             ->with('success', 'Room deleted successfully.');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Manage Subjects (Room Preferences)
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT: nothing below this point creates, edits, or reasons about
+    | a schedule. A "preferred" Subject Offering is stored as a plain
+    | Room <-> SubjectOffering pivot row (room_subject_offering) with no
+    | day/time/faculty fields at all. This is purely the input the future
+    | Greedy Scheduler will read — the actual scheduling decision happens
+    | in a different module.
+    |
+    */
+
+    /**
+     * Manage Subjects data for a single Room — returned as plain JSON,
+     * not an Inertia page render. This is now purely the data source
+     * for the Manage Subjects MODAL on Rooms/Index.vue: the Index page
+     * fetches it via axios when a room's "Manage Subjects" button is
+     * clicked, opens the modal client-side, and never navigates away
+     * from Index at all — filters, scroll position, and which room's
+     * modal is open all stay exactly as they were, since Index.vue
+     * itself never re-renders.
+     *
+     * Same underlying query/annotation logic as before (is_preferred,
+     * is_recommended, claimed_by_room_code) — only the response shape
+     * changed, from Inertia::render() to response()->json().
+     */
+    public function manageSubjects(Room $room)
+    {
+        $room->load('roomGroups');
+
+        $activeTerm = AcademicTerm::where('active', true)->first();
+
+        $offerings = collect();
+
+        if ($activeTerm) {
+
+            $preferredIds = $room->preferredSubjectOfferings()
+                ->where('subject_offerings.academic_term_id', $activeTerm->id)
+                ->pluck('subject_offerings.id');
+
+            $baseOfferings = SubjectOffering::with([
+                    'subject:id,subject_code,descriptive_title',
+                    'subject.roomGroups',
+                    'program:id,code',
+                    'section:id,section_code',
+                ])
+                ->where('academic_term_id', $activeTerm->id)
+                ->where('room_type', $room->room_type)
+                ->orderBy('edp_code')
+                ->get();
+
+            $claimedByOtherRoom = DB::table('room_subject_offering')
+                ->join('rooms', 'rooms.id', '=', 'room_subject_offering.room_id')
+                ->whereIn('room_subject_offering.subject_offering_id', $baseOfferings->pluck('id'))
+                ->where('room_subject_offering.room_id', '!=', $room->id)
+                ->pluck('rooms.room_code', 'room_subject_offering.subject_offering_id');
+
+            $offerings = $baseOfferings
+                ->map(function (SubjectOffering $offering) use ($room, $preferredIds, $claimedByOtherRoom) {
+                    return [
+                        'id' => $offering->id,
+                        'edp_code' => $offering->edp_code,
+                        'subject_code' => $offering->subject?->subject_code,
+                        'subject_title' => $offering->subject?->descriptive_title,
+                        'program_code' => $offering->program?->code,
+                        'year_level' => $offering->year_level,
+                        'section_code' => $offering->section?->section_code,
+                        'units' => $offering->units,
+                        'hours' => $offering->hours,
+                        'classification' => $offering->classification,
+                        'room_type' => $offering->room_type,
+                        'is_preferred' => $preferredIds->contains($offering->id),
+                        'is_recommended' => $this->isDepartmentCompatible($offering, $room),
+                        'claimed_by_room_code' => $claimedByOtherRoom->get($offering->id),
+                    ];
+                })
+                ->values();
+        }
+
+        return response()->json([
+
+            'room' => [
+                'id' => $room->id,
+                'room_code' => $room->room_code,
+                'room_type' => $room->room_type,
+                'room_group_codes' => $room->room_group_codes,
+            ],
+
+            'active_academic_term' => $activeTerm ? [
+                'id' => $activeTerm->id,
+                'display_name' => $activeTerm->display_name,
+            ] : null,
+
+            'offerings' => $offerings,
+
+            'weekly_capacity_hours' => Room::WEEKLY_CAPACITY_HOURS,
+
+        ]);
+    }
+
+    /**
+     * Replace this room's Preferred Subject Offerings for the ACTIVE
+     * Academic Term only. Preferences belonging to any other (past)
+     * term are left completely untouched.
+     *
+     * Every incoming ID is re-validated server-side against the active
+     * term + this room's Room Type — the department smart-filter is a
+     * UI convenience only, so it is NOT re-enforced here; a user may
+     * deliberately prefer an "unrecommended" Subject Offering (e.g. a
+     * Shared room), and that's allowed. What's never allowed is
+     * attaching an offering from the wrong term or the wrong Room Type.
+     *
+     * Returns plain JSON (fresh preferred_hours/preferred_count for
+     * THIS room only) rather than redirecting — the modal reads this
+     * response to update its own room's row in Rooms/Index.vue
+     * in-memory, then closes itself. No Inertia navigation, no
+     * page reload, nothing else on the page is touched.
+     */
+    public function syncPreferredSubjects(Request $request, Room $room)
+    {
+        $validated = $request->validate([
+            'subject_offering_ids' => ['present', 'array'],
+            'subject_offering_ids.*' => ['integer', 'exists:subject_offerings,id'],
+        ]);
+
+        $activeTerm = AcademicTerm::where('active', true)->first();
+
+        abort_unless($activeTerm, 422, 'There is no active Academic Term to manage preferences for.');
+
+        $activeTermOfferingIds = SubjectOffering::where('academic_term_id', $activeTerm->id)
+            ->where('room_type', $room->room_type)
+            ->pluck('id');
+
+        $selectedIds = collect($validated['subject_offering_ids'])
+            ->intersect($activeTermOfferingIds)
+            ->values();
+
+        // Only ever touch this term's rows — detach everything this room
+        // currently prefers for the active term, then reattach the
+        // (re-validated) submitted selection.
+        $room->preferredSubjectOfferings()->detach($activeTermOfferingIds);
+
+        // A Subject Offering can only be preferred by ONE room at a time
+        // (see the room_subject_offering unique index on
+        // subject_offering_id). Checking an offering here that another
+        // room currently claims TRANSFERS it to this room rather than
+        // erroring — the same "last save wins" behavior the Manage
+        // Subjects modal's "Currently in Room X" tag warns about before
+        // the user ever clicks Save.
+        //
+        // NOTE: if this transfers an offering away from another room,
+        // that other room's own preferred_hours/preferred_count in the
+        // Index table go stale until the next full reload of this page
+        // — this endpoint only recomputes and returns THIS room's
+        // numbers, by design (see class docblock above).
+        DB::table('room_subject_offering')
+            ->whereIn('subject_offering_id', $selectedIds)
+            ->delete();
+
+        $room->preferredSubjectOfferings()->attach($selectedIds);
+
+        $preferredHours = (int) $room->preferredSubjectOfferings()
+            ->where('subject_offerings.academic_term_id', $activeTerm->id)
+            ->sum('hours');
+
+        $preferredCount = $room->preferredSubjectOfferings()
+            ->where('subject_offerings.academic_term_id', $activeTerm->id)
+            ->count();
+
+        return response()->json([
+            'message' => 'Preferred subjects updated successfully.',
+            'room_id' => $room->id,
+            'preferred_hours' => $preferredHours,
+            'preferred_count' => $preferredCount,
+        ]);
+    }
+
+    /**
+     * Whether a Subject Offering fits this room's Department/Program
+     * assignment (Room Type has already been filtered out before this
+     * is called). Mirrors the PAP business rule:
+     *
+     *   - General ("Shared") rooms: every offering of the right Room
+     *     Type is compatible, regardless of program.
+     *   - Program-specific rooms (e.g. BSIT): Major offerings must match
+     *     one of the room's assigned programs; Minor offerings are only
+     *     compatible when the underlying Subject is itself flagged
+     *     "General" (i.e. a General Education subject open to every
+     *     program), via Subject::isApplicableToRoomGroup().
+     *
+     * Requires $offering->subject->roomGroups to already be eager-loaded
+     * by the caller to avoid an N+1 query per offering.
+     */
+    private function isDepartmentCompatible(SubjectOffering $offering, Room $room): bool
+    {
+        $roomGroups = $room->room_group_codes;
+
+        if (in_array('General', $roomGroups, true)) {
+            return true;
+        }
+
+        if ($offering->classification === SubjectOffering::CLASSIFICATION_MAJOR) {
+            return in_array($offering->program?->code, $roomGroups, true);
+        }
+
+        return (bool) $offering->subject?->isApplicableToRoomGroup('General');
     }
 
     /**

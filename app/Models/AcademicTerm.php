@@ -152,9 +152,27 @@ class AcademicTerm extends Model
     |--------------------------------------------------------------------------
     */
 
+    /**
+     * teaching_assignments has no academic_term_id column of its own —
+     * it only carries subject_offering_id (see
+     * 2026_07_03_120001_create_teaching_assignments_table.php). The
+     * academic_term_id lives on subject_offerings instead, so this
+     * relationship has to hop through that table rather than joining
+     * teaching_assignments directly. Fixes: "Column not found:
+     * teaching_assignments.academic_term_id" when deleting an
+     * Academic Term (hasSchedulingData() below calls ->exists() on
+     * this relationship).
+     */
     public function teachingAssignments()
     {
-        return $this->hasMany(TeachingAssignment::class);
+        return $this->hasManyThrough(
+            TeachingAssignment::class,
+            SubjectOffering::class,
+            'academic_term_id',    // FK on subject_offerings pointing to this academic_terms row
+            'subject_offering_id', // FK on teaching_assignments pointing to subject_offerings
+            'id',                  // local key on academic_terms
+            'id'                   // local key on subject_offerings
+        );
     }
 
     /**

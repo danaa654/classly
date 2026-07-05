@@ -1,11 +1,21 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import Toast from '@/Components/Toast.vue'
+import ManageSubjectsModal from '@/Components/Rooms/ManageSubjectsModal.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
-import { reactive, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
+import axios from 'axios'
+import { useFlashToast } from '@/Composables/useFlashToast'
 
 defineOptions({
     layout: DashboardLayout,
 })
+
+// Server-driven flashes (create/update/delete still redirect back here
+// via Inertia, so those keep working as before) PLUS manual client-side
+// flashes for the Manage Subjects modal below, which never redirects —
+// show() is exactly what useFlashToast's docblock describes it for.
+const { toast, show } = useFlashToast()
 
 const props = defineProps({
     rooms: Array,
@@ -15,6 +25,10 @@ const props = defineProps({
     },
     floorOptions: Array,
     filters: Object,
+    weeklyCapacityHours: {
+        type: Number,
+        default: 60,
+    },
 })
 
 /*
@@ -85,11 +99,94 @@ function destroyRoom(room) {
         preserveScroll: true,
     })
 }
+
+/*
+|--------------------------------------------------------------------------
+| Preferred Load
+|--------------------------------------------------------------------------
+|
+| preferred_hours comes from RoomController::index()'s withSum — the
+| total hours of this room's Preferred Subject Offerings for the ACTIVE
+| Academic Term only (see Rooms/ManageSubjects.vue). null means either
+| there's no active term or nothing has been preferred yet, so it's
+| treated as 0 here.
+*/
+
+function preferredHours(room) {
+    return room.preferred_hours ?? 0
+}
+
+function preferredCount(room) {
+    return room.preferred_count ?? 0
+}
+
+function utilizationPercent(room) {
+    if (!props.weeklyCapacityHours) return 0
+    return Math.min(100, Math.round((preferredHours(room) / props.weeklyCapacityHours) * 100))
+}
+
+function isOverCapacity(room) {
+    return preferredHours(room) > props.weeklyCapacityHours
+}
+
+/*
+|--------------------------------------------------------------------------
+| Manage Subjects Modal
+|--------------------------------------------------------------------------
+|
+| Opening/saving/closing this modal is entirely client-side — no
+| Inertia visit happens at any point in this flow, so Index.vue itself
+| never re-renders. That's what keeps filters, scroll position, and
+| everything else on this page exactly as the user left it.
+*/
+
+const modalData = ref(null)   // set once the fetch below resolves; null = closed
+const modalLoading = ref(false)
+
+function openManageSubjects(room) {
+    modalLoading.value = true
+
+    axios.get(route('rooms.manage-subjects', room.id))
+        .then(response => {
+            modalData.value = response.data
+        })
+        .catch(() => {
+            show('Could not load Manage Subjects for this room. Please try again.', 'error')
+        })
+        .finally(() => {
+            modalLoading.value = false
+        })
+}
+
+function closeManageSubjects() {
+    modalData.value = null
+}
+
+// The modal emits the server's fresh preferred_hours/preferred_count
+// for its one room — find that room in the local list and patch just
+// those two fields in place. This is a deliberate, narrow mutation of a
+// prop's nested object (not a reassignment of the `rooms` prop itself),
+// which is how this page gets its "update only the affected row, no
+// reload" behavior — Vue does not warn about this, only about
+// reassigning the prop reference.
+function onSubjectsSaved(payload) {
+    const room = props.rooms.find(r => r.id === payload.room_id)
+
+    if (room) {
+        room.preferred_hours = payload.preferred_hours
+        room.preferred_count = payload.preferred_count
+    }
+
+    show(payload.message, 'success')
+    closeManageSubjects()
+}
 </script>
 
 <template>
 
 <Head title="Rooms" />
+
+<Toast :toast="toast" />
 
 <div>
 
@@ -224,6 +321,10 @@ function destroyRoom(room) {
                     </th>
 
                     <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                        Preferred Load
+                    </th>
+
+                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
                         Actions
                     </th>
 
@@ -304,9 +405,45 @@ function destroyRoom(room) {
 
                     </td>
 
+                    <td class="px-4 py-3">
+
+                        <div class="flex flex-col items-center gap-1">
+
+                            <span
+                                class="text-xs font-semibold whitespace-nowrap"
+                                :class="isOverCapacity(room) ? 'text-red-500' : 'text-[var(--text-primary)]'"
+                            >
+                                {{ preferredHours(room) }} / {{ weeklyCapacityHours }} hrs
+                            </span>
+
+                            <span class="text-[10px] text-[var(--text-muted)] whitespace-nowrap">
+                                {{ preferredCount(room) }} subject{{ preferredCount(room) === 1 ? '' : 's' }}
+                            </span>
+
+                            <div class="w-20 h-1.5 rounded-full bg-[var(--page-bg)] overflow-hidden">
+                                <div
+                                    class="h-full rounded-full transition-all duration-300"
+                                    :class="isOverCapacity(room) ? 'bg-red-500' : 'bg-[#D4A62A]'"
+                                    :style="{ width: utilizationPercent(room) + '%' }"
+                                />
+                            </div>
+
+                        </div>
+
+                    </td>
+
                     <td class="px-4 py-3 text-center whitespace-nowrap">
 
                         <div class="flex justify-center gap-2">
+
+                            <button
+                                @click="openManageSubjects(room)"
+                                type="button"
+                                :disabled="modalLoading"
+                                class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D4A62A]/10 text-[#D4A62A] hover:bg-[#D4A62A]/20 transition-colors duration-150 whitespace-nowrap disabled:opacity-50"
+                            >
+                                Manage Subjects
+                            </button>
 
                             <Link
                                 :href="route('rooms.edit', room.id)"
@@ -331,7 +468,7 @@ function destroyRoom(room) {
                 <tr v-if="rooms.length === 0">
 
                     <td
-                        colspan="8"
+                        colspan="9"
                         class="text-center py-8 text-[var(--text-muted)]"
                     >
                         No rooms found.
@@ -344,6 +481,13 @@ function destroyRoom(room) {
         </table>
 
     </div>
+
+    <ManageSubjectsModal
+        v-if="modalData"
+        :initial-data="modalData"
+        @close="closeManageSubjects"
+        @saved="onSubjectsSaved"
+    />
 
 </div>
 

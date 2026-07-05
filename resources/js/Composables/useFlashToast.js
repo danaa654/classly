@@ -13,6 +13,7 @@ import { usePage } from '@inertiajs/vue3'
  *       'success' => fn () => $request->session()->get('success'),
  *       'warning' => fn () => $request->session()->get('warning'),
  *       'error'   => fn () => $request->session()->get('error'),
+ *       'deleted' => fn () => $request->session()->get('deleted'),
  *   ],
  *
  * Add that to app/Http/Middleware/HandleInertiaRequests.php's share()
@@ -47,6 +48,7 @@ export function useFlashToast() {
             if (flash.success) show(flash.success, 'success')
             else if (flash.warning) show(flash.warning, 'warning')
             else if (flash.error) show(flash.error, 'error')
+            else if (flash.deleted) show(flash.deleted, 'deleted')
         },
         { immediate: true, deep: true }
     )

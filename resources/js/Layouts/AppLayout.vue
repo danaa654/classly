@@ -1,6 +1,10 @@
 <script setup>
 import Sidebar from '@/Components/Sidebar.vue';
 import Topbar from '@/Components/Topbar.vue';
+import Toast from '@/Components/Toast.vue';
+import { useFlashToast } from '@/Composables/useFlashToast';
+
+const { toast } = useFlashToast();
 </script>
 
 <template>
@@ -22,5 +26,7 @@ import Topbar from '@/Components/Topbar.vue';
                 <slot />
             </main>
         </div>
+
+        <Toast :toast="toast" />
     </div>
 </template>
