@@ -54,6 +54,25 @@ class Faculty extends Model
         return $this->hasMany(TeachingAssignment::class);
     }
 
+    /**
+     * Subject Offerings this Faculty member PREFERS to teach, via the
+     * faculty_subject_offering pivot (see the Faculty "Manage Subjects"
+     * workspace). Direct mirror of Room::preferredSubjectOfferings().
+     *
+     * This is a preference only — it carries no day/time/room
+     * information and is NOT the same thing as an actual Faculty
+     * Loading assignment (see teachingAssignments() above). Since every
+     * Subject Offering already belongs to one Academic Term, filter by
+     * ->where('academic_term_id', ...) wherever only the active term's
+     * preferences should count, rather than assuming every row here is
+     * current.
+     */
+    public function preferredSubjectOfferings()
+    {
+        return $this->belongsToMany(SubjectOffering::class, 'faculty_subject_offering')
+            ->withTimestamps();
+    }
+
     public function getFullNameAttribute()
     {
         return collect([

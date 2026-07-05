@@ -49,6 +49,38 @@ class TeachingAssignment extends Model
         return $this->belongsTo(Faculty::class);
     }
 
+    /**
+     * The actual committed Master Grid schedule block for this
+     * assignment's Subject Offering, if one has been saved yet — the
+     * "when/where" half of this record. This is deliberately a
+     * hasOneThrough rather than a duplicated foreign key: `schedules`
+     * keys off subject_offering_id (a Subject Offering can only ever
+     * have one committed block — see MasterGridController::save()'s
+     * updateOrCreate(['subject_offering_id' => ...])), and a Teaching
+     * Assignment already points at the same offering. Going through
+     * SubjectOffering means there is exactly one place
+     * (subject_offering_id) that ties an assignment to its schedule,
+     * so the two tables can never silently drift apart.
+     *
+     * Null until the Registrar/Admin runs Generate Schedule and Save
+     * Schedule on the Master Grid for this offering — see
+     * TeachingAssignmentController::index(), which eager-loads
+     * 'schedule.room' so the Faculty Loading workspace can show real
+     * room/day/time instead of just the pre-scheduling room
+     * preference (subjectOffering.preferredByRooms).
+     */
+    public function schedule()
+    {
+        return $this->hasOneThrough(
+            Schedule::class,
+            SubjectOffering::class,
+            'id',                   // subject_offerings.id
+            'subject_offering_id',  // schedules.subject_offering_id
+            'subject_offering_id',  // teaching_assignments.subject_offering_id
+            'id'                    // subject_offerings.id
+        );
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Scopes

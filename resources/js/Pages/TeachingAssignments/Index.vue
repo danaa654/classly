@@ -82,6 +82,87 @@ function unitsOf(assignment) {
     return assignment.subject_offering?.subject?.units ?? 0;
 }
 
+/**
+ * The Room currently PREFERRED for this assignment's Subject Offering
+ * (via Rooms > Manage Subjects), or null. This is never a final
+ * schedule — no day/time has been decided — but it's real, useful
+ * information the Faculty Loading workspace shouldn't hide just
+ * because the Scheduler hasn't run yet. Comes from
+ * subject_offering.preferred_by_rooms, eager-loaded by
+ * TeachingAssignmentController@index.
+ */
+function preferredRoomOf(assignment) {
+    return assignment.subject_offering?.preferred_by_rooms?.[0] ?? null;
+}
+
+// Tries every field name the Room model might expose its display text
+// under, since that wasn't confirmed against the actual Room model.
+function roomLabel(room) {
+    if (!room) return null;
+    return room.name ?? room.room_name ?? room.room_number ?? room.room_code ?? `Room #${room.id}`;
+}
+
+/**
+ * The actual committed Master Grid schedule block for this
+ * assignment's Subject Offering, if Generate Schedule + Save Schedule
+ * has already run for it — see TeachingAssignment::schedule() and
+ * MasterGridController::save(). Unlike preferredRoomOf() above, this
+ * is a real fact, not a wish: day, start/end minutes, and room are all
+ * finalized. Eager-loaded as `schedule.room` by
+ * TeachingAssignmentController@index.
+ */
+function scheduleOf(assignment) {
+    return assignment.schedule ?? null;
+}
+
+function formatMinutes(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+// "monday" -> "Monday" — the day column is stored/returned lowercase,
+// this is display-only capitalization.
+function capitalizeDay(day) {
+    if (!day) return day;
+    return day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
+}
+
+/**
+ * Day and time range for a Schedule row, split so the template can
+ * render "Monday" on its own line with the time underneath instead of
+ * one long inline string — keeps the Assigned Subjects table narrow
+ * enough to avoid horizontal scrolling. Returns null when the offering
+ * hasn't been scheduled on the Master Grid yet.
+ */
+function scheduleParts(schedule) {
+    if (!schedule) return null;
+
+    return {
+        day: capitalizeDay(schedule.day),
+        time: `${formatMinutes(schedule.start_minutes)}–${formatMinutes(schedule.end_minutes)}`,
+    };
+}
+
+/**
+ * The room to display for this assignment: the real, committed
+ * Schedule room takes priority over the pre-scheduling preference —
+ * a schedule is a fact, a preference is only a wish. Falls back to
+ * the preferred room, then to '—'.
+ */
+function displayRoomOf(assignment) {
+    const schedule = scheduleOf(assignment);
+
+    if (schedule?.room) {
+        return roomLabel(schedule.room);
+    }
+
+    return roomLabel(preferredRoomOf(assignment));
+}
+
+
 function isMajorAssignment(assignment) {
     return !!assignment.subject_offering?.subject?.is_major;
 }
@@ -180,29 +261,70 @@ function checkEligibility(faculty, offering) {
 
 const showAssignModal = ref(false);
 const assignError = ref(null);
+const assignSuccess = ref(null);
+
+// Tracks the offering currently being submitted so its row can show a
+// spinner/disabled state — prevents a user double-clicking "Assign" on
+// the same offering (or in rapid succession on several offerings)
+// from firing overlapping requests before the load/unassigned list
+// has had a chance to refresh.
+const assigningOfferingId = ref(null);
+
+let successTimeout = null;
 
 const assignedOfferingIds = computed(
     () => new Set(props.teachingAssignments.map((a) => a.subject_offering_id))
 );
 
-const unassignedOfferings = computed(() =>
-    props.subjectOfferings.filter((offering) => !assignedOfferingIds.value.has(offering.id))
-);
+// Every offering assigned to the currently selected faculty member, keyed
+// by subject_offering_id, so the modal can show it as "Assigned" (with an
+// Unassign action) instead of just dropping it from the list.
+const assignmentByOfferingId = computed(() => {
+    const map = new Map();
+    if (!selectedFaculty.value) return map;
+    selectedAssignments.value.forEach((a) => map.set(a.subject_offering_id, a));
+    return map;
+});
+
+// Offerings the Assign Subject modal is allowed to show at all: either
+// still unassigned to anyone, or already assigned to THIS faculty member
+// (so a manager who changes their mind can unassign it from the same
+// screen). Offerings claimed by a different faculty member stay hidden —
+// that's not this faculty's business to see or touch here.
+const modalOfferings = computed(() => {
+    if (!selectedFaculty.value) return [];
+
+    return props.subjectOfferings.filter((offering) => {
+        if (!assignedOfferingIds.value.has(offering.id)) return true;
+        return assignmentByOfferingId.value.has(offering.id);
+    });
+});
 
 function openAssignModal() {
     assignError.value = null;
+    assignSuccess.value = null;
     showAssignModal.value = true;
 }
 
 function closeAssignModal() {
+    clearTimeout(successTimeout);
     showAssignModal.value = false;
     assignError.value = null;
+    assignSuccess.value = null;
+    assigningOfferingId.value = null;
 }
 
 function handleAssign(offering) {
     if (!selectedFaculty.value || !props.activeTerm) return;
 
+    // Guard against double-clicks / rapid-fire clicks on other rows
+    // while a previous assignment is still in flight.
+    if (assigningOfferingId.value) return;
+
     assignError.value = null;
+    assignSuccess.value = null;
+    assigningOfferingId.value = offering.id;
+    clearTimeout(successTimeout);
 
     router.post(
         route('teaching-assignments.store'),
@@ -215,10 +337,24 @@ function handleAssign(offering) {
         {
             preserveScroll: true,
             onSuccess: () => {
-                showAssignModal.value = false;
+                // Deliberately NOT closing the modal here — the manager
+                // is very likely assigning several subjects to the same
+                // faculty member in one sitting, so we let them keep
+                // picking. `modalOfferings` will reflect the new
+                // "Assigned" status on this row once teachingAssignments
+                // refreshes — the row stays put, it just changes state.
+                const title = offering.subject?.descriptive_title ?? 'Subject';
+                assignSuccess.value = `${title} assigned successfully.`;
+                successTimeout = setTimeout(() => {
+                    assignSuccess.value = null;
+                }, 3000);
             },
             onError: (errors) => {
+                assignSuccess.value = null;
                 assignError.value = Object.values(errors)[0] ?? 'Something went wrong while assigning this subject.';
+            },
+            onFinish: () => {
+                assigningOfferingId.value = null;
             },
         }
     );
@@ -235,6 +371,44 @@ function removeAssignment(assignment) {
         preserveScroll: true,
     });
 }
+
+// Unassign, triggered from a row inside the Assign Subject modal (the
+// "changed my mind" case) rather than from the Assigned Subjects table.
+// Shares the same assigningOfferingId in-flight guard and success/error
+// banners as handleAssign, since from the modal's point of view this is
+// just the other direction of the same action.
+function handleUnassign(offering) {
+    const assignment = assignmentByOfferingId.value.get(offering.id);
+    if (!assignment || assigningOfferingId.value) return;
+
+    const label = offering.subject?.descriptive_title ?? 'this subject';
+
+    if (!confirm(`Remove ${label} from ${selectedFaculty.value?.full_name}'s load?`)) {
+        return;
+    }
+
+    assignError.value = null;
+    assignSuccess.value = null;
+    assigningOfferingId.value = offering.id;
+    clearTimeout(successTimeout);
+
+    router.delete(route('teaching-assignments.destroy', assignment.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            assignSuccess.value = `${label} unassigned.`;
+            successTimeout = setTimeout(() => {
+                assignSuccess.value = null;
+            }, 3000);
+        },
+        onError: (errors) => {
+            assignSuccess.value = null;
+            assignError.value = Object.values(errors)[0] ?? 'Something went wrong while unassigning this subject.';
+        },
+        onFinish: () => {
+            assigningOfferingId.value = null;
+        },
+    });
+}
 </script>
 
 <template>
@@ -243,7 +417,7 @@ function removeAssignment(assignment) {
 
         <div class="flex h-[calc(100vh-4rem)] overflow-hidden">
             <!-- ==================== LEFT PANEL: FACULTY ROSTER ==================== -->
-            <aside class="flex w-80 flex-shrink-0 flex-col border-r border-[var(--card-border)] bg-[var(--card-bg)]">
+            <aside class="flex w-[17.5rem] flex-shrink-0 flex-col border-r border-[var(--card-border)] bg-[var(--card-bg)]">
                 <div class="border-b border-[var(--card-border)] px-4 py-4">
                     <h1 class="text-lg font-bold text-[var(--text-primary)]">Faculty Loading</h1>
                     <p class="mt-0.5 text-xs text-[var(--text-muted)]">
@@ -470,21 +644,21 @@ function removeAssignment(assignment) {
                             No active academic term is set — activate a term before assigning subjects.
                         </p>
 
-                        <div v-else class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-[var(--card-border)]">
+                        <div v-else>
+                            <table class="w-full table-fixed divide-y divide-[var(--card-border)]">
                                 <thead class="bg-[var(--page-bg)]">
                                     <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Code</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Subject</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Offering</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Program</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Year</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Sem</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Units</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Type</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Room</th>
-                                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Schedule</th>
-                                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Action</th>
+                                        <th class="w-[9%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Code</th>
+                                        <th class="w-[19%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Subject</th>
+                                        <th class="w-[9%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Offering</th>
+                                        <th class="w-[8%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Program</th>
+                                        <th class="w-[6%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Year</th>
+                                        <th class="w-[6%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Sem</th>
+                                        <th class="w-[7%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Units</th>
+                                        <th class="w-[8%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Type</th>
+                                        <th class="w-[14%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Room</th>
+                                        <th class="w-[10%] px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Schedule</th>
+                                        <th class="w-[7%] px-2 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-[var(--card-border)]">
@@ -494,28 +668,28 @@ function removeAssignment(assignment) {
                                         </td>
                                     </tr>
                                     <tr v-for="assignment in selectedAssignments" :key="assignment.id" class="hover:bg-[var(--page-bg)]">
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-primary)]">
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle text-xs text-[var(--text-primary)]">
                                             {{ assignment.subject_offering?.edp_code ?? '—' }}
                                         </td>
-                                        <td class="px-4 py-3 text-sm text-[var(--text-primary)]">
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle text-xs text-[var(--text-primary)]">
                                             {{ assignment.subject_offering?.subject?.descriptive_title ?? '—' }}
                                         </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-primary)]">
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle text-xs text-[var(--text-primary)]">
                                             {{ assignment.subject_offering?.section?.section_code }}
                                         </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-primary)]">
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle text-xs text-[var(--text-primary)]">
                                             {{ assignment.subject_offering?.section?.curriculum?.program?.code ?? '—' }}
                                         </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-primary)]">
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle text-xs text-[var(--text-primary)]">
                                             {{ assignment.subject_offering?.year_level ?? '—' }}
                                         </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-primary)]">
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle text-xs text-[var(--text-primary)]">
                                             {{ assignment.subject_offering?.semester ?? '—' }}
                                         </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-primary)]">
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle text-xs text-[var(--text-primary)]">
                                             {{ unitsOf(assignment) }}
                                         </td>
-                                        <td class="whitespace-nowrap px-4 py-3">
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle">
                                             <span
                                                 class="rounded-full px-2 py-0.5 text-xs font-medium"
                                                 :class="isMajorAssignment(assignment) ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'bg-sky-500/10 text-sky-600 dark:text-sky-400'"
@@ -523,15 +697,35 @@ function removeAssignment(assignment) {
                                                 {{ isMajorAssignment(assignment) ? 'Major' : 'Minor' }}
                                             </span>
                                         </td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">—</td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">Not yet scheduled</td>
-                                        <td class="whitespace-nowrap px-4 py-3 text-right text-sm">
+                                        <td
+                                            class="whitespace-normal break-words px-2 py-5 align-middle text-xs"
+                                            :class="scheduleOf(assignment)?.room ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'"
+                                            :title="!scheduleOf(assignment)?.room && roomLabel(preferredRoomOf(assignment)) ? `${roomLabel(preferredRoomOf(assignment))} — preferred, not yet a finalized schedule` : null"
+                                        >
+                                            {{ displayRoomOf(assignment) ?? '—' }}
+                                        </td>
+                                        <td class="whitespace-normal break-words px-2 py-5 align-middle text-xs">
+                                            <template v-if="scheduleParts(scheduleOf(assignment))">
+                                                <p class="font-semibold text-[var(--text-primary)]">{{ scheduleParts(scheduleOf(assignment)).day }}</p>
+                                                <p class="text-[var(--text-muted)]">{{ scheduleParts(scheduleOf(assignment)).time }}</p>
+                                            </template>
+                                            <span v-else class="text-[var(--text-muted)]">Not yet scheduled</span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-5 align-middle text-right text-sm">
                                             <button
                                                 type="button"
-                                                class="btn-delete"
+                                                class="btn-delete inline-flex items-center justify-center !p-2"
+                                                title="Remove"
+                                                aria-label="Remove assignment"
                                                 @click="removeAssignment(assignment)"
                                             >
-                                                Remove
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                                                    <path d="M10 11v6"></path>
+                                                    <path d="M14 11v6"></path>
+                                                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+                                                </svg>
                                             </button>
                                         </td>
                                     </tr>
@@ -547,12 +741,16 @@ function removeAssignment(assignment) {
         <AssignSubjectModal
             v-if="showAssignModal && selectedFaculty"
             :faculty="selectedFaculty"
-            :offerings="unassignedOfferings"
+            :offerings="modalOfferings"
+            :assigned-offering-ids="new Set(assignmentByOfferingId.keys())"
             :current-load="totalLoad(selectedFaculty.id)"
             :check-eligibility="checkEligibility"
             :error="assignError"
+            :success="assignSuccess"
+            :assigning-offering-id="assigningOfferingId"
             @close="closeAssignModal"
             @assign="handleAssign"
+            @unassign="handleUnassign"
         />
     </AppLayout>
 </template>

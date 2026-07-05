@@ -140,6 +140,23 @@ class Room extends Model
     }
 
     /**
+     * Actual, committed schedule blocks for this room (the `schedules`
+     * table) — the output of Master Grid's Save Schedule step, via
+     * GreedyScheduleService + MasterGridController::save(). This is
+     * NOT the same thing as preferredSubjectOfferings() above: a
+     * preference has no day/time and means "this room would like to
+     * host this offering"; a Schedule row means "this offering IS
+     * meeting here, on this day, at this time." Rooms/Index.vue and
+     * the Manage Subjects modal both need this to show real
+     * utilization instead of only the pre-scheduling wishlist — see
+     * RoomController::index() and RoomController::manageSubjects().
+     */
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    /**
      * Flat array of program codes (e.g. ['BSHM', 'BSTM']) for the roomGroups
      * relationship above — what the Create/Edit/Index pages actually bind
      * to and display. Call ->load('roomGroups') first when fetching many

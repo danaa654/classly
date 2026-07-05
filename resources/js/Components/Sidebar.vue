@@ -70,7 +70,7 @@ const navConfig = [
             // `can` prop on SubjectOfferings/Index.vue).
             { label: 'Subject Offerings', route: 'subject-offerings.index', icon: '🧾' },
             { label: 'Faculty Loading', route: 'teaching-assignments.index', icon: '📋' },
-            { label: 'Schedule', href: '#', icon: '🗓️', soon: true },
+            { label: 'Master Grid', route: 'master-grid.index', icon: '🗓️' },
         ],
     },
     {

@@ -87,6 +87,22 @@ const activeTermLabel = computed(() => {
     return term ? term.display_name : null
 })
 
+// Opens the printable Class List in a new tab, carrying over every
+// filter currently applied on this page (minus `status`, which the
+// print view doesn't use — see SubjectOfferingController::print()).
+function openPrintView() {
+    const params = new URLSearchParams()
+
+    if (form.academic_term_id) params.set('academic_term_id', form.academic_term_id)
+    if (form.program_id) params.set('program_id', form.program_id)
+    if (form.specialization_id) params.set('specialization_id', form.specialization_id)
+    if (form.year_level) params.set('year_level', form.year_level)
+    if (form.section_id) params.set('section_id', form.section_id)
+    if (form.search) params.set('search', form.search)
+
+    window.open(`${route('subject-offerings.print')}?${params.toString()}`, '_blank')
+}
+
 function statusBadgeClass(status) {
     return {
         Draft: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -146,13 +162,23 @@ function destroy(offering) {
                     </p>
                 </div>
 
-                <Link
-                    v-if="can.generate"
-                    :href="route('subject-offerings.create')"
-                    class="btn-info inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white"
-                >
-                    ⚙️ Generate Subject Offerings
-                </Link>
+                <div class="flex items-center gap-2">
+                    <button
+                        @click="openPrintView"
+                        type="button"
+                        class="btn-neutral inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
+                    >
+                        🖨️ Print Class List
+                    </button>
+
+                    <Link
+                        v-if="can.generate"
+                        :href="route('subject-offerings.create')"
+                        class="btn-info inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white"
+                    >
+                        ⚙️ Generate Subject Offerings
+                    </Link>
+                </div>
             </div>
 
             <!-- Filters -->
@@ -160,8 +186,8 @@ function destroy(offering) {
                 class="rounded-xl border p-4"
                 style="background: var(--card-bg); border-color: var(--card-border)"
             >
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
-                    <div>
+                <div class="flex flex-wrap gap-3">
+                    <div class="min-w-[160px] flex-1 basis-40">
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Academic Term
                         </label>
@@ -177,7 +203,7 @@ function destroy(offering) {
                         </select>
                     </div>
 
-                    <div>
+                    <div class="min-w-[160px] flex-1 basis-40">
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Program
                         </label>
@@ -195,8 +221,11 @@ function destroy(offering) {
 
                     <!-- Only shows once a Program with multiple tracks (e.g.
                          BSCRIM's FB/LD/QD/FI) is selected — single-track
-                         Programs like BSIT never trigger this. -->
-                    <div v-if="specializationsForProgram.length > 0">
+                         Programs like BSIT never trigger this. When it's
+                         absent, the flex-wrap layout above lets every other
+                         filter (especially Search) stretch to fill the gap
+                         instead of leaving empty grid space. -->
+                    <div v-if="specializationsForProgram.length > 0" class="min-w-[160px] flex-1 basis-40">
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Specialization
                         </label>
@@ -212,7 +241,7 @@ function destroy(offering) {
                         </select>
                     </div>
 
-                    <div>
+                    <div class="min-w-[160px] flex-1 basis-40">
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Year Level
                         </label>
@@ -226,7 +255,7 @@ function destroy(offering) {
                         </select>
                     </div>
 
-                    <div>
+                    <div class="min-w-[160px] flex-1 basis-40">
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Section
                         </label>
@@ -242,7 +271,7 @@ function destroy(offering) {
                         </select>
                     </div>
 
-                    <div>
+                    <div class="min-w-[160px] flex-1 basis-40">
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Status
                         </label>
@@ -258,7 +287,7 @@ function destroy(offering) {
                         </select>
                     </div>
 
-                    <div>
+                    <div class="min-w-[200px] flex-1 basis-40">
                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
                             Search
                         </label>

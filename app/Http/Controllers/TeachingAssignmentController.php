@@ -115,6 +115,21 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
                 ? TeachingAssignment::with([
                         'subjectOffering.subject',
                         'subjectOffering.section.curriculum.program.department',
+                        // Preferred Room, if any — surfaced here so the
+                        // Assigned Subjects table can show "Room 303"
+                        // (as a preference, not a final schedule) even
+                        // though this table has no room_id of its own.
+                        // See SubjectOffering::preferredByRooms().
+                        'subjectOffering.preferredByRooms',
+                        // The actual committed Master Grid schedule
+                        // block for this assignment's offering, if
+                        // Generate Schedule + Save Schedule has already
+                        // run for it — see TeachingAssignment::schedule()
+                        // and MasterGridController::save(). When present,
+                        // this takes priority over the room preference
+                        // above: a preference is a wish, a schedule is a
+                        // fact.
+                        'schedule.room',
                         'faculty',
                     ])
                     ->forTerm($activeTerm->id)
@@ -135,6 +150,7 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
                         'subject',
                         'section.curriculum.program.department',
                         'curriculumItem',
+                        'preferredByRooms',
                     ])
                     ->where('academic_term_id', $activeTerm->id)
                     ->when($departmentId, fn ($query) => $query->whereHas(

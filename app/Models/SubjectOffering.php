@@ -133,6 +133,63 @@ class SubjectOffering extends Model
         return $this->hasOne(TeachingAssignment::class);
     }
 
+    /**
+     * The Room(s) that currently prefer this Offering, via the
+     * room_subject_offering pivot — the inverse of
+     * Room::preferredSubjectOfferings(). subject_offering_id is
+     * unique on that pivot table, so in practice this never holds
+     * more than one row; use preferred_room below to read it as a
+     * single value instead of unwrapping a collection every time.
+     *
+     * This is a PREFERENCE, not a Room assignment with a day/time —
+     * see room_subject_offering's migration docblock. Faculty Loading
+     * surfaces it purely so a Dean/Registrar can see "a room has
+     * already been earmarked for this class" before the Scheduler
+     * ever runs.
+     */
+    public function preferredByRooms()
+    {
+        return $this->belongsToMany(Room::class, 'room_subject_offering')->withTimestamps();
+    }
+
+    /**
+     * The single preferred Room for this Offering, or null. Safe to
+     * call whether or not preferredByRooms was eager-loaded — reads
+     * from the already-loaded collection when available to avoid an
+     * extra query per offering, and only hits the DB directly as a
+     * fallback for one-off access.
+     */
+    public function getPreferredRoomAttribute()
+    {
+        return $this->relationLoaded('preferredByRooms')
+            ? $this->preferredByRooms->first()
+            : $this->preferredByRooms()->first();
+    }
+
+    /**
+     * The Faculty member who currently prefers this Offering, via the
+     * faculty_subject_offering pivot — the inverse of
+     * Faculty::preferredSubjectOfferings(). Same "preference, not an
+     * assignment" caveat as preferredByRooms() above; the actual
+     * Faculty Loading assignment still only ever lives in
+     * teachingAssignment().
+     */
+    public function preferredByFaculty()
+    {
+        return $this->belongsToMany(Faculty::class, 'faculty_subject_offering')->withTimestamps();
+    }
+
+    /**
+     * The single Faculty member who prefers this Offering, or null.
+     * Same loaded-vs-fallback pattern as getPreferredRoomAttribute().
+     */
+    public function getPreferredFacultyAttribute()
+    {
+        return $this->relationLoaded('preferredByFaculty')
+            ? $this->preferredByFaculty->first()
+            : $this->preferredByFaculty()->first();
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Scopes

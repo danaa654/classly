@@ -3,13 +3,17 @@ import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     faculty: { type: Object, required: true },
-    offerings: { type: Array, required: true }, // already filtered to "unassigned, active term"
+    offerings: { type: Array, required: true }, // unassigned-to-anyone + assigned-to-this-faculty, active term
+    assignedOfferingIds: { type: Set, default: () => new Set() },
     currentLoad: { type: Number, required: true },
     checkEligibility: { type: Function, required: true }, // (faculty, offering) => { ok, reason }
     error: { type: String, default: null },
+    success: { type: String, default: null },
+    // id of the offering currently being submitted, or null when idle.
+    assigningOfferingId: { type: [Number, String], default: null },
 });
 
-const emit = defineEmits(['close', 'assign']);
+const emit = defineEmits(['close', 'assign', 'unassign']);
 
 const search = ref('');
 const programFilter = ref('');
@@ -17,6 +21,18 @@ const classificationFilter = ref('');
 const yearFilter = ref('');
 const sectionFilter = ref('');
 const roomTypeFilter = ref('');
+
+// Defaults to "All" rather than "Unassigned" — a manager who just assigned
+// a subject should still see it sitting in the list (now marked Assigned)
+// instead of having it disappear, and a manager reviewing an existing load
+// needs the Assigned rows visible too, in case they've changed their mind.
+const statusFilter = ref('all');
+
+const STATUSES = [
+    { value: 'all', label: 'All' },
+    { value: 'assigned', label: 'Assigned' },
+    { value: 'unassigned', label: 'Unassigned' },
+];
 
 const programs = computed(() => {
     const set = new Set(
@@ -74,6 +90,10 @@ const filteredOfferings = computed(() => {
         const sectionCode = o.section?.section_code ?? null;
         const isMajor = !!o.subject?.is_major;
         const roomType = o.subject?.required_room_type ?? null;
+        const isAssigned = props.assignedOfferingIds.has(o.id);
+
+        if (statusFilter.value === 'assigned' && !isAssigned) return false;
+        if (statusFilter.value === 'unassigned' && isAssigned) return false;
 
         if (programFilter.value && programCode !== programFilter.value) return false;
 
@@ -111,13 +131,16 @@ const rows = computed(() =>
     filteredOfferings.value
         .map((offering) => ({
             offering,
+            isAssigned: props.assignedOfferingIds.has(offering.id),
             eligibility: props.checkEligibility(props.faculty, offering),
         }))
-        // Only offerings this faculty member can actually be assigned to
-        // are shown — no more sifting through a list full of "Outside
-        // faculty department" / "Departmental: Major only" rows just to
-        // find the handful that are actually pickable.
-        .filter((row) => row.eligibility.ok)
+        // An offering earns its place in the list either because this
+        // faculty member is eligible to take it on, or because it's
+        // already assigned to them — an already-assigned row stays
+        // visible (and unassignable from here) even if, say, a Faculty
+        // Scope change since the assignment was made would no longer
+        // make it eligible today.
+        .filter((row) => row.eligibility.ok || row.isAssigned)
 );
 </script>
 
@@ -151,8 +174,24 @@ const rows = computed(() =>
                 {{ error }}
             </div>
 
+            <!-- Assign success banner — confirms the assignment went through
+                 without closing the modal, since a manager will often assign
+                 several subjects to the same faculty member in one sitting. -->
+            <div
+                v-if="success"
+                class="border-b border-emerald-500/20 bg-emerald-500/10 px-6 py-3 text-sm font-medium text-emerald-600 dark:text-emerald-400"
+            >
+                ✓ {{ success }}
+            </div>
+
             <!-- Filters -->
             <div class="flex flex-wrap gap-3 border-b border-[var(--card-border)] px-6 py-3">
+                <select
+                    v-model="statusFilter"
+                    class="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm font-medium text-[var(--text-primary)] focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                >
+                    <option v-for="s in STATUSES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                </select>
                 <input
                     v-model="search"
                     type="text"
@@ -209,13 +248,14 @@ const rows = computed(() =>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Units</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Type</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Section</th>
+                            <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Status</th>
                             <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--card-border)]">
                         <tr v-if="rows.length === 0">
-                            <td colspan="9" class="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
-                                No eligible offerings for this faculty member match your filters.
+                            <td colspan="10" class="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                                No offerings match your filters.
                             </td>
                         </tr>
                         <tr v-for="row in rows" :key="row.offering.id" class="hover:bg-[var(--page-bg)]">
@@ -249,13 +289,32 @@ const rows = computed(() =>
                                 </div>
                             </td>
                             <td class="whitespace-nowrap px-4 py-2.5 text-sm text-[var(--text-primary)]">{{ row.offering.section?.section_code }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-sm">
+                                <span
+                                    class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                    :class="row.isAssigned ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'"
+                                >
+                                    {{ row.isAssigned ? 'Assigned' : 'Unassigned' }}
+                                </span>
+                            </td>
                             <td class="whitespace-nowrap px-4 py-2.5 text-right">
                                 <button
+                                    v-if="row.isAssigned"
                                     type="button"
-                                    class="btn-save"
+                                    class="rounded-lg border border-red-500/30 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
+                                    :disabled="!!assigningOfferingId"
+                                    @click="emit('unassign', row.offering)"
+                                >
+                                    {{ assigningOfferingId === row.offering.id ? 'Removing…' : 'Unassign' }}
+                                </button>
+                                <button
+                                    v-else
+                                    type="button"
+                                    class="btn-save disabled:cursor-not-allowed disabled:opacity-60"
+                                    :disabled="!!assigningOfferingId"
                                     @click="emit('assign', row.offering)"
                                 >
-                                    Assign
+                                    {{ assigningOfferingId === row.offering.id ? 'Assigning…' : 'Assign' }}
                                 </button>
                             </td>
                         </tr>

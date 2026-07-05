@@ -22,16 +22,6 @@ class SubjectOfferingController extends Controller implements HasMiddleware
     ) {
     }
 
-    /**
-     * Everyone with any stake in scheduling can VIEW Subject Offerings
-     * — Admin, Registrar, Dean, Assistant Dean, OIC. Generating and
-     * Deleting are each gated separately, further down: Generate via
-     * SubjectOfferingPolicy::generate() in create()/store() (Admin +
-     * Registrar only, unchanged), Delete via an explicit role check
-     * in destroy() (Admin + Registrar only). Dean/Assistant Dean/OIC
-     * hitting create/store/destroy directly still get a clean 403 —
-     * this middleware only clears them past the front door.
-     */
     public static function middleware(): array
     {
         return [
@@ -54,19 +44,18 @@ class SubjectOfferingController extends Controller implements HasMiddleware
     }
 
     /**
-     * Query string params (all optional):
-     *   academic_term_id, program_id, year_level, section_id, status, search
+     * Shared filter logic used by both index() (paginated, Inertia)
+     * and print() (unpaginated, Blade). Keeping this in one place
+     * means the Print button always reflects exactly what's on
+     * screen — same academic_term_id/program_id/specialization_id/
+     * year_level/section_id/search, applied the same way.
      *
-     * status filters on the DERIVED overall_status (see
-     * SubjectOffering::getOverallStatusAttribute()) rather than a real
-     * column, so it can't be pushed into the SQL where() the other
-     * filters use. When it's present, this pulls the (already
-     * term/program/section/search-filtered) matches into memory once
-     * and paginates that filtered collection by hand — fine at the
-     * scale one Academic Term's offerings run at; revisit only if
-     * that scale changes materially.
+     * NOTE: deliberately does NOT apply the `status` filter — status
+     * is derived in PHP after the query runs (see index()), and the
+     * print view has no use for it anyway since it never shows
+     * Faculty/Room/Status columns.
      */
-    public function index(Request $request)
+    private function filteredOfferingsQuery(Request $request)
     {
         $academicTermId = $request->input('academic_term_id')
             ?: AcademicTerm::where('active', true)->value('id');
@@ -75,12 +64,9 @@ class SubjectOfferingController extends Controller implements HasMiddleware
         $specializationId = $request->input('specialization_id');
         $yearLevel = $request->input('year_level');
         $sectionId = $request->input('section_id');
-        $status = $request->input('status');
         $search = trim((string) $request->input('search', ''));
-        $page = max(1, (int) $request->input('page', 1));
-        $perPage = 20;
 
-        $query = SubjectOffering::with([
+        return SubjectOffering::with([
                 'section:id,section_code',
                 'subject:id,subject_code,descriptive_title',
                 'program:id,code',
@@ -89,10 +75,6 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             ])
             ->when($academicTermId, fn ($q) => $q->where('academic_term_id', $academicTermId))
             ->when($programId, fn ($q) => $q->where('program_id', $programId))
-            // Specialization isn't denormalized onto subject_offerings
-            // (only curriculum_id/program_id are) — reach through the
-            // Curriculum to filter Offerings for a specific
-            // specialization (e.g. BSCRIM-FB vs BSCRIM-LD).
             ->when($specializationId, fn ($q) => $q->whereHas(
                 'curriculum',
                 fn ($c) => $c->where('specialization_id', $specializationId)
@@ -110,7 +92,24 @@ class SubjectOfferingController extends Controller implements HasMiddleware
                                 ->orWhereRaw('LOWER(descriptive_title) LIKE ?', [$term]);
                         });
                 });
-            })
+            });
+    }
+
+    public function index(Request $request)
+    {
+        $academicTermId = $request->input('academic_term_id')
+            ?: AcademicTerm::where('active', true)->value('id');
+
+        $programId = $request->input('program_id');
+        $specializationId = $request->input('specialization_id');
+        $yearLevel = $request->input('year_level');
+        $sectionId = $request->input('section_id');
+        $status = $request->input('status');
+        $search = trim((string) $request->input('search', ''));
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 20;
+
+        $query = $this->filteredOfferingsQuery($request)
             ->orderBy('year_level')
             ->orderBy('edp_code');
 
@@ -136,17 +135,10 @@ class SubjectOfferingController extends Controller implements HasMiddleware
 
             'programs' => Program::where('active', true)->orderBy('name')->get(['id', 'code', 'name']),
 
-            // Every active Program's Specializations (e.g. BSCRIM's FB/
-            // LD/QD/FI) — the frontend only shows this as a filter once
-            // a Program that actually has any is selected.
             'specializations' => Specialization::where('active', true)
                 ->orderBy('name')
                 ->get(['id', 'program_id', 'code', 'name']),
 
-            // program_id/specialization_id are denormalized here (read
-            // off each Section's Curriculum) purely so the Index page
-            // can narrow the Section dropdown to the selected Program/
-            // Specialization client-side, without a round trip.
             'sections' => Section::with('curriculum:id,program_id,specialization_id')
                 ->where('status', 'Active')
                 ->orderBy('section_code')
@@ -173,10 +165,6 @@ class SubjectOfferingController extends Controller implements HasMiddleware
                 'search' => $search,
             ],
 
-            // Computed once here, same as UserController's
-            // is_protected/protected_reason pattern — the Vue page
-            // just reads booleans, it never has to know or guess
-            // which role names map to which permission.
             'can' => [
                 'generate' => auth()->user()->can('generate', SubjectOffering::class),
                 'delete' => auth()->user()->hasAnyRole(['Admin', 'Registrar']),
@@ -186,12 +174,57 @@ class SubjectOfferingController extends Controller implements HasMiddleware
     }
 
     /**
-     * "Generate Subject Offerings" — Academic Term (defaulted to the
-     * active one) + Curriculum + which Sections (grouped by Year
-     * Level) should be opened. Program/Year Level/Subject are never
-     * asked for directly; they're read off the Curriculum + its
-     * Sections once the registrar clicks Generate.
+     * Printable Class List — a partial-list handout for posting
+     * before enrollment: "which Subjects is BSIT 1-A taking this
+     * term," grouped by Section, with no Faculty/Room/Time/Status
+     * columns since none of that exists yet at this stage.
+     *
+     * Reuses index()'s exact filters (minus `status`, which doesn't
+     * apply here) so the printed list always matches whatever the
+     * Registrar/Dean currently has on screen. Deliberately NOT
+     * paginated — a posted class list needs every matching row, not
+     * page 1 of 20.
+     *
+     * Returns a plain Blade view (not Inertia) so it opens cleanly in
+     * its own tab and the browser's native "Print > Save as PDF"
+     * works without any extra PDF library.
      */
+    public function print(Request $request)
+    {
+        $academicTermId = $request->input('academic_term_id')
+            ?: AcademicTerm::where('active', true)->value('id');
+
+        $academicTerm = $academicTermId ? AcademicTerm::find($academicTermId) : null;
+
+        $offerings = $this->filteredOfferingsQuery($request)
+            ->orderBy('year_level')
+            ->get();
+
+        // Group by Section so the printout reads "BSIT 1-A" as a
+        // header with its Subjects listed underneath, rather than one
+        // long flat table repeating the Section on every row.
+        $sections = $offerings
+            ->groupBy(fn ($offering) => $offering->section_id)
+            ->map(function ($group) {
+                $first = $group->first();
+
+                return [
+                    'section_code' => $first->section?->section_code ?? 'Unassigned Section',
+                    'year_level' => $first->year_level,
+                    'program_code' => $first->program?->code,
+                    'offerings' => $group->sortBy(fn ($o) => $o->subject?->subject_code)->values(),
+                ];
+            })
+            ->sortBy(['year_level', 'section_code'])
+            ->values();
+
+        return view('subject-offerings.print', [
+            'academicTerm' => $academicTerm,
+            'sections' => $sections,
+            'generatedAt' => now(),
+        ]);
+    }
+
     public function create()
     {
         abort_unless(auth()->user()->can('generate', SubjectOffering::class), 403, 'Unauthorized.');
@@ -202,10 +235,6 @@ class SubjectOfferingController extends Controller implements HasMiddleware
 
             'activeAcademicTermId' => AcademicTerm::where('active', true)->value('id'),
 
-            // Sections nested under each Curriculum, grouped by Year
-            // Level on the frontend — kept as one payload (no extra
-            // route) since a school's Curriculum+Section counts are
-            // small enough for this to stay cheap.
             'curriculums' => Curriculum::with('program', 'specialization')
                 ->where('active', true)
                 ->get()
@@ -242,14 +271,6 @@ class SubjectOfferingController extends Controller implements HasMiddleware
 
         $label = "{$curriculum->display_name} — {$academicTerm->display_name}";
 
-        // Nothing new was created. Two distinct reasons why, each with
-        // its own toast so the registrar isn't told "0 generated" with
-        // no explanation:
-        //   1. Every matching pair already existed — this Curriculum
-        //      (for these Sections) was already generated earlier.
-        //   2. Nothing matched at all, or every match was unresolved
-        //      (e.g. missing Specialization code) — a real problem,
-        //      not just a harmless re-run.
         if ($summary['created'] === 0) {
             if ($summary['skipped_existing'] > 0 && $summary['skipped_unresolved'] === 0) {
                 return redirect()
@@ -283,18 +304,6 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             ->with('success', $message);
     }
 
-    /**
-     * Blocked once Faculty Loading has touched this offering — mirrors
-     * Section::isInUse()'s guard.
-     */
-    /**
-     * Deleting is its own permission, separate from Generate — Admin
-     * + Registrar only. Dean/Assistant Dean/OIC can view this page
-     * (see middleware() above) but hitting this action directly still
-     * 403s for them; the Delete button is hidden for them in the UI
-     * via the 'can.delete' prop from index(), this check is what
-     * actually enforces it.
-     */
     public function destroy(SubjectOffering $subjectOffering)
     {
         abort_unless(

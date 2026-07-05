@@ -17,6 +17,7 @@ use App\Http\Controllers\RoomController;
 use App\Http\Controllers\SectionController;
 use App\Http\Controllers\AcademicTermController;
 use App\Http\Controllers\TeachingAssignmentController;
+use App\Http\Controllers\MasterGridController;
 use App\Http\Controllers\ProfileController;
 /*
 |--------------------------------------------------------------------------
@@ -170,6 +171,27 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('role:Admin|Registrar|Dean|Assistant Dean|OIC')->group(function () {
 
         Route::resource('faculty', FacultyController::class);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Faculty Preferences ("Manage Subjects")
+        |--------------------------------------------------------------------------
+        |
+        | Per-faculty workspace for selecting which active-term Subject
+        | Offerings a faculty member PREFERS to teach. This stores
+        | preferences only (see faculty_subject_offering) — no
+        | day/time/room is assigned here, and this is NOT the actual
+        | Faculty Loading assignment (that's Teaching Assignments,
+        | above). Direct mirror of Rooms' "Manage Subjects" below.
+        |
+        */
+
+        Route::get('faculty/{faculty}/manage-subjects', [FacultyController::class, 'manageSubjects'])
+            ->name('faculty.manage-subjects');
+
+        Route::put('faculty/{faculty}/manage-subjects', [FacultyController::class, 'syncPreferredSubjects'])
+            ->name('faculty.manage-subjects.update');
+
         Route::resource('subjects', SubjectController::class);
 
         // Rooms — master list only (no schedules/availability here).
@@ -210,14 +232,28 @@ Route::middleware(['auth'])->group(function () {
 
         /*
         |--------------------------------------------------------------------------
+        | Subject Offerings — Printable Class List
+        |--------------------------------------------------------------------------
+        |
+        | Same viewers as the Index above — a partial class list for
+        | posting before enrollment. No Faculty/Room/Time is shown or
+        | required, so this is safe for the same role group that can
+        | already see the Index.
+        */
+
+        Route::get('subject-offerings/print', [SubjectOfferingController::class, 'print'])
+            ->name('subject-offerings.print');
+
+        /*
+        |--------------------------------------------------------------------------
         | Faculty Loading (Teaching Assignments)
         |--------------------------------------------------------------------------
         |
         | Assigns which faculty member teaches each Subject Offering
         | for the active academic term. This is NOT the final room/time
         | schedule — Subject Offerings stay unscheduled here; the
-        | future Greedy Scheduler is what will assign room and time
-        | slots later, checking conflicts at that stage.
+        | Greedy Scheduler (Master Grid) is what assigns room and time
+        | slots, checking conflicts at that stage.
         |
         | Only index/store/destroy are registered — this module has no
         | standalone create/edit pages. Assigning happens via the
@@ -232,6 +268,58 @@ Route::middleware(['auth'])->group(function () {
 
         Route::resource('teaching-assignments', TeachingAssignmentController::class)
             ->only(['index', 'store', 'destroy']);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Master Grid Scheduling Workspace
+        |--------------------------------------------------------------------------
+        |
+        | Read-only visual workspace for the active Academic Term —
+        | timetable + Subject/Room sidebars. index() is viewable by
+        | everyone in this role group (Admin/Registrar/Dean/Assistant
+        | Dean/OIC all have a stake in seeing the scheduling
+        | workspace).
+        |
+        */
+
+        Route::get('master-grid', [MasterGridController::class, 'index'])
+            ->name('master-grid.index');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Master Grid — Generate Schedule (Greedy Scheduling Algorithm)
+        |--------------------------------------------------------------------------
+        |
+        | Preview-only endpoint: runs GreedyScheduleService for one
+        | Department + Program + [Specialization] + Year Level +
+        | Section and returns a draft schedule as JSON. It does NOT
+        | write to the database — see GreedyScheduleService's docblock.
+        | Restricted to Admin/Registrar only, unlike index() above,
+        | per spec ("When the Registrar or Admin clicks Generate
+        | Schedule..."). MasterGridController::middleware() also
+        | double-checks this same restriction on the controller side,
+        | so a direct hit still 403s even if this route grouping is
+        | ever rearranged later.
+        |
+        */
+
+        Route::middleware('role:Admin|Registrar')->group(function () {
+
+            Route::post('master-grid/generate', [MasterGridController::class, 'generate'])
+                ->name('master-grid.generate');
+
+            // Interactive Schedule Review (Phase 2): validate-block runs
+            // on every field change inside the Edit Schedule modal; save
+            // re-validates the whole preview and, only if clean, inserts
+            // every block into `schedules` in one transaction. Both act
+            // purely on the in-memory preview the client already holds.
+            Route::post('master-grid/validate-block', [MasterGridController::class, 'validateBlock'])
+                ->name('master-grid.validate-block');
+
+            Route::post('master-grid/save', [MasterGridController::class, 'save'])
+                ->name('master-grid.save');
+
+        });
 
         // Future Modules
         // Route::resource('schedules', ScheduleController::class);

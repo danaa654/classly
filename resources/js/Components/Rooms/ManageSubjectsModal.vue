@@ -20,8 +20,12 @@ import axios from 'axios'
 */
 
 const props = defineProps({
-    // Shape: { room, active_academic_term, offerings, weekly_capacity_hours }
-    // — exactly what RoomController::manageSubjects() now returns as JSON.
+    // Shape: { room, active_academic_term, offerings, weekly_capacity_hours,
+    // scheduled_hours, scheduled_count } — exactly what
+    // RoomController::manageSubjects() now returns as JSON. scheduled_hours/
+    // scheduled_count are the REAL Master Grid numbers (from the
+    // `schedules` table), separate from the preference totals computed
+    // client-side below from `selected`.
     initialData: Object,
 })
 
@@ -31,6 +35,39 @@ const room = props.initialData.room
 const activeAcademicTerm = props.initialData.active_academic_term
 const offerings = props.initialData.offerings
 const weeklyCapacityHours = props.initialData.weekly_capacity_hours
+const scheduledHours = props.initialData.scheduled_hours ?? 0
+const scheduledCount = props.initialData.scheduled_count ?? 0
+
+const scheduledPercent = weeklyCapacityHours
+    ? Math.min(100, Math.round((scheduledHours / weeklyCapacityHours) * 100))
+    : 0
+
+const scheduledRemainingHours = Math.max(0, weeklyCapacityHours - scheduledHours)
+
+/**
+ * Minute-offset (0-1439, same unit Schedule/GreedyScheduleService use)
+ * to a display string like "1:00 PM". Returns null for anything not a
+ * finite number so the template can fall back to "—".
+ */
+function formatMinutes(minutes) {
+    if (typeof minutes !== 'number' || Number.isNaN(minutes)) return null
+
+    const hour24 = Math.floor(minutes / 60)
+    const minute = minutes % 60
+    const suffix = hour24 >= 12 ? 'PM' : 'AM'
+    const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12
+
+    return `${hour12}:${String(minute).padStart(2, '0')} ${suffix}`
+}
+
+function formatScheduledTime(offering) {
+    const start = formatMinutes(offering.scheduled_start_minutes)
+    const end = formatMinutes(offering.scheduled_end_minutes)
+
+    if (!offering.scheduled_day || !start || !end) return null
+
+    return `${offering.scheduled_day} · ${start}–${end}`
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -43,10 +80,18 @@ const weeklyCapacityHours = props.initialData.weekly_capacity_hours
 */
 
 const selected = reactive(
-    new Set(offerings.filter(o => o.is_preferred).map(o => o.id))
+    new Set(offerings.filter(o => o.is_preferred || o.is_scheduled_here).map(o => o.id))
 )
 
 function toggle(offering) {
+    // Locked: Master Grid has already committed a real Schedule row for
+    // this offering in THIS room. Unchecking it here would only remove
+    // the preference, not the actual class — which would be misleading,
+    // so this offering just can't be unchecked from this modal at all.
+    // To actually move/remove it, edit or delete the schedule in Master
+    // Grid instead.
+    if (offering.is_scheduled_here) return
+
     if (selected.has(offering.id)) {
         selected.delete(offering.id)
     } else {
@@ -228,6 +273,53 @@ function close() {
 
             <template v-else>
 
+                <!--
+                    Master Grid Schedule Card
+                    --------------------------------------------------------------
+                    Mirrors MasterGridDataService::presentRoom()'s Room
+                    Sidebar exactly (dot indicator, "X/Y hrs · Z%",
+                    Remaining hrs) — this is the REAL, already-committed
+                    load for this room, not a preview. It never changes
+                    based on what's checked below; only Save Schedule in
+                    Master Grid can change it.
+                -->
+                <div class="mb-5 rounded-2xl border border-[var(--card-border)] bg-green-500/5 p-5">
+
+                    <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h3 class="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+                                <span
+                                    v-if="scheduledCount > 0"
+                                    class="h-2 w-2 rounded-full bg-green-500"
+                                />
+                                Master Grid Schedule
+                            </h3>
+                            <p class="mt-0.5 text-xs text-[var(--text-muted)]">
+                                {{ activeAcademicTerm.display_name }} &middot;
+                                {{ scheduledCount }} class{{ scheduledCount === 1 ? '' : 'es' }} actually scheduled to this room
+                            </p>
+                        </div>
+
+                        <div class="text-right">
+                            <span class="text-2xl font-bold text-green-600 dark:text-green-400">
+                                {{ scheduledHours }}
+                            </span>
+                            <span class="text-sm text-[var(--text-muted)]"> / {{ weeklyCapacityHours }} hrs &middot; {{ scheduledPercent }}%</span>
+                        </div>
+                    </div>
+
+                    <div class="h-2 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
+                        <div
+                            class="h-full rounded-full bg-green-500 transition-all duration-300"
+                            :style="{ width: scheduledPercent + '%' }"
+                        />
+                    </div>
+
+                    <p class="mt-2 text-xs text-[var(--text-muted)]">
+                        Remaining: <span class="font-medium text-[var(--text-primary)]">{{ scheduledRemainingHours }} hrs</span>
+                    </p>
+                </div>
+
                 <!-- Utilization Card -->
                 <div class="mb-5 rounded-2xl border border-[var(--card-border)] p-5">
 
@@ -237,7 +329,7 @@ function close() {
                                 Preferred Hours
                             </h3>
                             <p class="mt-0.5 text-xs text-[var(--text-muted)]">
-                                {{ activeAcademicTerm.display_name }} &middot; derived from checked subjects below, no schedule created
+                                {{ activeAcademicTerm.display_name }} &middot; derived from checked subjects below, includes anything already scheduled above
                             </p>
                         </div>
 
@@ -308,15 +400,18 @@ function close() {
                             <tr
                                 v-for="offering in filteredOfferings"
                                 :key="offering.id"
-                                class="cursor-pointer border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
+                                class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
+                                :class="offering.is_scheduled_here ? 'cursor-not-allowed bg-green-500/5' : 'cursor-pointer'"
                                 @click="toggle(offering)"
                             >
                                 <td class="px-4 py-3 text-center" @click.stop="toggle(offering)">
                                     <input
                                         type="checkbox"
                                         :checked="selected.has(offering.id)"
+                                        :disabled="offering.is_scheduled_here"
+                                        :title="offering.is_scheduled_here ? 'Already scheduled via Master Grid — edit or delete the schedule there to change it.' : null"
                                         @change="toggle(offering)"
-                                        class="rounded border-[var(--card-border)] text-[#D4A62A] focus:ring-[#D4A62A]/30"
+                                        class="rounded border-[var(--card-border)] text-[#D4A62A] focus:ring-[#D4A62A]/30 disabled:opacity-60"
                                     />
                                 </td>
 
@@ -327,8 +422,30 @@ function close() {
                                 <td class="px-4 py-3">
                                     <div class="font-medium text-[var(--text-primary)]">{{ offering.subject_code }}</div>
                                     <div class="text-xs text-[var(--text-muted)]">{{ offering.subject_title }}</div>
+
+                                    <!--
+                                        Real Master Grid state — takes
+                                        priority over the preference-only
+                                        badges below, since it's what's
+                                        actually true right now.
+                                    -->
                                     <div
-                                        v-if="offering.claimed_by_room_code"
+                                        v-if="offering.is_scheduled_here"
+                                        class="mt-1 inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-400"
+                                    >
+                                        ● Scheduled<span v-if="formatScheduledTime(offering)"> — {{ formatScheduledTime(offering) }}</span>
+                                    </div>
+
+                                    <div
+                                        v-else-if="offering.scheduled_elsewhere_room_code"
+                                        class="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400"
+                                        :title="`Master Grid actually scheduled this in ${offering.scheduled_elsewhere_room_code}, not here.`"
+                                    >
+                                        Scheduled in {{ offering.scheduled_elsewhere_room_code }}
+                                    </div>
+
+                                    <div
+                                        v-else-if="offering.claimed_by_room_code"
                                         class="mt-1 inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400"
                                         :title="`Currently preferred by ${offering.claimed_by_room_code}. Checking this will move it to ${room.room_code} instead.`"
                                     >

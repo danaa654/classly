@@ -120,13 +120,41 @@ function preferredCount(room) {
     return room.preferred_count ?? 0
 }
 
+// scheduled_hours/scheduled_count come from RoomController::index() too,
+// but are sourced from the real `schedules` table (Master Grid's actual
+// generated/saved classes) — NOT the preference pivot above. Kept as
+// separate fields so "preferred" and "actually scheduled" never get
+// blended into one misleading number. See RoomController::index() and
+// MasterGridDataService::presentRoom() for the same distinction there.
+function scheduledHours(room) {
+    return room.scheduled_hours ?? 0
+}
+
+function scheduledCount(room) {
+    return room.scheduled_count ?? 0
+}
+
+// The bar/percent should always match what Master Grid's Room Sidebar
+// shows for the SAME room (see MasterGridDataService::presentRoom()) —
+// real scheduled hours take priority once any exist. Preferred Hours is
+// only a pre-scheduling wishlist and stays purely informational (the
+// small line beneath) once real classes exist; it's the primary number
+// ONLY for rooms nothing has been scheduled to yet.
+function primaryHours(room) {
+    return scheduledCount(room) > 0 ? scheduledHours(room) : preferredHours(room)
+}
+
 function utilizationPercent(room) {
     if (!props.weeklyCapacityHours) return 0
-    return Math.min(100, Math.round((preferredHours(room) / props.weeklyCapacityHours) * 100))
+    return Math.min(100, Math.round((primaryHours(room) / props.weeklyCapacityHours) * 100))
 }
 
 function isOverCapacity(room) {
-    return preferredHours(room) > props.weeklyCapacityHours
+    return primaryHours(room) > props.weeklyCapacityHours
+}
+
+function remainingHours(room) {
+    return Math.max(0, props.weeklyCapacityHours - primaryHours(room))
 }
 
 /*
@@ -321,7 +349,7 @@ function onSubjectsSaved(payload) {
                     </th>
 
                     <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
-                        Preferred Load
+                        Room Load
                     </th>
 
                     <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
@@ -409,21 +437,42 @@ function onSubjectsSaved(payload) {
 
                         <div class="flex flex-col items-center gap-1">
 
+                            <!--
+                                Same wording/format as the Master Grid
+                                Room Sidebar: a dot + "X hrs scheduled ·
+                                Y classes" once anything real exists.
+                                This — not Preferred Hours — is what
+                                drives the big number and bar below.
+                            -->
+                            <span
+                                v-if="scheduledCount(room) > 0"
+                                class="inline-flex items-center gap-1 text-[10px] font-semibold text-green-600 dark:text-green-400 whitespace-nowrap"
+                            >
+                                ● {{ scheduledHours(room) }} hrs scheduled · {{ scheduledCount(room) }} class{{ scheduledCount(room) === 1 ? '' : 'es' }}
+                            </span>
+
                             <span
                                 class="text-xs font-semibold whitespace-nowrap"
                                 :class="isOverCapacity(room) ? 'text-red-500' : 'text-[var(--text-primary)]'"
                             >
-                                {{ preferredHours(room) }} / {{ weeklyCapacityHours }} hrs
+                                {{ primaryHours(room) }} / {{ weeklyCapacityHours }} hrs · {{ utilizationPercent(room) }}%
                             </span>
 
                             <span class="text-[10px] text-[var(--text-muted)] whitespace-nowrap">
-                                {{ preferredCount(room) }} subject{{ preferredCount(room) === 1 ? '' : 's' }}
+                                Remaining: {{ remainingHours(room) }} hrs
+                            </span>
+
+                            <span
+                                v-if="preferredCount(room) > 0"
+                                class="text-[10px] text-[var(--text-muted)] whitespace-nowrap"
+                            >
+                                {{ preferredHours(room) }} hrs / {{ preferredCount(room) }} subject{{ preferredCount(room) === 1 ? '' : 's' }} preferred
                             </span>
 
                             <div class="w-20 h-1.5 rounded-full bg-[var(--page-bg)] overflow-hidden">
                                 <div
                                     class="h-full rounded-full transition-all duration-300"
-                                    :class="isOverCapacity(room) ? 'bg-red-500' : 'bg-[#D4A62A]'"
+                                    :class="isOverCapacity(room) ? 'bg-red-500' : (scheduledCount(room) > 0 ? 'bg-green-500' : 'bg-[#D4A62A]')"
                                     :style="{ width: utilizationPercent(room) + '%' }"
                                 />
                             </div>

@@ -7,6 +7,7 @@ use App\Models\Room;
 use App\Models\SubjectOffering;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -92,9 +93,42 @@ class RoomController extends Controller implements HasMiddleware
             $query->forRoomGroup($roomGroup);
         }
 
+        $rooms = $query->get();
+
+        // Real, committed load from the `schedules` table — the same
+        // thing Master Grid's Room Sidebar already shows (see
+        // MasterGridDataService::presentRoom()). Preferred Hours above
+        // is only the pre-scheduling wishlist (room_subject_offering);
+        // this is what the Greedy Scheduler has actually
+        // generated/saved. Computed as one grouped query (not
+        // withSum/withCount) since summing a *duration*
+        // (end_minutes - start_minutes) isn't a plain column sum.
+        // Kept as separate fields — scheduled_hours/scheduled_count —
+        // rather than folded into preferred_hours, so the two
+        // concepts never get confused on the frontend either.
+        if ($activeTerm && Schema::hasTable('schedules')) {
+            $scheduleTotals = DB::table('schedules')
+                ->where('academic_term_id', $activeTerm->id)
+                ->selectRaw('room_id, COUNT(*) as scheduled_count, SUM(end_minutes - start_minutes) as scheduled_minutes')
+                ->groupBy('room_id')
+                ->get()
+                ->keyBy('room_id');
+
+            $rooms->each(function (Room $room) use ($scheduleTotals) {
+                $totals = $scheduleTotals->get($room->id);
+                $room->scheduled_count = $totals ? (int) $totals->scheduled_count : 0;
+                $room->scheduled_hours = $totals ? (int) round($totals->scheduled_minutes / 60) : 0;
+            });
+        } else {
+            $rooms->each(function (Room $room) {
+                $room->scheduled_count = 0;
+                $room->scheduled_hours = 0;
+            });
+        }
+
         return Inertia::render('Rooms/Index', [
 
-            'rooms' => $query->get(),
+            'rooms' => $rooms,
 
             'roomGroupOptions' => $this->roomGroupOptions(),
 
@@ -257,6 +291,8 @@ class RoomController extends Controller implements HasMiddleware
         $activeTerm = AcademicTerm::where('active', true)->first();
 
         $offerings = collect();
+        $scheduledHours = 0;
+        $scheduledCount = 0;
 
         if ($activeTerm) {
 
@@ -281,8 +317,66 @@ class RoomController extends Controller implements HasMiddleware
                 ->where('room_subject_offering.room_id', '!=', $room->id)
                 ->pluck('rooms.room_code', 'room_subject_offering.subject_offering_id');
 
+            /*
+            |--------------------------------------------------------------------------
+            | Actual Schedule Data (Master Grid)
+            |--------------------------------------------------------------------------
+            |
+            | Everything above this point is still purely about
+            | PREFERENCES. This block is the connection to what the
+            | Greedy Scheduler + Save Schedule has actually committed
+            | for these offerings, so a Dean/Registrar opening Manage
+            | Subjects isn't looking at a stale "0/60 hrs" while
+            | Master Grid already shows real classes meeting in this
+            | room. Defensive Schema::hasTable() check, same pattern
+            | as SubjectOffering::getRoomStatusAttribute(), in case
+            | this runs before the schedules table has ever migrated.
+            */
+
+            $scheduledHereByOffering = collect();
+            $scheduledElsewhereByOffering = collect();
+
+            if (Schema::hasTable('schedules')) {
+
+                $scheduleRows = DB::table('schedules')
+                    ->join('rooms', 'rooms.id', '=', 'schedules.room_id')
+                    ->whereIn('schedules.subject_offering_id', $baseOfferings->pluck('id'))
+                    ->where('schedules.academic_term_id', $activeTerm->id)
+                    ->get([
+                        'schedules.subject_offering_id',
+                        'schedules.room_id',
+                        'rooms.room_code',
+                        'schedules.day',
+                        'schedules.start_minutes',
+                        'schedules.end_minutes',
+                    ]);
+
+                $scheduledHereByOffering = $scheduleRows
+                    ->where('room_id', $room->id)
+                    ->keyBy('subject_offering_id');
+
+                $scheduledElsewhereByOffering = $scheduleRows
+                    ->where('room_id', '!=', $room->id)
+                    ->keyBy('subject_offering_id');
+
+                $scheduledCount = $scheduledHereByOffering->count();
+                $scheduledMinutes = $scheduledHereByOffering->sum(
+                    fn ($row) => max(0, (int) $row->end_minutes - (int) $row->start_minutes)
+                );
+                $scheduledHours = (int) round($scheduledMinutes / 60);
+            }
+
             $offerings = $baseOfferings
-                ->map(function (SubjectOffering $offering) use ($room, $preferredIds, $claimedByOtherRoom) {
+                ->map(function (SubjectOffering $offering) use (
+                    $room,
+                    $preferredIds,
+                    $claimedByOtherRoom,
+                    $scheduledHereByOffering,
+                    $scheduledElsewhereByOffering
+                ) {
+                    $scheduledHere = $scheduledHereByOffering->get($offering->id);
+                    $scheduledElsewhere = $scheduledElsewhereByOffering->get($offering->id);
+
                     return [
                         'id' => $offering->id,
                         'edp_code' => $offering->edp_code,
@@ -298,6 +392,18 @@ class RoomController extends Controller implements HasMiddleware
                         'is_preferred' => $preferredIds->contains($offering->id),
                         'is_recommended' => $this->isDepartmentCompatible($offering, $room),
                         'claimed_by_room_code' => $claimedByOtherRoom->get($offering->id),
+
+                        // Real Master Grid state — not a preference.
+                        // is_scheduled_here means a Schedule row for
+                        // this offering already lives in THIS room;
+                        // scheduled_elsewhere_room_code flags the case
+                        // where the Scheduler put it in a different
+                        // room than the one currently preferred here.
+                        'is_scheduled_here' => (bool) $scheduledHere,
+                        'scheduled_day' => $scheduledHere?->day,
+                        'scheduled_start_minutes' => $scheduledHere?->start_minutes,
+                        'scheduled_end_minutes' => $scheduledHere?->end_minutes,
+                        'scheduled_elsewhere_room_code' => $scheduledElsewhere?->room_code,
                     ];
                 })
                 ->values();
@@ -321,8 +427,16 @@ class RoomController extends Controller implements HasMiddleware
 
             'weekly_capacity_hours' => Room::WEEKLY_CAPACITY_HOURS,
 
+            // Real, committed hours/count for this room (from
+            // `schedules`), alongside the existing preference totals —
+            // see the docblock above. The modal should show BOTH: how
+            // much is preferred vs. how much is actually scheduled.
+            'scheduled_hours' => $scheduledHours,
+            'scheduled_count' => $scheduledCount,
+
         ]);
     }
+
 
     /**
      * Replace this room's Preferred Subject Offerings for the ACTIVE
