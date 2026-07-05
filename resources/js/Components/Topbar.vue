@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue'
-import { usePage } from '@inertiajs/vue3'
+import { computed, ref } from 'vue'
+import { usePage, router } from '@inertiajs/vue3'
 import { useAppShell } from '@/Composables/useAppShell'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 
@@ -11,6 +11,36 @@ const { mobileOpen } = useAppShell()
 
 const page = usePage()
 const activeAcademicTerm = computed(() => page.props.activeAcademicTerm)
+
+// The scheduling workspace's term — independent of activeAcademicTerm
+// above. Shared to every authenticated user by HandleInertiaRequests,
+// but the switcher UI (below) only ever renders for Admin/Registrar
+// because academicTermsForSwitcher is only populated for them.
+const workingAcademicTerm = computed(() => page.props.workingAcademicTerm)
+const switcherOptions = computed(() => page.props.academicTermsForSwitcher ?? [])
+const canSwitchWorkingTerm = computed(() => switcherOptions.value.length > 0)
+
+const menuOpen = ref(false)
+
+function toggleMenu() {
+    if (!canSwitchWorkingTerm.value) return
+    menuOpen.value = !menuOpen.value
+}
+
+function selectTerm(term) {
+    menuOpen.value = false
+
+    if (term.id === workingAcademicTerm.value?.id) return
+
+    router.put(route('working-term.update'), { academic_term_id: term.id }, {
+        preserveScroll: true,
+        preserveState: true,
+    })
+}
+
+function closeMenu() {
+    menuOpen.value = false
+}
 
 // TODO: wire this up to a real notifications count once that feature
 // exists (e.g. page.props.unreadNotificationsCount). Left as a static
@@ -49,7 +79,10 @@ const unreadNotifications = computed(() => page.props.unreadNotificationsCount >
 
         <!-- Right controls -->
         <div class="flex items-center gap-3 sm:gap-4">
-            <!-- Active Academic Term -->
+
+            <!-- Active Academic Term (unchanged — Enrollment, Grades,
+                 Attendance, Reports, dashboard stats, and the Student
+                 Portal all key off this one, never the Working Term). -->
             <div
                 class="flex items-center gap-1.5 sm:gap-2 rounded-full border px-2.5 sm:px-3 py-1 sm:py-1.5 brand-font"
                 :style="activeAcademicTerm
@@ -67,7 +100,7 @@ const unreadNotifications = computed(() => page.props.unreadNotificationsCount >
                         class="hidden sm:block text-[9px] font-bold uppercase tracking-widest"
                         :class="activeAcademicTerm ? 'text-emerald-300/80' : 'text-slate-400'"
                     >
-                        {{ activeAcademicTerm ? 'Active Academic Term' : 'No Active Academic Term' }}
+                        {{ activeAcademicTerm ? 'Active Term' : 'No Active Academic Term' }}
                     </span>
                     <span
                         v-if="activeAcademicTerm"
@@ -78,6 +111,83 @@ const unreadNotifications = computed(() => page.props.unreadNotificationsCount >
                     <span v-else class="sm:hidden text-[11px] font-semibold text-slate-300">
                         No Active Term
                     </span>
+                </div>
+            </div>
+
+            <!-- Working Academic Term — the scheduling workspace switcher.
+                 Visible to every authenticated user (Faculty need to know
+                 which term's schedules they're looking at), but the dropdown
+                 itself only opens for Admin/Registrar, since
+                 switcherOptions is empty for everyone else. -->
+            <div v-if="workingAcademicTerm || canSwitchWorkingTerm" class="relative brand-font">
+                <button
+                    type="button"
+                    class="flex items-center gap-1.5 sm:gap-2 rounded-full border px-2.5 sm:px-3 py-1 sm:py-1.5 transition-colors"
+                    :class="canSwitchWorkingTerm ? 'cursor-pointer hover:bg-indigo-500/10' : 'cursor-default'"
+                    style="background: rgba(99, 102, 241, 0.10); border-color: rgba(99, 102, 241, 0.3)"
+                    @click="toggleMenu"
+                >
+                    <span
+                        class="w-1.5 h-1.5 rounded-full shrink-0 bg-indigo-400"
+                        style="box-shadow: 0 0 6px rgba(129, 140, 248, 0.8)"
+                    ></span>
+
+                    <div class="flex flex-col leading-tight text-left">
+                        <span class="hidden sm:block text-[9px] font-bold uppercase tracking-widest text-indigo-300/80">
+                            Working Term
+                        </span>
+                        <span
+                            v-if="workingAcademicTerm"
+                            class="text-[11px] sm:text-[12px] font-semibold text-white truncate max-w-[110px] sm:max-w-none"
+                        >
+                            {{ workingAcademicTerm.semester_label }} &bull; SY {{ workingAcademicTerm.academic_year }}
+                        </span>
+                        <span v-else class="text-[11px] font-semibold text-slate-300">
+                            No Working Term
+                        </span>
+                    </div>
+
+                    <span
+                        v-if="workingAcademicTerm"
+                        class="hidden sm:inline text-[9px] font-bold uppercase tracking-wide text-indigo-200/80 border border-indigo-400/30 rounded px-1.5 py-0.5 whitespace-nowrap"
+                    >
+                        {{ workingAcademicTerm.scheduling_status }}
+                    </span>
+
+                    <svg
+                        v-if="canSwitchWorkingTerm"
+                        class="w-3.5 h-3.5 text-indigo-200/70 transition-transform"
+                        :class="menuOpen ? 'rotate-180' : ''"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+
+                <!-- Backdrop to close the menu on outside click -->
+                <div v-if="menuOpen" class="fixed inset-0 z-40" @click="closeMenu"></div>
+
+                <div
+                    v-if="menuOpen"
+                    class="absolute right-0 mt-2 w-64 rounded-lg border border-white/10 shadow-xl z-50 overflow-hidden"
+                    style="background: var(--sidebar-bg)"
+                >
+                    <div class="px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-white/40 border-b border-white/10">
+                        Switch Working Term
+                    </div>
+                    <button
+                        v-for="term in switcherOptions"
+                        :key="term.id"
+                        type="button"
+                        class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-[12px] hover:bg-white/10 transition-colors"
+                        :class="term.id === workingAcademicTerm?.id ? 'text-indigo-300 font-semibold bg-indigo-500/10' : 'text-white/80'"
+                        @click="selectTerm(term)"
+                    >
+                        <span class="truncate">{{ term.semester_label }} &bull; SY {{ term.academic_year }}</span>
+                        <span class="text-[9px] uppercase text-white/40 shrink-0">{{ term.scheduling_status }}</span>
+                    </button>
                 </div>
             </div>
 

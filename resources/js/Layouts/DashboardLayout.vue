@@ -1,10 +1,7 @@
 <script setup>
-import { ref } from 'vue'
 import Sidebar from '@/Components/Sidebar.vue'
 import Topbar from '@/Components/Topbar.vue'
 import AppFooter from '@/Components/AppFooter.vue'
-
-const sidebarOpen = ref(true)
 </script>
 
 <template>
@@ -14,11 +11,11 @@ const sidebarOpen = ref(true)
     style="background: var(--page-bg)"
 >
 
-    <Sidebar :open="sidebarOpen" />
+    <Sidebar />
 
     <div class="flex-1 flex flex-col">
 
-        <Topbar @toggle="sidebarOpen = !sidebarOpen" />
+        <Topbar />
 
         <main class="flex-1 overflow-y-auto p-6">
             <slot />

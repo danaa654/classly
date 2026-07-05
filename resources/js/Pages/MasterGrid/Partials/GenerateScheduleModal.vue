@@ -109,7 +109,7 @@ function generate() {
             <div class="space-y-3">
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Department</label>
-                    <select v-model="departmentId" class="w-full rounded-lg border-slate-300 text-sm dark:bg-slate-900 dark:border-slate-600">
+                    <select v-model="departmentId" class="w-full rounded-lg border-slate-300 text-sm text-black dark:text-white dark:bg-slate-900 dark:border-slate-600">
                         <option :value="null">Select department</option>
                         <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
                     </select>
@@ -117,7 +117,7 @@ function generate() {
 
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Program</label>
-                    <select v-model="programId" class="w-full rounded-lg border-slate-300 text-sm dark:bg-slate-900 dark:border-slate-600">
+                    <select v-model="programId" class="w-full rounded-lg border-slate-300 text-sm text-black dark:text-white dark:bg-slate-900 dark:border-slate-600">
                         <option :value="null">Select program</option>
                         <option v-for="program in programsForDepartment" :key="program.id" :value="program.id">{{ program.name }}</option>
                     </select>
@@ -125,7 +125,7 @@ function generate() {
 
                 <div v-if="hasSpecializations">
                     <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Specialization</label>
-                    <select v-model="specializationId" class="w-full rounded-lg border-slate-300 text-sm dark:bg-slate-900 dark:border-slate-600">
+                    <select v-model="specializationId" class="w-full rounded-lg border-slate-300 text-sm text-black dark:text-white dark:bg-slate-900 dark:border-slate-600">
                         <option :value="null">Select specialization</option>
                         <option v-for="spec in specializationsForProgram" :key="spec.id" :value="spec.id">{{ spec.name }}</option>
                     </select>
@@ -133,7 +133,7 @@ function generate() {
 
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Year Level</label>
-                    <select v-model="yearLevel" class="w-full rounded-lg border-slate-300 text-sm dark:bg-slate-900 dark:border-slate-600">
+                    <select v-model="yearLevel" class="w-full rounded-lg border-slate-300 text-sm text-black dark:text-white dark:bg-slate-900 dark:border-slate-600">
                         <option :value="null">Select year level</option>
                         <option v-for="year in [1, 2, 3, 4]" :key="year" :value="year">Year {{ year }}</option>
                     </select>
@@ -144,7 +144,7 @@ function generate() {
                     <select
                         v-model="sectionId"
                         :disabled="!programId || !yearLevel"
-                        class="w-full rounded-lg border-slate-300 text-sm dark:bg-slate-900 dark:border-slate-600 disabled:opacity-50"
+                        class="w-full rounded-lg border-slate-300 text-sm text-black dark:text-white dark:bg-slate-900 dark:border-slate-600 disabled:opacity-50"
                     >
                         <option :value="null">
                             {{ !programId || !yearLevel ? 'Select program and year first' : 'Select section' }}
