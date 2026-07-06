@@ -9,6 +9,7 @@ use App\Models\Program;
 use App\Models\Room;
 use App\Models\Schedule;
 use App\Models\SubjectOffering;
+use App\Services\RoomCapacityService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -25,6 +26,11 @@ use Illuminate\Support\Facades\Schema;
  */
 class MasterGridDataService
 {
+    public function __construct(
+        private readonly RoomCapacityService $capacity
+    ) {
+    }
+
     /**
      * Everything the Master Grid page needs, keyed for direct use as
      * Inertia props.
@@ -107,7 +113,7 @@ class MasterGridDataService
                 ->with('roomGroups')
                 ->orderBy('room_code')
                 ->get()
-                ->map(fn (Room $room) => $this->presentRoom($room, $activeTerm->id, $programDepartmentMap))
+                ->map(fn (Room $room) => $this->presentRoom($room, $activeTerm, $programDepartmentMap))
                 ->values(),
 
             'departments' => Department::where('active', true)->orderBy('name')->get(['id', 'name', 'abbreviation']),
@@ -305,11 +311,11 @@ class MasterGridDataService
      * latter. Falls back to 0 when the schedules table doesn't exist
      * yet (fresh install) rather than erroring.
      */
-    private function presentRoom(Room $room, int $academicTermId, array $programDepartmentMap): array
+    private function presentRoom(Room $room, AcademicTerm $academicTerm, array $programDepartmentMap): array
     {
         $scheduledRows = Schema::hasTable('schedules')
             ? Schedule::where('room_id', $room->id)
-                ->where('academic_term_id', $academicTermId)
+                ->where('academic_term_id', $academicTerm->id)
                 ->get(['start_minutes', 'end_minutes'])
             : collect();
 
@@ -318,7 +324,18 @@ class MasterGridDataService
         );
 
         $hoursUsed = (int) round($scheduledMinutes / 60);
-        $capacity = Room::WEEKLY_CAPACITY_HOURS;
+
+        // Was a flat Room::WEEKLY_CAPACITY_HOURS (always 60) regardless
+        // of which term was actually being viewed — Rooms/Index and the
+        // Manage Subjects modal had already moved to the real,
+        // term-derived number (School Hours minus Lunch Break, times
+        // Working Days — see AcademicTerm::getWeeklyCapacityHoursAttribute()
+        // and RoomCapacityService), so Master Grid's Room Sidebar was
+        // quietly showing a different, wrong ceiling for every term
+        // whose actual school hours didn't happen to add up to 60. This
+        // is the same call RoomController now makes, so all three
+        // surfaces agree on one number per term.
+        $capacity = $this->capacity->weeklyCapacityHoursFor($academicTerm);
 
         return [
             'id' => $room->id,
