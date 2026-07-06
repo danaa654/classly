@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { collegeClasses } from '@/Utils/collegeColors'
+import { accentColor } from '@/Utils/roomAccentColor'
 
 const props = defineProps({
     collapsed: { type: Boolean, default: false },
@@ -42,16 +42,18 @@ const scheduledCount = computed(() => props.scheduledOfferings.length)
 
 <template>
     <aside
-        class="subject-sidebar shrink-0 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col transition-all duration-200"
+        class="subject-sidebar shrink-0 flex flex-col transition-all duration-200"
+        style="background: var(--card-bg); border-right: 1px solid var(--card-border)"
         :class="collapsed ? 'w-10' : 'w-[220px]'"
     >
-        <div class="flex items-center justify-between px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 shrink-0">
-            <p v-if="!collapsed" class="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                Subjects <span class="text-slate-400">({{ count }})</span>
+        <div class="flex items-center justify-between px-3 py-2.5 shrink-0" style="border-bottom: 1px solid var(--card-border)">
+            <p v-if="!collapsed" class="text-[11px] font-black uppercase tracking-widest" style="color: var(--text-secondary)">
+                Subjects <span style="color: var(--text-muted)">({{ count }})</span>
             </p>
             <button
                 type="button"
-                class="text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                class="text-xs font-bold hover:opacity-70"
+                style="color: var(--text-muted)"
                 @click="toggle"
             >
                 {{ collapsed ? '»' : '« Hide Subjects' }}
@@ -60,63 +62,79 @@ const scheduledCount = computed(() => props.scheduledOfferings.length)
 
         <label
             v-if="!collapsed && scheduledCount > 0"
-            class="flex items-center gap-1.5 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 shrink-0 text-[10px] font-semibold text-slate-500 cursor-pointer select-none"
+            class="flex items-center gap-1.5 px-3 py-1.5 shrink-0 text-[10px] font-semibold cursor-pointer select-none"
+            style="border-bottom: 1px solid var(--card-border); color: var(--text-secondary)"
         >
             <input type="checkbox" v-model="showScheduled" class="rounded" />
             Show scheduled too ({{ scheduledCount }})
         </label>
 
         <div v-if="!collapsed" class="flex-1 overflow-y-auto custom-scrollbar-theme p-2 space-y-2">
-            <p v-if="count === 0" class="text-xs text-slate-400 text-center py-8">
+            <p v-if="count === 0" class="text-xs text-center py-8" style="color: var(--text-muted)">
                 No unscheduled Subject Offerings for this term.
             </p>
 
             <div
                 v-for="offering in visibleOfferings"
                 :key="offering.id"
-                class="subject-card rounded-lg border px-2.5 py-2"
-                :class="[
-                    collegeClasses(offering.college_code).bg,
-                    collegeClasses(offering.college_code).border,
-                    offering.is_scheduled ? 'opacity-60 cursor-default' : 'cursor-grab',
-                ]"
+                class="subject-card rounded-lg px-2.5 py-2 transition-all duration-150 ease-out"
+                :class="offering.is_scheduled
+                    ? 'opacity-60 cursor-default'
+                    : 'cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-md'"
+                :style="{
+                    background: 'var(--card-bg)',
+                    border: '1px solid var(--card-border)',
+                    borderLeft: '4px solid var(--subject-accent)',
+                    '--subject-accent': accentColor(offering.college_code),
+                }"
                 :draggable="!offering.is_scheduled"
             >
                 <div class="flex items-center justify-between gap-2">
-                    <p class="font-black text-[12px]" :class="collegeClasses(offering.college_code).text">
+                    <p class="font-black text-[12px]" style="color: var(--text-primary)">
                         {{ offering.subject_code }}
-                        <span class="font-bold text-slate-500">· {{ offering.section_code }}</span>
+                        <span class="font-bold" style="color: var(--text-muted)">· {{ offering.section_code }}</span>
                     </p>
                     <span
                         v-if="offering.is_scheduled"
-                        class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase border bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-700 dark:border-slate-600"
+                        class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase"
+                        style="background: var(--card-border); color: var(--text-muted)"
                     >
                         {{ offering.overall_status }}
                     </span>
                     <span
                         v-else
-                        class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase border"
-                        :class="collegeClasses(offering.college_code).badge"
+                        class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase text-white shrink-0"
+                        :style="{ background: accentColor(offering.college_code) }"
                     >
                         {{ offering.college_code }}
                     </span>
                 </div>
 
-                <p class="text-[11px] font-semibold text-slate-700 truncate">
+                <p class="text-[11px] font-semibold truncate" style="color: var(--text-secondary)">
                     {{ offering.descriptive_title }}
                 </p>
 
-                <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1.5 text-[10px] text-slate-600">
+                <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1.5 text-[10px]" style="color: var(--text-secondary)">
                     <span>{{ offering.program_code }} · Yr {{ offering.year_level }}</span>
                     <span>{{ offering.section_code }}</span>
                     <span>{{ offering.hours }} hrs</span>
                     <span>{{ offering.classification }}</span>
-                    <span class="col-span-2 truncate">Faculty: <strong class="font-bold text-slate-800">{{ offering.faculty_assigned ?? '—' }}</strong></span>
-                    <span class="col-span-2 truncate">Pref. Room: <strong class="font-bold text-slate-800">{{ offering.preferred_room_code ?? '—' }}</strong></span>
-                    <span class="col-span-2 truncate">Pref. Faculty: <strong class="font-bold text-slate-800">{{ offering.preferred_faculty_name ?? '—' }}</strong></span>
-                    <span class="col-span-2">Room Type: <strong class="font-bold text-slate-800">{{ offering.room_type ?? '—' }}</strong></span>
+                    <span class="col-span-2 truncate">Faculty: <strong class="font-bold" style="color: var(--text-primary)">{{ offering.faculty_assigned ?? '—' }}</strong></span>
+                    <span class="col-span-2 truncate">Pref. Room: <strong class="font-bold" style="color: var(--text-primary)">{{ offering.preferred_room_code ?? '—' }}</strong></span>
+                    <span class="col-span-2 truncate">Pref. Faculty: <strong class="font-bold" style="color: var(--text-primary)">{{ offering.preferred_faculty_name ?? '—' }}</strong></span>
+                    <span class="col-span-2">Room Type: <strong class="font-bold" style="color: var(--text-primary)">{{ offering.room_type ?? '—' }}</strong></span>
                 </div>
             </div>
         </div>
     </aside>
 </template>
+
+<style scoped>
+.subject-card {
+    border-left-width: 4px;
+}
+.subject-card:not(.cursor-default):hover {
+    border-left-width: 6px;
+    padding-left: calc(0.625rem - 2px);
+}
+</style>

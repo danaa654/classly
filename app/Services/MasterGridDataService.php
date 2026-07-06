@@ -44,8 +44,24 @@ class MasterGridDataService
      * as-is (rather than renamed) so the existing Vue workspace
      * doesn't need to change — it's simply "the term this workspace
      * is currently showing," not necessarily the literal Active term.
+     *
+     * $departmentId scopes Subject Offerings (and their Scheduled/
+     * Completed/Archived counterparts) to a single department — null
+     * for Admin/Registrar/Assistant Dean, who see every department;
+     * the Dean/OIC's own department_id otherwise. Mirrors the exact
+     * same "own department + General Education" rule
+     * TeachingAssignmentController::index() already applies to
+     * Faculty Loading — Master Grid had no such scoping at all before
+     * this, so a CCS OIC could see every other college's Subject
+     * Offerings in the sidebar. Rooms are intentionally left
+     * unscoped: a Dean/OIC still needs to see every physical room on
+     * campus (including shared/General ones) to actually schedule
+     * into, the same way the Room Sidebar's "Allowed" column already
+     * shows non-CCS programs on shared rooms without that being a
+     * data leak — it's the room's own allowance list, not another
+     * college's private data.
      */
-    public function build(?AcademicTerm $term): array
+    public function build(?AcademicTerm $term, ?int $departmentId = null): array
     {
         $activeTerm = $term;
 
@@ -79,7 +95,7 @@ class MasterGridDataService
             // Greedy Scheduler's future Save step writes real schedule
             // rows, those offerings naturally drop out of this list on
             // their own, no extra flag needed.
-            'subjectOfferings' => $this->unscheduledOfferings($activeTerm->id)
+            'subjectOfferings' => $this->unscheduledOfferings($activeTerm->id, $departmentId)
                 ->map(fn (SubjectOffering $offering) => $this->presentOffering(
                     $offering,
                     $programDepartmentMap,
@@ -100,7 +116,7 @@ class MasterGridDataService
             // to check. Shares presentOffering() so the card shape
             // (and therefore faculty_assigned, preferred_room_code,
             // etc.) is identical either way.
-            'scheduledOfferings' => $this->scheduledOfferings($activeTerm->id)
+            'scheduledOfferings' => $this->scheduledOfferings($activeTerm->id, $departmentId)
                 ->map(fn (SubjectOffering $offering) => $this->presentOffering(
                     $offering,
                     $programDepartmentMap,
@@ -194,8 +210,13 @@ class MasterGridDataService
      * Subject Offerings for the active term, excluding anything already
      * Scheduled/Completed/Archived. Eager-loads everything the card and
      * the college color-mapping need in one shot to avoid N+1 queries.
+     *
+     * $departmentId scopes to a single department (plus General
+     * Education, whose Subject Offerings carry a program with no
+     * department at all) when given — see build()'s doc comment for
+     * why this exists and why Rooms don't get the same treatment.
      */
-    private function unscheduledOfferings(int $academicTermId)
+    private function unscheduledOfferings(int $academicTermId, ?int $departmentId = null)
     {
         $excluded = [
             SubjectOffering::STATUS_SCHEDULED,
@@ -211,6 +232,10 @@ class MasterGridDataService
                 'teachingAssignment.faculty',
             ])
             ->forTerm($academicTermId)
+            ->when($departmentId, fn ($query) => $query->whereHas(
+                'program',
+                fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
+            ))
             ->get()
             ->reject(fn (SubjectOffering $offering) => in_array($offering->overall_status, $excluded, true));
     }
@@ -218,10 +243,10 @@ class MasterGridDataService
     /**
      * The mirror image of unscheduledOfferings() — every offering for
      * this term whose overall_status IS Scheduled/Completed/Archived.
-     * Same eager-loads, since presentOffering() needs the same fields
-     * either way.
+     * Same eager-loads and same department scope, since presentOffering()
+     * needs the same fields either way.
      */
-    private function scheduledOfferings(int $academicTermId)
+    private function scheduledOfferings(int $academicTermId, ?int $departmentId = null)
     {
         $included = [
             SubjectOffering::STATUS_SCHEDULED,
@@ -237,6 +262,10 @@ class MasterGridDataService
                 'teachingAssignment.faculty',
             ])
             ->forTerm($academicTermId)
+            ->when($departmentId, fn ($query) => $query->whereHas(
+                'program',
+                fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
+            ))
             ->get()
             ->filter(fn (SubjectOffering $offering) => in_array($offering->overall_status, $included, true));
     }

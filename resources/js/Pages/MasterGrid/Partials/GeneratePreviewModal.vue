@@ -32,6 +32,17 @@ const props = defineProps({
     result: { type: Object, default: null }, // raw response from master-grid.generate
     saving: { type: Boolean, default: false },
     error: { type: String, default: null },
+    // subject_offering_id => array of conflict objects (type, reason,
+    // current, conflicting — see ScheduleValidationService::conflict()),
+    // populated only when Save Changes itself came back 422. This is
+    // what actually tells the Registrar WHICH of the "Success" rows was
+    // the real problem — every row still reads Greedy-generation status
+    // ('preview'/'unscheduled'/'skipped') on its own, which has nothing
+    // to do with whether Save Schedule's own re-validation later
+    // rejected it (e.g. it collided with something saved by someone
+    // else a second ago). Without this, the generic banner above the
+    // table was the only signal given, and it named zero rows.
+    conflicts: { type: Object, default: null },
 })
 
 const emit = defineEmits(['save', 'discard', 'edit-block'])
@@ -42,6 +53,19 @@ const placedBlocks = computed(() => blocks.value.filter((b) => b.status === 'pre
 
 const scheduledCount = computed(() => props.result?.scheduled_count ?? 0)
 const unscheduledCount = computed(() => props.result?.unscheduled_count ?? 0)
+
+/**
+ * The specific conflict reason(s) Save Schedule rejected THIS block
+ * for, or null if this block wasn't part of the rejected batch (or
+ * nothing has failed yet). Keys of props.conflicts come back from
+ * Laravel as strings even though subject_offering_id is numeric, so
+ * this coerces both sides before comparing.
+ */
+function saveConflictsFor(block) {
+    if (!props.conflicts) return null
+    const entry = props.conflicts[block.subject_offering_id] ?? props.conflicts[String(block.subject_offering_id)]
+    return entry && entry.length ? entry : null
+}
 
 function timeLabel(minutes) {
     if (minutes === null || minutes === undefined) return '—'
@@ -126,7 +150,7 @@ function editBlock(block) {
                             :key="block.subject_offering_id"
                             class="border-b border-slate-100 dark:border-slate-700/60"
                             :class="[
-                                block.status !== 'preview' ? 'bg-red-50/60 dark:bg-red-900/10' : '',
+                                block.status !== 'preview' || saveConflictsFor(block) ? 'bg-red-50/60 dark:bg-red-900/10' : '',
                                 rowClickable(block) ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40' : '',
                             ]"
                             :title="rowClickable(block) ? 'Click to edit faculty, room, day, or time' : ''"
@@ -155,10 +179,22 @@ function editBlock(block) {
                             </td>
                             <td class="px-4 py-2">
                                 <span
-                                    v-if="block.status === 'preview'"
+                                    v-if="block.status === 'preview' && !saveConflictsFor(block)"
                                     class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
                                 >
                                     Success
+                                </span>
+                                <span v-else-if="block.status === 'preview'" class="inline-flex flex-col">
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300 self-start">
+                                        Conflict
+                                    </span>
+                                    <span
+                                        v-for="(conflict, i) in saveConflictsFor(block)"
+                                        :key="i"
+                                        class="text-[10px] text-red-500 dark:text-red-400 mt-0.5"
+                                    >
+                                        {{ conflict.reason }}
+                                    </span>
                                 </span>
                                 <span v-else class="inline-flex flex-col">
                                     <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300 self-start">

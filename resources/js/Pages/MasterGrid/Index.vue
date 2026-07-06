@@ -10,7 +10,6 @@ import Timetable from './Partials/Timetable.vue'
 import GenerateScheduleModal from './Partials/GenerateScheduleModal.vue'
 import GeneratePreviewModal from './Partials/GeneratePreviewModal.vue'
 import EditScheduleModal from './Partials/EditScheduleModal.vue'
-import ConflictModal from './Partials/ConflictModal.vue'
 
 defineOptions({
     layout: DashboardLayout,
@@ -74,6 +73,15 @@ const generatePreview = ref(null)
 const generatePreviewSectionId = ref(null)
 const applyingPreview = ref(false)
 const applyError = ref(null)
+// subject_offering_id => array of conflict objects (see
+// ScheduleValidationService::conflict() for shape: type, reason,
+// current, conflicting) — populated only when applyGeneratedPreview()
+// fails with a 422. Lets the Schedule Preview modal show EXACTLY
+// which row(s) conflicted and WHY, instead of just the generic banner
+// ("One or more schedule blocks have conflicts. Nothing was saved.")
+// that gave no way to tell which of the 8 rows was actually the
+// problem.
+const applyConflicts = ref(null)
 
 /* ── Subject Sidebar live preview overlay ────────────────────────────
    subjectOfferings (from the server) only ever reflects faculty_assigned
@@ -149,6 +157,7 @@ async function handleGenerate(payload) {
         generatePreview.value = data
         generatePreviewSectionId.value = payload.section_id
         applyError.value = null
+        applyConflicts.value = null
         showGenerateModal.value = false
         showPreviewModal.value = true
     } catch (err) {
@@ -171,6 +180,7 @@ async function applyGeneratedPreview() {
 
     applyingPreview.value = true
     applyError.value = null
+    applyConflicts.value = null
 
     const data = generatePreview.value
     const newBlocks = data.blocks.filter((block) => block.status === 'preview')
@@ -209,6 +219,7 @@ async function applyGeneratedPreview() {
     } catch (err) {
         if (err.response?.status === 422 && err.response.data?.conflicts) {
             conflictingIds.value = Object.keys(err.response.data.conflicts).map(Number)
+            applyConflicts.value = err.response.data.conflicts
             applyError.value = err.response.data.message
         } else {
             applyError.value = 'Failed to save the schedule. Please try again.'
@@ -227,6 +238,7 @@ function discardGeneratedPreview() {
     generatePreview.value = null
     generatePreviewSectionId.value = null
     applyError.value = null
+    applyConflicts.value = null
 }
 
 /* ── Phase 2: Interactive Schedule Review ─────────────────────────── */
@@ -495,11 +507,13 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
                 <Timetable
                     :academic-term="activeTerm"
                     :selected-room="selectedRoom"
+                    :rooms="rooms"
                     :scheduled-events="scheduledEvents"
                     :college-colors="collegeColors"
                     :editable="hasPreview"
                     :conflicting-ids="conflictingIds"
                     @edit-block="openEditModal"
+                    @select-room="selectRoom"
                 />
             </div>
 
@@ -541,6 +555,7 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
     :result="generatePreview"
     :saving="applyingPreview"
     :error="applyError"
+    :conflicts="applyConflicts"
     @save="applyGeneratedPreview"
     @discard="discardGeneratedPreview"
     @edit-block="(block) => openEditModal(block, 'preview')"
@@ -554,17 +569,11 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
     :rooms="rooms"
     :conflicts="currentConflicts"
     :warnings="currentWarnings"
+    :recommendations="conflictRecommendations"
     :validating="validating"
     @close="closeEditModal"
     @field-changed="validateDraft"
     @apply="applyEdit"
-/>
-
-<ConflictModal
-    :show="showConflictModal"
-    :conflicts="currentConflicts"
-    :recommendations="conflictRecommendations"
-    @dismiss="dismissConflictModal"
     @apply-faculty="applySuggestedFaculty"
     @apply-room="applySuggestedRoom"
     @apply-time="applySuggestedTime"

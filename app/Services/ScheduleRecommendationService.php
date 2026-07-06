@@ -35,10 +35,18 @@ class ScheduleRecommendationService
      */
     public function recommend(array $block, Collection $allBlocks, AcademicTerm $term): array
     {
+        // Preview + already-saved schedules, merged — see
+        // ScheduleValidationService::allKnownBlocksForTerm(). Every
+        // suggestion below is checked against this full picture, not
+        // just the in-memory preview batch, so a room/faculty/time
+        // already spoken for by a PREVIOUSLY saved class (outside this
+        // batch) can never be suggested as if it were free.
+        $known = $this->validator->allKnownBlocksForTerm($allBlocks, $term);
+
         return [
-            'faculty' => $this->suggestFaculty($block, $allBlocks),
-            'rooms' => $this->suggestRooms($block, $allBlocks),
-            'times' => $this->suggestTimes($block, $allBlocks, $term),
+            'faculty' => $this->suggestFaculty($block, $known),
+            'rooms' => $this->suggestRooms($block, $known),
+            'times' => $this->suggestTimes($block, $known, $term),
         ];
     }
 

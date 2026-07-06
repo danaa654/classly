@@ -6,7 +6,6 @@ use App\Models\AcademicTerm;
 use App\Models\Faculty;
 use App\Models\Room;
 use App\Models\Section;
-use App\Models\Specialization;
 use App\Models\SubjectOffering;
 use App\Models\TeachingAssignment;
 use Illuminate\Support\Collection;
@@ -80,6 +79,15 @@ class GreedyScheduleService
         // checks are measured against — always live, never stale.
         $facultyLoad = $this->initialFacultyLoad($term);
 
+        // Running room-usage count for THIS run only (rooms have no
+        // "max load" concept, so there's nothing to seed from existing
+        // data — every room starts at 0 uses per run). Used purely to
+        // spread subjects across every eligible General/type-matching
+        // room instead of the search always finding the same smallest-
+        // capacity room "available" and picking it again — see
+        // candidateRooms() for why that happened.
+        $roomUsage = [];
+
         $placedBlocks = [];
         $scheduledSubjectIds = [];
         $results = [];
@@ -110,7 +118,7 @@ class GreedyScheduleService
                 $this->preferredRoomCode($offering) ?? 'None set — will search automatically.'
             ));
 
-            $placement = $this->findPlacement($offering, $section, $grid, $durationMinutes, $assignedFaculty, $facultyLoad, $placedBlocks);
+            $placement = $this->findPlacement($offering, $section, $grid, $durationMinutes, $assignedFaculty, $facultyLoad, $placedBlocks, $roomUsage);
 
             if (! $placement) {
                 $reason = $this->unscheduledReason($offering, $assignedFaculty);
@@ -136,6 +144,8 @@ class GreedyScheduleService
             if ($usedFaculty) {
                 $facultyLoad[$usedFaculty->id] = ($facultyLoad[$usedFaculty->id] ?? 0) + (int) $offering->units;
             }
+
+            $roomUsage[$placement['room']->id] = ($roomUsage[$placement['room']->id] ?? 0) + 1;
 
             $scheduledSubjectIds[] = $offering->subject_id;
 
@@ -187,6 +197,11 @@ class GreedyScheduleService
                 'teachingAssignment.faculty',
                 'program.department',
                 'section',
+                // Needed for the specialization filter below — a
+                // Curriculum (not a Subject) is what actually carries
+                // specialization_id. See the note below on why this
+                // replaced the old subject->room_group_codes check.
+                'curriculum',
             ])
             ->forTerm($term->id)
             ->where('program_id', $filters['program_id'])
@@ -200,21 +215,36 @@ class GreedyScheduleService
                 SubjectOffering::STATUS_ARCHIVED,
             ], true));
 
-        // Specialization is an optional narrowing filter (e.g. BSCRIM's
-        // FB/LD/QD/FI tracks). Specializations were folded into the
-        // room_group taxonomy on Subject, so we match a subject as
-        // "belonging" to a specialization when its room_group_codes
-        // contains that specialization's code. If the specialization
-        // can't be resolved, or no code matches, we leave the offering
-        // list untouched rather than silently returning nothing.
+        // Specialization is an optional narrowing filter (e.g.
+        // BSCRIM's FB/LD/QD/FI tracks). This used to compare the
+        // chosen Specialization's code against the OFFERING'S
+        // SUBJECT's room_group_codes — but Subject::room_group_codes
+        // (via SubjectRoomGroup) is an entirely different taxonomy:
+        // PROGRAM-level tags like "General", "BSED", "BSHM", "BSCRIM".
+        // A Specialization's code ("ENG", "FI", "FB", "LD", "QD") never
+        // appears in that list, by construction — the two never
+        // overlap except by coincidence. That's why this filter never
+        // actually matched anything: BSED-ENG-1A's subjects (UTS, MMW,
+        // GENSOC, EDUC1, etc.) all carry program-level tags like
+        // "BSED"/"General", none of which equal "ENG", so the whole
+        // offering list came back empty every time a specialization
+        // was selected — 0 scheduled, 0 failed, regardless of how many
+        // Subject Offerings actually existed.
+        //
+        // Specialization actually lives on Curriculum
+        // (curriculum.specialization_id), and every Subject Offering
+        // already points at the Curriculum it was generated from — see
+        // SubjectOfferingGeneratorService::createOffering(). This is
+        // also exactly how SubjectOfferingController::
+        // filteredOfferingsQuery() already filters by specialization
+        // (`whereHas('curriculum', fn ($c) => $c->where(
+        // 'specialization_id', $specializationId))`), so this now
+        // matches that same, already-correct pattern instead of
+        // inventing a second, incompatible one here.
         if (! empty($filters['specialization_id'])) {
-            $specialization = Specialization::find($filters['specialization_id']);
-
-            if ($specialization) {
-                $offerings = $offerings->filter(
-                    fn (SubjectOffering $o) => in_array($specialization->code, $o->subject?->room_group_codes ?? [], true)
-                );
-            }
+            $offerings = $offerings->filter(
+                fn (SubjectOffering $o) => (int) $o->curriculum?->specialization_id === (int) $filters['specialization_id']
+            );
         }
 
         return $offerings->values();
@@ -356,7 +386,22 @@ class GreedyScheduleService
                     $query->whereIn('faculty_scope', ['general', 'cross_department']);
                 }
             })
-            ->get();
+            ->get()
+            // Shuffled BEFORE the stable sort below on purpose. ->sort()
+            // is stable — when several faculty tie exactly on
+            // [same_department, current_load] (e.g. every Gen-Ed/Cross-
+            // Department faculty still sitting at 0 load at the start of
+            // a run), a stable sort leaves ties in whatever order the DB
+            // happened to return them, and that SAME faculty member wins
+            // every tie, every time, until their load finally climbs
+            // past everyone else's. That's how one low-load faculty
+            // member could absorb five straight Minor subjects in a row
+            // instead of the load spreading across the whole eligible
+            // pool. Shuffling first means ties resolve differently on
+            // every call, while real signals (department match, actual
+            // load) still fully determine the ranking whenever they
+            // actually differ.
+            ->shuffle();
 
         return $candidates
             ->map(function (Faculty $faculty) use ($facultyLoad, $departmentId) {
@@ -365,9 +410,36 @@ class GreedyScheduleService
 
                 return $faculty;
             })
+            // Load comes first, department match is only the
+            // tie-breaker. See the class-level note above this method:
+            // for a Major, every candidate already shares the
+            // offering's department (the query above filters on it),
+            // so same_department is 0 for the whole list and this
+            // tuple order changes nothing for Majors. For a Minor,
+            // department_id is NOT filtered — General/GenEd faculty
+            // (department_id null, same_department always 1) compete
+            // directly against Cross-Department faculty who happen to
+            // share the offering's department (same_department 0).
+            // Sorting department-first meant that one same-department
+            // Cross-Department faculty would out-rank every General/
+            // GenEd faculty on EVERY Minor in that department, no
+            // matter how high their own load climbed, until they
+            // finally hit max_units — which is exactly how a single
+            // faculty member (e.g. a CCS Cross-Department instructor)
+            // ended up auto-assigned to every Minor subject for a
+            // section (NSTP, PATHFIT, GENSOC, etc.) while every GenEd
+            // faculty sat untouched at 0 load. Load-first restores the
+            // "lowest current workload" behavior the docblock actually
+            // promises, and department match only breaks a tie between
+            // two otherwise-equally-loaded candidates. This also keeps
+            // this method in agreement with
+            // ScheduleRecommendationService::suggestFaculty(), which
+            // already sorts load-first — see this method's own
+            // docblock ("if you change the rule here, mirror it
+            // there too").
             ->sort(function (Faculty $a, Faculty $b) {
-                return [$a->_same_department ? 0 : 1, $a->_current_load]
-                    <=> [$b->_same_department ? 0 : 1, $b->_current_load];
+                return [$a->_current_load, $a->_same_department ? 0 : 1]
+                    <=> [$b->_current_load, $b->_same_department ? 0 : 1];
             })
             ->values();
     }
@@ -518,7 +590,7 @@ class GreedyScheduleService
      * capacity follows, ordered smallest-sufficient-capacity first so we
      * don't burn a large room on a small section.
      */
-    private function candidateRooms(SubjectOffering $offering, ?Section $section): Collection
+    private function candidateRooms(SubjectOffering $offering, ?Section $section, array $roomUsage = []): Collection
     {
         $preferredRoomId = DB::table('room_subject_offering')
             ->where('subject_offering_id', $offering->id)
@@ -546,7 +618,26 @@ class GreedyScheduleService
 
                 return true;
             })
-            ->sortBy('capacity')
+            // Usage-this-run first, capacity as the tie-breaker —
+            // NOT capacity alone. Sorting by capacity alone means
+            // whichever General/type-matching room happens to have
+            // the smallest sufficient capacity wins the search every
+            // single time it's free — and since these subjects are
+            // routinely on DIFFERENT days/times for the same section,
+            // that one room is essentially always free, so it gets
+            // picked for every single subject while every other
+            // General Lecture room with plenty of open slots sits
+            // completely unused. That's exactly how "Room 110" ended
+            // up hosting five straight BSIT-1A subjects while the rest
+            // of the General rooms were never even tried. Usage-first
+            // spreads subjects across the whole eligible room pool the
+            // same way the faculty auto-search now spreads load across
+            // faculty, and capacity only breaks a tie between two
+            // otherwise-equally-used rooms.
+            ->sort(function (Room $a, Room $b) use ($roomUsage) {
+                return [$roomUsage[$a->id] ?? 0, $a->capacity]
+                    <=> [$roomUsage[$b->id] ?? 0, $b->capacity];
+            })
             ->values();
 
         $ordered = collect();
@@ -610,9 +701,10 @@ class GreedyScheduleService
         int $duration,
         ?Faculty $assignedFaculty,
         array $facultyLoad,
-        array $placedBlocks
+        array $placedBlocks,
+        array $roomUsage = []
     ): ?array {
-        $rooms = $this->candidateRooms($offering, $section);
+        $rooms = $this->candidateRooms($offering, $section, $roomUsage);
 
         $assignedUsable = $assignedFaculty
             && ! $this->exceedsMaxLoad($assignedFaculty, $facultyLoad, (int) $offering->units);

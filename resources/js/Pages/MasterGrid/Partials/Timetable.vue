@@ -2,10 +2,15 @@
 import { computed } from 'vue'
 import { useTimetableGrid } from '@/Composables/useTimetableGrid'
 import { collegeClasses } from '@/Utils/collegeColors'
+import RoomUtilizationOverview from '@/Components/RoomUtilizationOverview.vue'
 
 const props = defineProps({
     academicTerm: { type: Object, default: null },
     selectedRoom: { type: Object, default: null },
+    // All rooms for this term, with the same utilization fields
+    // RoomSidebar already renders per-card — used only to populate the
+    // "no room selected yet" overview below, never the grid itself.
+    rooms: { type: Array, default: () => [] },
     // Future Greedy output: [{ subject_offering_id, day, start_minutes,
     //   end_minutes, room_id, subject_code, section_code, faculty_name,
     //   college_code }]. Empty today — nothing generates schedules yet.
@@ -19,7 +24,7 @@ const props = defineProps({
     editable: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['edit-block'])
+const emit = defineEmits(['edit-block', 'select-room'])
 
 function isConflicting(event) {
     return props.conflictingIds.includes(event.subject_offering_id)
@@ -34,7 +39,16 @@ const { workingDays, timeRows } = useTimetableGrid(computed(() => props.academic
  * isn't.
  */
 const visibleEvents = computed(() => {
-    if (!props.selectedRoom) return props.scheduledEvents
+    // No room selected -> show nothing, rather than every room's
+    // events overlaid into the same day/time cells. The grid has no
+    // per-room column of its own; overlaying everything by default
+    // made two totally unrelated classes in two different rooms LOOK
+    // like a double-booking at a glance, when in reality only clicking
+    // a specific Room in the sidebar (see Index.vue's selectRoom())
+    // narrows this to a single room's real timetable. "Nothing
+    // selected" and "empty grid" now mean the same thing, instead of
+    // "nothing selected" secretly meaning "show literally everything."
+    if (!props.selectedRoom) return []
     return props.scheduledEvents.filter((event) => event.room_id === props.selectedRoom.id)
 })
 
@@ -136,6 +150,12 @@ const gridTemplateColumns = computed(
             This Academic Term has no valid school hours configured yet.
         </div>
 
+        <RoomUtilizationOverview
+            v-else-if="!selectedRoom"
+            :rooms="rooms"
+            @select="(room) => emit('select-room', room)"
+        />
+
         <div v-else class="min-w-[660px]">
             <div
                 class="timetable-grid grid border-separate select-none"
@@ -201,7 +221,7 @@ const gridTemplateColumns = computed(
                 <div
                     v-for="{ event, gridColumn, gridRow } in positionedEvents"
                     :key="event.subject_offering_id"
-                    class="rounded-md border px-2 py-1.5 m-0.5 overflow-hidden z-[5] flex flex-col items-center justify-center text-center gap-0.5"
+                    class="rounded-md border px-2 py-1.5 m-0.5 overflow-hidden z-[5] flex flex-col items-center justify-center text-center gap-0.5 !text-black dark:!text-black"
                     :class="[
                         collegeClasses(event.college_code).block,
                         editable ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : 'cursor-default',

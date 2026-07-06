@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AcademicTerm;
 use App\Models\Schedule;
 use App\Models\TeachingAssignment;
+use App\Models\User;
 use App\Services\GreedyScheduleService;
 use App\Services\MasterGridDataService;
 use App\Services\ScheduleRecommendationService;
@@ -107,7 +108,30 @@ class MasterGridController extends Controller implements HasMiddleware
         // see SchedulingWorkspaceService::getTermForUser().
         $term = $this->workspace->getTermForUser(auth()->user());
 
-        return Inertia::render('MasterGrid/Index', $this->data->build($term));
+        return Inertia::render(
+            'MasterGrid/Index',
+            $this->data->build($term, $this->managerDepartmentId(auth()->user()))
+        );
+    }
+
+    /**
+     * The department a manager is scoped to, or null if they oversee
+     * every department. Admin, Registrar, and Assistant Dean always
+     * see every department unscoped; Dean/OIC are limited to their own
+     * department_id (plus General Education, which MasterGridDataService
+     * always includes regardless of this value). Exact same rule —
+     * and copied verbatim rather than shared — as
+     * TeachingAssignmentController::managerDepartmentId(), since
+     * Faculty Loading and Master Grid must never drift apart on who
+     * gets to see whose Subject Offerings.
+     */
+    private function managerDepartmentId(User $user): ?int
+    {
+        if ($user->hasAnyRole(['Admin', 'Registrar', 'Assistant Dean'])) {
+            return null;
+        }
+
+        return $user->department_id;
     }
 
     /**

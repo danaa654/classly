@@ -182,6 +182,53 @@ class ScheduleValidationService
         return $result;
     }
 
+    /**
+     * Every block the term actually knows about: the in-memory preview
+     * PLUS whatever's already committed to `schedules` for offerings
+     * NOT in that preview. This is the exact same "preview + saved"
+     * merge overlappingOthers() below does per-block for conflict
+     * detection — pulled out as a public, reusable method because
+     * ScheduleRecommendationService needs the identical merged set.
+     * Without this, a suggestion could recommend a room/faculty/time
+     * that's actually already taken by a PREVIOUSLY saved class simply
+     * because that class isn't part of the current preview batch — the
+     * validator would still correctly reject it, but the recommender
+     * would have no idea it was ever a bad idea to suggest in the
+     * first place.
+     *
+     * Preview rows win over a saved row for the same
+     * subject_offering_id — a block actively being edited/generated
+     * always represents the newest intent for that offering, so its
+     * saved counterpart (about to be overwritten by Save Schedule
+     * anyway) is dropped rather than kept alongside it.
+     */
+    public function allKnownBlocksForTerm(Collection $previewBlocks, AcademicTerm $term): Collection
+    {
+        $saved = Schedule::forTerm($term->id)
+            ->get()
+            ->map(fn (Schedule $s) => [
+                'subject_offering_id' => $s->subject_offering_id,
+                'faculty_id' => $s->faculty_id,
+                'faculty_name' => $s->faculty?->full_name,
+                'room_id' => $s->room_id,
+                'room_code' => $s->room?->room_code,
+                'section_id' => $s->subjectOffering?->section_id,
+                'subject_code' => $s->subjectOffering?->subject?->subject_code,
+                'units' => $s->subjectOffering?->subject?->units ?? 0,
+                'day' => $s->day,
+                'start_minutes' => $s->start_minutes,
+                'end_minutes' => $s->end_minutes,
+            ]);
+
+        $previewOfferingIds = $previewBlocks->pluck('subject_offering_id')->all();
+
+        $savedNotInPreview = $saved->reject(
+            fn ($row) => in_array($row['subject_offering_id'], $previewOfferingIds, true)
+        );
+
+        return $previewBlocks->merge($savedNotInPreview)->values();
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Shared helpers (also used by ScheduleRecommendationService)
