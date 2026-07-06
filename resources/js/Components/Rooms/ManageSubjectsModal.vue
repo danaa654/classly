@@ -83,6 +83,25 @@ const selected = reactive(
     new Set(offerings.filter(o => o.is_preferred || o.is_scheduled_here).map(o => o.id))
 )
 
+/**
+ * Whether checking this (currently unchecked) offering would push
+ * Preferred Hours past this room's weekly capacity. Already-checked
+ * offerings are exempt — this only blocks NEW selections, never
+ * un-checking, so a user is always free to uncheck something else
+ * first to make room rather than getting stuck. Scheduled-here
+ * offerings are handled by their own separate lock (see toggle()).
+ *
+ * preferredHours/weeklyCapacityHours are declared further down this
+ * file (Utilization section) — safe to reference here since this
+ * function only ever runs from a user click, long after setup has
+ * finished running top to bottom.
+ */
+function wouldExceedCapacity(offering) {
+    if (selected.has(offering.id) || offering.is_scheduled_here) return false
+
+    return preferredHours.value + Number(offering.hours || 0) > weeklyCapacityHours
+}
+
 function toggle(offering) {
     // Locked: Master Grid has already committed a real Schedule row for
     // this offering in THIS room. Unchecking it here would only remove
@@ -94,9 +113,17 @@ function toggle(offering) {
 
     if (selected.has(offering.id)) {
         selected.delete(offering.id)
-    } else {
-        selected.add(offering.id)
+        return
     }
+
+    // Hard client-side block, mirroring RoomCapacityService's
+    // server-side guard — never let a selection be made that Save
+    // Preferences would just reject anyway. Checking this offering's
+    // checkbox is disabled below too; this is the belt to that
+    // suspenders in case toggle() is ever called some other way.
+    if (wouldExceedCapacity(offering)) return
+
+    selected.add(offering.id)
 }
 
 /*
@@ -113,11 +140,92 @@ function toggle(offering) {
 const search = ref('')
 const recommendedOnly = ref(true)
 
+// Empty string means "All" for every dropdown below — kept as '' rather
+// than null so a plain <select> v-model binds to it directly.
+const programFilter = ref('')
+const specializationFilter = ref('')
+const sectionFilter = ref('')
+const classificationFilter = ref('')
+
+/**
+ * Program options come from the offerings actually loaded for this
+ * room's Room Type — not a hardcoded list — so a Laboratory room never
+ * shows a Lecture-only program (or vice versa) as a filter choice.
+ */
+const programOptions = computed(() =>
+    [...new Set(offerings.map(o => o.program_code).filter(Boolean))].sort()
+)
+
+/**
+ * Specialization options are scoped to whichever Program is currently
+ * selected. This is what makes the filter appear/disappear per program:
+ * BSIT offerings never carry a specialization_code, so selecting BSIT
+ * yields an empty array and the dropdown simply doesn't render (see
+ * template below); selecting BSCRIM yields ['FB', 'FI', 'LD', 'QD'].
+ * With no Program selected yet, this stays empty on purpose — the
+ * Specialization filter only makes sense once a specialized program is
+ * chosen.
+ */
+const specializationOptions = computed(() => {
+    if (!programFilter.value) return []
+
+    return [...new Set(
+        offerings
+            .filter(o => o.program_code === programFilter.value)
+            .map(o => o.specialization_code)
+            .filter(Boolean)
+    )].sort()
+})
+
+/**
+ * Section options are scoped to whatever Program/Specialization are
+ * currently selected, so the list only ever shows sections that could
+ * actually appear in the table below.
+ */
+const sectionOptions = computed(() => {
+    return [...new Set(
+        offerings
+            .filter(o => !programFilter.value || o.program_code === programFilter.value)
+            .filter(o => !specializationFilter.value || o.specialization_code === specializationFilter.value)
+            .map(o => o.section_code)
+            .filter(Boolean)
+    )].sort()
+})
+
+// Changing Program invalidates whatever Specialization/Section was
+// selected under the previous program (e.g. switching BSCRIM -> BSIT
+// must drop a stale "FB" specialization filter rather than silently
+// filtering everything out).
+function onProgramChange() {
+    specializationFilter.value = ''
+    sectionFilter.value = ''
+}
+
+function onSpecializationChange() {
+    sectionFilter.value = ''
+}
+
 const filteredOfferings = computed(() => {
     const term = search.value.trim().toLowerCase()
 
     return offerings.filter(offering => {
         if (recommendedOnly.value && !offering.is_recommended && !selected.has(offering.id)) {
+            return false
+        }
+
+        if (programFilter.value && offering.program_code !== programFilter.value) {
+            return false
+        }
+
+        if (specializationFilter.value && offering.specialization_code !== specializationFilter.value) {
+            return false
+        }
+
+        if (sectionFilter.value && offering.section_code !== sectionFilter.value) {
+            return false
+        }
+
+        if (classificationFilter.value && offering.classification !== classificationFilter.value) {
             return false
         }
 
@@ -261,7 +369,7 @@ function close() {
         </div>
 
         <!-- Body (scrolls; header/footer stay put) -->
-        <div class="flex-1 overflow-y-auto p-5">
+        <div class="modal-scroll flex-1 overflow-y-auto p-5">
 
             <!-- No Active Term -->
             <div
@@ -272,6 +380,41 @@ function close() {
             </div>
 
             <template v-else>
+
+                <!--
+                    Sticky Utilization Summary
+                    --------------------------------------------------------------
+                    The full Master Grid Schedule / Preferred Hours cards
+                    below scroll out of view once the offerings table
+                    gets long — this compact bar pins to the top of the
+                    scroll area (position: sticky, relative to
+                    .modal-scroll) so the room's usage stays visible the
+                    whole time, not just before the user scrolls. The
+                    negative margins pull it flush to the scroll
+                    container's edges (which has p-5 padding) so the
+                    sticky background covers the full width with no gap.
+                -->
+                <div class="sticky top-0 z-10 -mx-5 -mt-5 mb-5 border-b border-[var(--card-border)] bg-[var(--card-bg)]/95 px-5 py-3 backdrop-blur">
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="text-sm font-semibold text-[var(--text-primary)]">
+                            {{ room.room_code }} Utilization
+                        </span>
+                        <span
+                            class="text-sm font-semibold"
+                            :class="isOverCapacity ? 'text-red-500' : 'text-[var(--text-primary)]'"
+                        >
+                            {{ preferredHours }} / {{ weeklyCapacityHours }} hrs &middot; {{ utilizationPercent }}%
+                        </span>
+                    </div>
+
+                    <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
+                        <div
+                            class="h-full rounded-full transition-all duration-300"
+                            :class="isOverCapacity ? 'bg-red-500' : 'bg-[#D4A62A]'"
+                            :style="{ width: utilizationPercent + '%' }"
+                        />
+                    </div>
+                </div>
 
                 <!--
                     Master Grid Schedule Card
@@ -353,28 +496,83 @@ function close() {
                     </div>
 
                     <p v-if="isOverCapacity" class="mt-2 text-xs text-red-500">
-                        Preferred hours exceed this room's weekly capacity. You can still save — this is only a preference, not a conflict.
+                        Preferred hours exceed this room's weekly capacity for {{ activeAcademicTerm.display_name }}. Uncheck some subjects — Save Preferences will be rejected while this is over capacity.
                     </p>
                 </div>
 
                 <!-- Filters -->
                 <div class="mb-5 rounded-2xl border border-[var(--card-border)] p-4">
-                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
-                        <input
-                            v-model="search"
-                            type="text"
-                            placeholder="Search by EDP code, subject code, title, program, or section..."
-                            class="w-full rounded-lg border-[var(--card-border)] bg-[var(--page-bg)] text-sm text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30 lg:flex-1"
-                        />
-
-                        <label class="flex items-center gap-2 whitespace-nowrap text-sm text-[var(--text-secondary)]">
+                    <div class="flex flex-col gap-3">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
                             <input
-                                v-model="recommendedOnly"
-                                type="checkbox"
-                                class="rounded border-[var(--card-border)] text-[#D4A62A] focus:ring-[#D4A62A]/30"
+                                v-model="search"
+                                type="text"
+                                placeholder="Search by EDP code, subject code, title, program, or section..."
+                                class="w-full rounded-lg border-[var(--card-border)] bg-[var(--page-bg)] text-sm text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30 lg:flex-1"
                             />
-                            Recommended for this room only
-                        </label>
+
+                            <label class="flex items-center gap-2 whitespace-nowrap text-sm text-[var(--text-secondary)]">
+                                <input
+                                    v-model="recommendedOnly"
+                                    type="checkbox"
+                                    class="rounded border-[var(--card-border)] text-[#D4A62A] focus:ring-[#D4A62A]/30"
+                                />
+                                Recommended for this room only
+                            </label>
+                        </div>
+
+                        <div class="flex flex-wrap gap-3">
+                            <select
+                                v-model="programFilter"
+                                @change="onProgramChange"
+                                class="rounded-lg border-[var(--card-border)] bg-[var(--page-bg)] text-sm text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                            >
+                                <option value="">All Programs</option>
+                                <option v-for="program in programOptions" :key="program" :value="program">
+                                    {{ program }}
+                                </option>
+                            </select>
+
+                            <!--
+                                Only rendered once a Program with actual
+                                Specializations is selected — BSIT, BSED,
+                                BSHM, BSTM currently have none, so picking
+                                one of those leaves specializationOptions
+                                empty and this dropdown simply never
+                                appears. Picking BSCRIM populates it with
+                                FB/FI/LD/QD.
+                            -->
+                            <select
+                                v-if="specializationOptions.length > 0"
+                                v-model="specializationFilter"
+                                @change="onSpecializationChange"
+                                class="rounded-lg border-[var(--card-border)] bg-[var(--page-bg)] text-sm text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                            >
+                                <option value="">All Specializations</option>
+                                <option v-for="spec in specializationOptions" :key="spec" :value="spec">
+                                    {{ spec }}
+                                </option>
+                            </select>
+
+                            <select
+                                v-model="sectionFilter"
+                                class="rounded-lg border-[var(--card-border)] bg-[var(--page-bg)] text-sm text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                            >
+                                <option value="">All Sections</option>
+                                <option v-for="section in sectionOptions" :key="section" :value="section">
+                                    {{ section }}
+                                </option>
+                            </select>
+
+                            <select
+                                v-model="classificationFilter"
+                                class="rounded-lg border-[var(--card-border)] bg-[var(--page-bg)] text-sm text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                            >
+                                <option value="">Major & Minor</option>
+                                <option value="Major">Major only</option>
+                                <option value="Minor">Minor only</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -401,15 +599,23 @@ function close() {
                                 v-for="offering in filteredOfferings"
                                 :key="offering.id"
                                 class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
-                                :class="offering.is_scheduled_here ? 'cursor-not-allowed bg-green-500/5' : 'cursor-pointer'"
+                                :class="offering.is_scheduled_here
+                                    ? 'cursor-not-allowed bg-green-500/5'
+                                    : wouldExceedCapacity(offering)
+                                        ? 'cursor-not-allowed opacity-50'
+                                        : 'cursor-pointer'"
                                 @click="toggle(offering)"
                             >
                                 <td class="px-4 py-3 text-center" @click.stop="toggle(offering)">
                                     <input
                                         type="checkbox"
                                         :checked="selected.has(offering.id)"
-                                        :disabled="offering.is_scheduled_here"
-                                        :title="offering.is_scheduled_here ? 'Already scheduled via Master Grid — edit or delete the schedule there to change it.' : null"
+                                        :disabled="offering.is_scheduled_here || wouldExceedCapacity(offering)"
+                                        :title="offering.is_scheduled_here
+                                            ? 'Already scheduled via Master Grid — edit or delete the schedule there to change it.'
+                                            : wouldExceedCapacity(offering)
+                                                ? `Not enough remaining capacity (needs ${offering.hours} hr(s)) — uncheck something else first.`
+                                                : null"
                                         @change="toggle(offering)"
                                         class="rounded border-[var(--card-border)] text-[#D4A62A] focus:ring-[#D4A62A]/30 disabled:opacity-60"
                                     />
@@ -455,6 +661,9 @@ function close() {
 
                                 <td class="px-4 py-3 text-center text-[var(--text-secondary)]">
                                     {{ offering.program_code ?? '—' }}
+                                    <span v-if="offering.specialization_code" class="ml-1 text-xs text-[var(--text-muted)]">
+                                        ({{ offering.specialization_code }})
+                                    </span>
                                 </td>
 
                                 <td class="px-4 py-3 text-center text-[var(--text-secondary)]">
@@ -526,7 +735,8 @@ function close() {
 
                     <button
                         @click="save"
-                        :disabled="saving || !activeAcademicTerm"
+                        :disabled="saving || !activeAcademicTerm || isOverCapacity"
+                        :title="isOverCapacity ? 'Uncheck some subjects to get back within this room\'s weekly capacity before saving.' : null"
                         class="btn-save disabled:opacity-50"
                     >
                         {{ saving ? 'Saving…' : 'Save Preferences' }}
@@ -539,3 +749,34 @@ function close() {
 </div>
 
 </template>
+
+<style scoped>
+/*
+ * Slim, theme-colored scrollbar for the modal body — replaces the
+ * bulky default OS scrollbar (dark, no rounding, no hover state) with
+ * something that matches the rest of the app's rounded/soft aesthetic.
+ * Firefox and WebKit need separate properties; there is no single
+ * cross-browser scrollbar API yet.
+ */
+.modal-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--card-border) transparent;
+}
+
+.modal-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--card-border);
+    border-radius: 9999px;
+}
+
+.modal-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: #D4A62A;
+}
+</style>

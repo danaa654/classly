@@ -19,6 +19,7 @@ defineOptions({
 const props = defineProps({
     activeTerm: { type: Object, default: null },
     subjectOfferings: { type: Array, default: () => [] },
+    scheduledOfferings: { type: Array, default: () => [] },
     rooms: { type: Array, default: () => [] },
     departments: { type: Array, default: () => [] },
     programs: { type: Array, default: () => [] },
@@ -73,6 +74,70 @@ const generatePreview = ref(null)
 const generatePreviewSectionId = ref(null)
 const applyingPreview = ref(false)
 const applyError = ref(null)
+
+/* ── Subject Sidebar live preview overlay ────────────────────────────
+   subjectOfferings (from the server) only ever reflects faculty_assigned
+   from the `teaching_assignments` table — i.e. whatever was actually
+   Saved. That's correct once persisted, but it means the Subject Card
+   still says "Faculty: —" the moment a block is placed on the grid via
+   an in-progress Generate Preview or an in-progress inline Edit, even
+   though the Timetable itself already shows a faculty name for that
+   same offering.
+
+   This computed overlays THREE still-unsaved sources onto the
+   server-provided offering list, purely for display — it never
+   mutates subjectOfferings itself and never substitutes for the real
+   Save step:
+
+     1. generatePreview.value.blocks with status 'preview' — a batch
+        just generated, sitting in the Review modal, not yet applied.
+     2. scheduledEvents.value entries with status 'preview' — set only
+        for rows freshly merged in from a Generate Preview batch that
+        hasn't round-tripped through the server yet (see
+        applyGeneratedPreview() below).
+     3. draftBlock.value — the row currently open in the Edit Schedule
+        modal. Opening/editing that modal never flips anything to
+        status 'preview' (that flag only ever applies to a fresh
+        Generate batch, never to editing an already-placed block), so
+        without this source the sidebar would keep showing whatever
+        was last saved even while the modal has a different faculty
+        selected right in front of the user.
+
+   Whichever source names a faculty for a given subject_offering_id
+   wins over the server's last-saved value; if neither source touches
+   an offering, its server-provided faculty_assigned passes through
+   unchanged. */
+const previewFacultyByOffering = computed(() => {
+    const map = {}
+
+    for (const block of generatePreview.value?.blocks ?? []) {
+        if (block.status === 'preview' && block.faculty_name) {
+            map[block.subject_offering_id] = block.faculty_name
+        }
+    }
+
+    for (const event of scheduledEvents.value) {
+        if (event.status === 'preview') {
+            map[event.subject_offering_id] = event.faculty_name ?? null
+        }
+    }
+
+    if (draftBlock.value) {
+        map[draftBlock.value.subject_offering_id] = draftBlock.value.faculty_name ?? null
+    }
+
+    return map
+})
+
+const sidebarOfferings = computed(() =>
+    props.subjectOfferings.map((offering) => {
+        const previewFaculty = previewFacultyByOffering.value[offering.id]
+
+        return previewFaculty === undefined
+            ? offering
+            : { ...offering, faculty_assigned: previewFaculty }
+    })
+)
 
 async function handleGenerate(payload) {
     generating.value = true
@@ -136,7 +201,7 @@ async function applyGeneratedPreview() {
         // Resync from the database once the reload actually lands —
         // this is the real source of truth from here on.
         router.reload({
-            only: ['subjectOfferings', 'rooms', 'savedSchedules'],
+            only: ['subjectOfferings', 'scheduledOfferings', 'rooms', 'savedSchedules'],
             onSuccess: (page) => {
                 scheduledEvents.value = page.props.savedSchedules.map((s) => ({ ...s, status: 'saved' }))
             },
@@ -215,7 +280,23 @@ let validateToken = 0
 async function validateDraft(fields) {
     if (!editingBlock.value) return
 
-    draftBlock.value = { ...editingBlock.value, ...fields }
+    const merged = { ...editingBlock.value, ...fields }
+
+    // fields (from EditScheduleModal's @field-changed) only ever
+    // carries faculty_id, never a display name — recompute faculty_name
+    // here whenever it's present so draftBlock never carries a stale
+    // name for whatever faculty_id was just selected. Without this,
+    // the Subject Sidebar's live overlay (see previewFacultyByOffering
+    // above) would keep showing the PREVIOUS faculty's name after
+    // switching the dropdown, right up until Apply Changes.
+    if ('faculty_id' in fields) {
+        const faculty = props.faculties.find((f) => f.id === fields.faculty_id)
+        merged.faculty_name = faculty
+            ? [faculty.first_name, faculty.last_name].filter(Boolean).join(' ')
+            : null
+    }
+
+    draftBlock.value = merged
 
     const token = ++validateToken
     validating.value = true
@@ -328,7 +409,7 @@ async function applyEdit(fields) {
         closeEditModal()
 
         router.reload({
-            only: ['subjectOfferings', 'rooms', 'savedSchedules'],
+            only: ['subjectOfferings', 'scheduledOfferings', 'rooms', 'savedSchedules'],
             onSuccess: (page) => {
                 scheduledEvents.value = page.props.savedSchedules.map((s) => ({ ...s, status: 'saved' }))
             },
@@ -426,7 +507,8 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
             <div class="shrink-0 flex min-h-0 border-l border-[var(--card-border)]">
                 <SubjectSidebar
                     v-model:collapsed="subjectsCollapsed"
-                    :offerings="subjectOfferings"
+                    :offerings="sidebarOfferings"
+                    :scheduled-offerings="scheduledOfferings"
                     :college-colors="collegeColors"
                 />
 

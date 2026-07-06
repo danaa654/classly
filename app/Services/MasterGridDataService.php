@@ -28,15 +28,26 @@ class MasterGridDataService
     /**
      * Everything the Master Grid page needs, keyed for direct use as
      * Inertia props.
+     *
+     * $term is whatever MasterGridController resolved via
+     * SchedulingWorkspaceService::getTermForUser() — the Planning
+     * Academic Term for Admin/Registrar, or the Active Academic Term
+     * for Dean/Assistant Dean/OIC. This method itself has no opinion
+     * on which term that should be; it only assembles data for
+     * whichever term it's handed. The 'activeTerm' prop key is kept
+     * as-is (rather than renamed) so the existing Vue workspace
+     * doesn't need to change — it's simply "the term this workspace
+     * is currently showing," not necessarily the literal Active term.
      */
-    public function build(): array
+    public function build(?AcademicTerm $term): array
     {
-        $activeTerm = AcademicTerm::active()->first();
+        $activeTerm = $term;
 
         if (! $activeTerm) {
             return [
                 'activeTerm' => null,
                 'subjectOfferings' => [],
+                'scheduledOfferings' => [],
                 'rooms' => [],
                 'departments' => [],
                 'programs' => [],
@@ -63,6 +74,27 @@ class MasterGridDataService
             // rows, those offerings naturally drop out of this list on
             // their own, no extra flag needed.
             'subjectOfferings' => $this->unscheduledOfferings($activeTerm->id)
+                ->map(fn (SubjectOffering $offering) => $this->presentOffering(
+                    $offering,
+                    $programDepartmentMap,
+                    $preferredRoomByOffering,
+                    $preferredFacultyByOffering
+                ))
+                ->values(),
+
+            // The flip side of subjectOfferings — every offering that
+            // WAS excluded above for being Scheduled/Completed/Archived.
+            // Not shown by default: the Subject Sidebar is a "drag-in"
+            // tray of work still to be placed, and a Scheduled offering
+            // has nothing left to drag. This exists purely so the
+            // sidebar's optional "Show scheduled too" toggle has
+            // something to reveal — e.g. after placing BSIT-4A, a
+            // Registrar can flip the toggle to confirm it really is
+            // done rather than having to jump over to Faculty Loading
+            // to check. Shares presentOffering() so the card shape
+            // (and therefore faculty_assigned, preferred_room_code,
+            // etc.) is identical either way.
+            'scheduledOfferings' => $this->scheduledOfferings($activeTerm->id)
                 ->map(fn (SubjectOffering $offering) => $this->presentOffering(
                     $offering,
                     $programDepartmentMap,
@@ -178,6 +210,32 @@ class MasterGridDataService
     }
 
     /**
+     * The mirror image of unscheduledOfferings() — every offering for
+     * this term whose overall_status IS Scheduled/Completed/Archived.
+     * Same eager-loads, since presentOffering() needs the same fields
+     * either way.
+     */
+    private function scheduledOfferings(int $academicTermId)
+    {
+        $included = [
+            SubjectOffering::STATUS_SCHEDULED,
+            SubjectOffering::STATUS_COMPLETED,
+            SubjectOffering::STATUS_ARCHIVED,
+        ];
+
+        return SubjectOffering::with([
+                'subject',
+                'section',
+                'program.department',
+                'academicTerm',
+                'teachingAssignment.faculty',
+            ])
+            ->forTerm($academicTermId)
+            ->get()
+            ->filter(fn (SubjectOffering $offering) => in_array($offering->overall_status, $included, true));
+    }
+
+    /**
      * Shapes a single Subject Offering into exactly the fields the
      * Subject Card needs (per the Master Grid spec): code, title,
      * program, year, section, hours, faculty assigned, preferred room,
@@ -219,6 +277,11 @@ class MasterGridDataService
             'preferred_room_code' => $preferredRoomByOffering[$offering->id] ?? null,
             'preferred_faculty_name' => $preferredFacultyByOffering[$offering->id] ?? null,
             'overall_status' => $offering->overall_status,
+            'is_scheduled' => in_array($offering->overall_status, [
+                SubjectOffering::STATUS_SCHEDULED,
+                SubjectOffering::STATUS_COMPLETED,
+                SubjectOffering::STATUS_ARCHIVED,
+            ], true),
             'college_code' => $collegeCode,
         ];
     }

@@ -9,6 +9,7 @@ use App\Models\Program;
 use App\Models\Section;
 use App\Models\Specialization;
 use App\Models\SubjectOffering;
+use App\Services\SchedulingWorkspaceService;
 use App\Services\SubjectOfferingGeneratorService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -18,7 +19,8 @@ use Inertia\Inertia;
 class SubjectOfferingController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly SubjectOfferingGeneratorService $generator
+        private readonly SubjectOfferingGeneratorService $generator,
+        private readonly SchedulingWorkspaceService $workspace
     ) {
     }
 
@@ -58,7 +60,7 @@ class SubjectOfferingController extends Controller implements HasMiddleware
     private function filteredOfferingsQuery(Request $request)
     {
         $academicTermId = $request->input('academic_term_id')
-            ?: AcademicTerm::where('active', true)->value('id');
+            ?: $this->workspace->getTermForUser(auth()->user())?->id;
 
         $programId = $request->input('program_id');
         $specializationId = $request->input('specialization_id');
@@ -98,7 +100,7 @@ class SubjectOfferingController extends Controller implements HasMiddleware
     public function index(Request $request)
     {
         $academicTermId = $request->input('academic_term_id')
-            ?: AcademicTerm::where('active', true)->value('id');
+            ?: $this->workspace->getTermForUser(auth()->user())?->id;
 
         $programId = $request->input('program_id');
         $specializationId = $request->input('specialization_id');
@@ -192,7 +194,7 @@ class SubjectOfferingController extends Controller implements HasMiddleware
     public function print(Request $request)
     {
         $academicTermId = $request->input('academic_term_id')
-            ?: AcademicTerm::where('active', true)->value('id');
+            ?: $this->workspace->getTermForUser(auth()->user())?->id;
 
         $academicTerm = $academicTermId ? AcademicTerm::find($academicTermId) : null;
 
@@ -233,7 +235,11 @@ class SubjectOfferingController extends Controller implements HasMiddleware
 
             'academicTerms' => AcademicTerm::orderByDesc('academic_year')->orderBy('semester')->get(),
 
-            'activeAcademicTermId' => AcademicTerm::where('active', true)->value('id'),
+            // Generate Subject Offerings is a scheduling module — it
+            // pre-selects the Planning Academic Term, not the Active
+            // one, so a Registrar preparing next semester's offerings
+            // doesn't have to hunt for the right term in the list.
+            'planningAcademicTermId' => $this->workspace->getTermForUser(auth()->user())?->id,
 
             'curriculums' => Curriculum::with('program', 'specialization')
                 ->where('active', true)
@@ -261,6 +267,8 @@ class SubjectOfferingController extends Controller implements HasMiddleware
 
         $academicTerm = AcademicTerm::findOrFail($validated['academic_term_id']);
         $curriculum = Curriculum::with('program', 'specialization')->findOrFail($validated['curriculum_id']);
+
+        $this->workspace->assertWritable($academicTerm);
 
         $summary = $this->generator->generate(
             $academicTerm,
@@ -311,6 +319,8 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             403,
             'You do not have permission to delete Subject Offerings.'
         );
+
+        $this->workspace->assertWritable($subjectOffering->academicTerm);
 
         if ($subjectOffering->teachingAssignment()->exists()) {
             return back()->with('error', "{$subjectOffering->edp_code} already has a Faculty assignment and cannot be deleted.");

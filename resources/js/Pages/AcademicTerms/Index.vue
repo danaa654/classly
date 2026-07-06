@@ -76,6 +76,11 @@ function requestDelete(term) {
         return
     }
 
+    if (term.status === 'Archived') {
+        show('Archived Academic Terms are permanent historical record and cannot be deleted.', 'warning')
+        return
+    }
+
     pendingTerm.value = term
 }
 
@@ -227,12 +232,14 @@ function finalizeDelete() {
 
                                 <button
                                     @click="requestDelete(term)"
-                                    :disabled="term.active"
+                                    :disabled="term.active || term.status === 'Archived'"
                                     :title="term.active
                                         ? 'Activate a different term before deleting this one.'
-                                        : 'Delete this Academic Term'"
+                                        : term.status === 'Archived'
+                                            ? 'Archived Academic Terms are permanent historical record and cannot be deleted.'
+                                            : 'Delete this Academic Term'"
                                     class="btn-delete"
-                                    :class="term.active && 'opacity-50 cursor-not-allowed'"
+                                    :class="(term.active || term.status === 'Archived') && 'opacity-50 cursor-not-allowed'"
                                 >
                                     Delete
                                 </button>

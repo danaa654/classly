@@ -9,6 +9,7 @@ use App\Models\Faculty;
 use App\Models\SubjectOffering;
 use App\Models\TeachingAssignment;
 use App\Models\User;
+use App\Services\SchedulingWorkspaceService;
 use App\Services\TeachingAssignmentService;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -17,7 +18,8 @@ use Inertia\Inertia;
 class TeachingAssignmentController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly TeachingAssignmentService $service
+        private readonly TeachingAssignmentService $service,
+        private readonly SchedulingWorkspaceService $workspace
     ) {
     }
 
@@ -83,13 +85,20 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
      */
     public function index()
     {
-        $activeTerm = AcademicTerm::active()->first();
+        // Admin/Registrar manage Faculty Loading against the Planning
+        // Academic Term (so they can staff up next semester's
+        // offerings ahead of time); Dean/Assistant Dean/OIC only ever
+        // see the Active Academic Term here, read-only — a future
+        // draft schedule isn't official yet, so they shouldn't be
+        // reviewing faculty loads that could still change. See
+        // SchedulingWorkspaceService::getTermForUser().
+        $planningTerm = $this->workspace->getTermForUser(auth()->user());
 
         $departmentId = $this->managerDepartmentId(auth()->user());
 
         return Inertia::render('TeachingAssignments/Index', [
 
-            'activeTerm' => $activeTerm,
+            'planningTerm' => $planningTerm,
 
             'faculties' => Faculty::with('department')
                 ->when($departmentId, fn ($query) => $query->where(
@@ -111,7 +120,7 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
             // the same faculty set as the roster above, so a Dean
             // never sees assignment data for faculty they can't even
             // select.
-            'teachingAssignments' => $activeTerm
+            'teachingAssignments' => $planningTerm
                 ? TeachingAssignment::with([
                         'subjectOffering.subject',
                         'subjectOffering.section.curriculum.program.department',
@@ -132,7 +141,7 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
                         'schedule.room',
                         'faculty',
                     ])
-                    ->forTerm($activeTerm->id)
+                    ->forTerm($planningTerm->id)
                     ->when($departmentId, fn ($query) => $query->whereHas(
                         'faculty',
                         fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
@@ -145,14 +154,14 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
             // client-side. Scoped to the manager's own department's
             // programs — a Dean of CTE has no reason to see CCS's
             // offerings in the Assign Subject list.
-            'subjectOfferings' => $activeTerm
+            'subjectOfferings' => $planningTerm
                 ? SubjectOffering::with([
                         'subject',
                         'section.curriculum.program.department',
                         'curriculumItem',
                         'preferredByRooms',
                     ])
-                    ->where('academic_term_id', $activeTerm->id)
+                    ->where('academic_term_id', $planningTerm->id)
                     ->when($departmentId, fn ($query) => $query->whereHas(
                         'section.curriculum.program',
                         fn ($inner) => $inner->where('department_id', $departmentId)
@@ -174,6 +183,15 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
 
         $this->assertManagesFaculty($faculty);
 
+        // TeachingAssignmentService::assertAcademicTermIsActive() only
+        // checks that the offering's term MATCHES the current Working
+        // Term — it doesn't know about Archived. If Admin/Registrar has
+        // deliberately switched the Working Term to an Archived
+        // semester to review it, that match would otherwise succeed and
+        // silently let them write to historical record. This is the
+        // explicit stop for that case.
+        $this->workspace->assertWritable($this->workspace->getTermForUser(auth()->user()));
+
         $this->service->assertBusinessRules($validated);
 
         TeachingAssignment::create($validated);
@@ -189,6 +207,8 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
     public function destroy(TeachingAssignment $teachingAssignment)
     {
         $this->assertManagesFaculty($teachingAssignment->faculty);
+
+        $this->workspace->assertWritable($teachingAssignment->subjectOffering?->academicTerm);
 
         $teachingAssignment->delete();
 

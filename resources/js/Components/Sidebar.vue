@@ -78,12 +78,15 @@ const navConfig = [
         id: 'system',
         label: 'System',
         icon: '⚙️',
-        roles: ['Admin'],
+        roles: ['Admin', 'Registrar', 'Dean', 'Assistant Dean', 'OIC'],
         children: [
-            { label: 'Users', route: 'users.index', icon: '👥' },
-            // TODO: swap in the real route name once the Settings page exists —
-            // safeRoute() below falls back to '#' instead of throwing if it's missing.
-            { label: 'Settings', route: 'settings.index', icon: '🛠️' },
+            // Users management stays Admin-only via its own `roles`
+            // entry, even though the "System" group itself is now open
+            // to more roles (Settings needs to be visible to Dean/
+            // Assistant Dean/OIC as a read-only page — see
+            // SettingsController).
+            { label: 'Users', route: 'users.index', icon: '👥', roles: ['Admin'] },
+            { label: 'Settings', route: 'settings.scheduling-workspace', icon: '🛠️' },
         ],
     },
 ]

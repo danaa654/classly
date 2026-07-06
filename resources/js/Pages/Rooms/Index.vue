@@ -29,6 +29,14 @@ const props = defineProps({
         type: Number,
         default: 60,
     },
+    // Admin/Registrar only — see RoomController::middleware(). Drives
+    // whether "+ New Room" and the per-row Edit/Delete buttons render
+    // at all; Manage Subjects is unaffected, since Dean/Assistant
+    // Dean/OIC still need it for their own department's preferences.
+    canManageRooms: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 /*
@@ -91,6 +99,16 @@ function resetFilters() {
 }
 
 function destroyRoom(room) {
+    // Mirrors RoomController::destroy()'s server-side block — this is
+    // only a UX shortcut (instant feedback, no round trip) for what the
+    // backend already enforces as the real source of truth; the button
+    // itself is also disabled for these rooms (see the template), this
+    // is just belt-and-suspenders in case it's ever triggered another way.
+    if (room.scheduled_count > 0) {
+        show(`${room.room_code} has ${room.scheduled_count} class(es) already scheduled via Master Grid and cannot be deleted. Reassign or delete those schedules first.`, 'error')
+        return
+    }
+
     if (!confirm(`Delete ${room.room_code}? This cannot be undone.`)) {
         return
     }
@@ -235,6 +253,7 @@ function onSubjectsSaved(payload) {
         </div>
 
         <Link
+            v-if="canManageRooms"
             :href="route('rooms.create')"
             class="btn-save"
         >
@@ -489,24 +508,30 @@ function onSubjectsSaved(payload) {
                                 @click="openManageSubjects(room)"
                                 type="button"
                                 :disabled="modalLoading"
-                                class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D4A62A]/10 text-[#D4A62A] hover:bg-[#D4A62A]/20 transition-colors duration-150 whitespace-nowrap disabled:opacity-50"
+                                class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D4A62A] text-white shadow-sm hover:bg-[#b8901f] transition-colors duration-150 whitespace-nowrap disabled:opacity-50"
                             >
                                 Manage Subjects
                             </button>
 
-                            <Link
-                                :href="route('rooms.edit', room.id)"
-                                class="btn-edit"
-                            >
-                                Edit
-                            </Link>
+                            <template v-if="canManageRooms">
+                                <Link
+                                    :href="route('rooms.edit', room.id)"
+                                    class="btn-edit"
+                                >
+                                    Edit
+                                </Link>
 
-                            <button
-                                @click="destroyRoom(room)"
-                                class="btn-delete"
-                            >
-                                Delete
-                            </button>
+                                <button
+                                    @click="destroyRoom(room)"
+                                    :disabled="room.scheduled_count > 0"
+                                    :title="room.scheduled_count > 0
+                                        ? `${room.room_code} has ${room.scheduled_count} class(es) already scheduled via Master Grid — reassign or delete those schedules first.`
+                                        : null"
+                                    class="btn-delete disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    Delete
+                                </button>
+                            </template>
 
                         </div>
 

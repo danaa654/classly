@@ -87,6 +87,9 @@ class AcademicTerm extends Model
         'display_name',
         'start_year',
         'is_locked',
+        'daily_hours',
+        'active_days_count',
+        'weekly_capacity_hours',
     ];
 
     /*
@@ -299,5 +302,75 @@ class AcademicTerm extends Model
         }
 
         return (int) substr($this->academic_year, 0, 4);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Weekly Room Capacity (derived from School Hours + Working Days)
+    |--------------------------------------------------------------------------
+    |
+    | This term now IS the source of truth for "how many hours can a room
+    | realistically host per week" — Room::WEEKLY_CAPACITY_HOURS used to
+    | be a flat placeholder constant (see its docblock); RoomCapacityService
+    | reads these accessors instead so Rooms/Index, the Manage Subjects
+    | modal, and the over-capacity save guard all agree on one number.
+    |
+    | These are intentionally forgiving: a term missing school hours (or
+    | a malformed lunch pair, or zero working days) just resolves to 0
+    | rather than throwing, since RoomCapacityService already has to
+    | fall back to Room::WEEKLY_CAPACITY_HOURS whenever a term can't
+    | produce a usable number at all (e.g. no Active/Planning term yet).
+    |
+    */
+
+    /**
+     * Minutes of actual class time per day, i.e. School Hours minus the
+     * Lunch Break (if one is set). school_start_time/school_end_time are
+     * cast to `datetime:H:i`, so these come back as real Carbon instances
+     * that ->diffInMinutes() can compare directly — the underlying date
+     * component is irrelevant since both sides share it.
+     */
+    public function dailyMinutes(): int
+    {
+        if (! $this->school_start_time || ! $this->school_end_time) {
+            return 0;
+        }
+
+        $minutes = $this->school_start_time->diffInMinutes($this->school_end_time);
+
+        if ($this->lunch_start_time && $this->lunch_end_time) {
+            $minutes -= $this->lunch_start_time->diffInMinutes($this->lunch_end_time);
+        }
+
+        return max(0, $minutes);
+    }
+
+    public function getDailyHoursAttribute(): float
+    {
+        return round($this->dailyMinutes() / 60, 2);
+    }
+
+    /**
+     * How many of the seven day-booleans are actually working days for
+     * this term (e.g. Mon-Fri = 5, Mon-Sat = 6).
+     */
+    public function getActiveDaysCountAttribute(): int
+    {
+        return collect([
+            'monday', 'tuesday', 'wednesday', 'thursday',
+            'friday', 'saturday', 'sunday',
+        ])->filter(fn ($day) => (bool) $this->{$day})->count();
+    }
+
+    /**
+     * Daily Hours x Active Days — the real weekly ceiling a Room's
+     * preferred/scheduled hours should be measured against for this
+     * term, replacing the old flat Room::WEEKLY_CAPACITY_HOURS
+     * placeholder. See RoomCapacityService, which is the only intended
+     * caller of this outside AcademicTerms' own Create/Edit preview.
+     */
+    public function getWeeklyCapacityHoursAttribute(): float
+    {
+        return round($this->daily_hours * $this->active_days_count, 2);
     }
 }

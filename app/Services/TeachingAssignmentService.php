@@ -30,6 +30,11 @@ use Illuminate\Validation\ValidationException;
  */
 class TeachingAssignmentService
 {
+    public function __construct(
+        private readonly SchedulingWorkspaceService $workspace
+    ) {
+    }
+
     /**
      * Run every cross-model business rule for a Faculty Loading
      * assignment. $teachingAssignment is accepted for reuse/testability
@@ -51,15 +56,31 @@ class TeachingAssignmentService
     }
 
     /**
-     * A faculty member can't be assigned to an Offering that belongs to
-     * an academic term which is no longer the active one — Faculty
-     * Loading only ever operates on the currently active term.
+     * A faculty member can only be assigned to an Offering that
+     * belongs to the Academic Term the Scheduling Workspace currently
+     * points at for the manager making the request — i.e. the
+     * Planning Academic Term for Admin/Registrar, which is exactly
+     * the point of a Planning Term: it lets them staff up NEXT
+     * semester's offerings before that term is ever activated. Dean/
+     * Assistant Dean/OIC only ever see the Active term (see
+     * SchedulingWorkspaceService::getTermForUser()), so this
+     * naturally also stops them from creating an assignment against
+     * an offering that belongs to a not-yet-active Planning term they
+     * were never shown in the first place.
+     *
+     * This intentionally checks against getTermForUser(), NOT the
+     * offering's own `active` flag — those used to be treated as the
+     * same thing, but the whole premise of Planning Ahead is that an
+     * Offering can be perfectly assignable while its Academic Term is
+     * still in Draft/Published-but-not-Active.
      */
     private function assertAcademicTermIsActive(SubjectOffering $offering): void
     {
-        if (! $offering->academicTerm || ! $offering->academicTerm->active) {
+        $term = $this->workspace->getTermForUser(auth()->user());
+
+        if (! $offering->academicTerm || ! $term || $offering->academicTerm->id !== $term->id) {
             throw ValidationException::withMessages([
-                'subject_offering_id' => 'This Subject Offering belongs to an academic term that is not currently active.',
+                'subject_offering_id' => 'This Subject Offering does not belong to the Academic Term you are currently scheduling for.',
             ]);
         }
     }

@@ -6,7 +6,7 @@ import AssignSubjectModal from './Partials/AssignSubjectModal.vue';
 import CircularLoadIndicator from './Partials/CircularLoadIndicator.vue';
 
 const props = defineProps({
-    activeTerm: { type: Object, default: null },
+    planningTerm: { type: Object, default: null },
     faculties: { type: Array, required: true },
     departments: { type: Array, required: true },
     teachingAssignments: { type: Array, required: true },
@@ -276,6 +276,87 @@ const assignedOfferingIds = computed(
     () => new Set(props.teachingAssignments.map((a) => a.subject_offering_id))
 );
 
+/*
+|--------------------------------------------------------------------------
+| Overview stats (shown only before a faculty member is selected)
+|--------------------------------------------------------------------------
+*/
+
+const totalFacultyCount = computed(() => props.faculties.length);
+const totalSubjectOfferingCount = computed(() => props.subjectOfferings.length);
+const totalAssignedOfferingCount = computed(() => assignedOfferingIds.value.size);
+const totalUnassignedOfferingCount = computed(
+    () => Math.max(totalSubjectOfferingCount.value - totalAssignedOfferingCount.value, 0)
+);
+
+const assignedOfferingPercent = computed(() => {
+    if (!totalSubjectOfferingCount.value) return 0;
+    return Math.round((totalAssignedOfferingCount.value / totalSubjectOfferingCount.value) * 100);
+});
+
+const unassignedOfferingPercent = computed(() => {
+    if (!totalSubjectOfferingCount.value) return 0;
+    return Math.max(100 - assignedOfferingPercent.value, 0);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Total Faculty card — click-to-cycle through departments
+|--------------------------------------------------------------------------
+|
+| One bucket per active department (by name), plus a trailing "General
+| Education" bucket for faculty with no department_id at all (mirrors
+| every other "General Education (no department)" fallback already used
+| elsewhere on this page). -1 means "show the grand total"; clicking the
+| card walks forward through the buckets and wraps back to -1 after the
+| last one.
+*/
+
+const facultyDeptBuckets = computed(() =>
+    [
+        ...props.departments.map((dept) => ({
+            key: `dept-${dept.id}`,
+            label: dept.name,
+            count: props.faculties.filter((f) => f.department_id === dept.id).length,
+        })),
+        {
+            key: 'gened',
+            label: 'General Education',
+            count: props.faculties.filter((f) => !f.department_id).length,
+        },
+    ]
+);
+
+const facultyViewIndex = ref(-1);
+
+function cycleFacultyView() {
+    const lastIndex = facultyDeptBuckets.value.length - 1;
+    facultyViewIndex.value = facultyViewIndex.value >= lastIndex ? -1 : facultyViewIndex.value + 1;
+}
+
+const facultyCardView = computed(() => {
+    if (facultyViewIndex.value === -1) {
+        return {
+            label: 'Total Faculty',
+            count: totalFacultyCount.value,
+            caption: 'Faculty members in the active scope',
+        };
+    }
+
+    const bucket = facultyDeptBuckets.value[facultyViewIndex.value];
+
+    return {
+        label: bucket.label,
+        count: bucket.count,
+        caption: `Faculty members under ${bucket.label}`,
+    };
+});
+
+const facultyCardPercent = computed(() => {
+    if (!totalFacultyCount.value) return 0;
+    return Math.round((facultyCardView.value.count / totalFacultyCount.value) * 100);
+});
+
 // Every offering assigned to the currently selected faculty member, keyed
 // by subject_offering_id, so the modal can show it as "Assigned" (with an
 // Unassign action) instead of just dropping it from the list.
@@ -315,7 +396,7 @@ function closeAssignModal() {
 }
 
 function handleAssign(offering) {
-    if (!selectedFaculty.value || !props.activeTerm) return;
+    if (!selectedFaculty.value || !props.planningTerm) return;
 
     // Guard against double-clicks / rapid-fire clicks on other rows
     // while a previous assignment is still in flight.
@@ -421,7 +502,7 @@ function handleUnassign(offering) {
                 <div class="border-b border-[var(--card-border)] px-4 py-4">
                     <h1 class="text-lg font-bold text-[var(--text-primary)]">Faculty Loading</h1>
                     <p class="mt-0.5 text-xs text-[var(--text-muted)]">
-                        <template v-if="activeTerm">{{ activeTerm.display_name }}</template>
+                        <template v-if="planningTerm">{{ planningTerm.display_name }}</template>
                         <template v-else>No active academic term set</template>
                     </p>
 
@@ -505,12 +586,160 @@ function handleUnassign(offering) {
 
             <!-- ==================== RIGHT PANEL: FACULTY WORKSPACE ==================== -->
             <main class="flex-1 overflow-y-auto bg-[var(--page-bg)] px-8 py-8 custom-scrollbar-theme">
-                <div v-if="!selectedFaculty" class="flex h-full items-center justify-center text-center">
-                    <div>
-                        <div class="text-4xl">🧑‍🏫</div>
-                        <p class="mt-3 text-sm text-[var(--text-muted)]">
-                            Select a faculty member from the roster to view and manage their load.
+                <div v-if="!selectedFaculty">
+                    <!-- Overview Header -->
+                    <div class="mb-6">
+                        <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                            Faculty Loading &amp; Scheduling
                         </p>
+                        <h2 class="mt-1 text-3xl font-black tracking-tight text-[var(--text-primary)]">
+                            Department Overview
+                        </h2>
+                        <p class="mt-1 text-sm text-[var(--text-muted)]">
+                            Select a faculty member to begin assignment, or review the term's subject distribution below.
+                        </p>
+                    </div>
+
+                    <!-- Overview Cards -->
+                    <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                        <!-- Total Faculty (click to cycle through departments) -->
+                        <button
+                            type="button"
+                            class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300/60 hover:shadow-lg hover:shadow-blue-500/10 dark:hover:border-blue-500/40"
+                            @click="cycleFacultyView"
+                        >
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="truncate text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                                    {{ facultyCardView.label }}
+                                </p>
+                                <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 dark:text-blue-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="9" cy="7" r="4"></circle>
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">
+                                {{ facultyCardView.count }}
+                            </p>
+                            <p class="mt-2 truncate text-xs leading-snug text-[var(--text-muted)]">{{ facultyCardView.caption }}</p>
+                            <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
+                                <div class="h-full rounded-full bg-blue-500 transition-all duration-500 ease-out" :style="{ width: `${facultyCardPercent}%` }"></div>
+                            </div>
+                            <div class="mt-2 flex items-center justify-between gap-2">
+                                <p class="text-xs font-medium text-blue-600 dark:text-blue-400">{{ facultyCardPercent }}% of total faculty</p>
+                                <span class="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                                    Tap to filter →
+                                </span>
+                            </div>
+                            <!-- Position dots: which bucket is currently showing -->
+                            <div class="mt-2.5 flex items-center gap-1">
+                                <span
+                                    v-for="n in facultyDeptBuckets.length + 1"
+                                    :key="n"
+                                    class="h-1 rounded-full transition-all duration-300"
+                                    :class="
+                                        (n - 2) === facultyViewIndex
+                                            ? 'w-3 bg-blue-500'
+                                            : 'w-1 bg-[var(--card-border)]'
+                                    "
+                                ></span>
+                            </div>
+                        </button>
+
+                        <!-- Total Subjects -->
+                        <div class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300/60 hover:shadow-lg hover:shadow-indigo-500/10 dark:hover:border-indigo-500/40">
+                            <div class="flex items-start justify-between">
+                                <p class="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">Total Subjects</p>
+                                <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 dark:text-indigo-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">{{ totalSubjectOfferingCount }}</p>
+                            <p class="mt-2 text-xs leading-snug text-[var(--text-muted)]">Total class offerings this term</p>
+                            <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
+                                <div class="h-full w-full rounded-full bg-indigo-500 transition-all duration-500 ease-out"></div>
+                            </div>
+                            <p class="mt-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400">100% of active scope</p>
+                        </div>
+
+                        <!-- Assigned Subjects -->
+                        <div class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300/60 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:border-emerald-500/40">
+                            <div class="flex items-start justify-between">
+                                <p class="text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Assigned Subjects</p>
+                                <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 dark:text-emerald-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">{{ totalAssignedOfferingCount }}</p>
+                            <p class="mt-2 text-xs leading-snug text-[var(--text-muted)]">Classes with a faculty member assigned</p>
+                            <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
+                                <div class="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out" :style="{ width: `${assignedOfferingPercent}%` }"></div>
+                            </div>
+                            <p class="mt-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ assignedOfferingPercent }}% of total</p>
+                        </div>
+
+                        <!-- Unassigned Subjects -->
+                        <div class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-red-300/60 hover:shadow-lg hover:shadow-red-500/10 dark:hover:border-red-500/40">
+                            <div class="flex items-start justify-between">
+                                <p class="text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">Unassigned Left</p>
+                                <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 dark:text-red-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">{{ totalUnassignedOfferingCount }}</p>
+                            <p class="mt-2 text-xs leading-snug text-[var(--text-muted)]">Remaining classes without a faculty</p>
+                            <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
+                                <div class="h-full rounded-full bg-red-500 transition-all duration-500 ease-out" :style="{ width: `${unassignedOfferingPercent}%` }"></div>
+                            </div>
+                            <p class="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">{{ unassignedOfferingPercent }}% unassigned</p>
+                        </div>
+                    </div>
+
+                    <!-- Status Legend -->
+                    <div class="mb-8 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-sm transition-all duration-300 hover:shadow-md">
+                        <p class="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                            </svg>
+                            Assignment Status Legend
+                        </p>
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div class="flex items-start gap-3">
+                                <span class="mt-0.5 flex-shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ Assigned</span>
+                                <p class="text-xs leading-snug text-[var(--text-muted)]">
+                                    A faculty member has been given this Subject Offering as part of their load.
+                                </p>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="mt-0.5 flex-shrink-0 rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">Unassigned</span>
+                                <p class="text-xs leading-snug text-[var(--text-muted)]">
+                                    No faculty has been assigned to this class yet — select a faculty member to close the gap.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-center text-center" style="min-height: 20vh;">
+                        <div>
+                            <div class="text-4xl">🧑‍🏫</div>
+                            <p class="mt-3 text-sm text-[var(--text-muted)]">
+                                Select a faculty member from the roster to view and manage their load.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -632,7 +861,7 @@ function handleUnassign(offering) {
                             <h3 class="text-base font-bold text-[var(--text-primary)]">Assigned Subjects</h3>
                             <button
                                 type="button"
-                                :disabled="!activeTerm || loadPercent(selectedFaculty) >= 100 || !selectedFaculty.status"
+                                :disabled="!planningTerm || loadPercent(selectedFaculty) >= 100 || !selectedFaculty.status"
                                 class="btn-save"
                                 @click="openAssignModal"
                             >
@@ -640,7 +869,7 @@ function handleUnassign(offering) {
                             </button>
                         </div>
 
-                        <p v-if="!activeTerm" class="px-6 py-6 text-sm text-[var(--text-muted)]">
+                        <p v-if="!planningTerm" class="px-6 py-6 text-sm text-[var(--text-muted)]">
                             No active academic term is set — activate a term before assigning subjects.
                         </p>
 

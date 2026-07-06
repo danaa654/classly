@@ -19,6 +19,7 @@ use App\Http\Controllers\AcademicTermController;
 use App\Http\Controllers\TeachingAssignmentController;
 use App\Http\Controllers\MasterGridController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SettingsController;
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -48,6 +49,42 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Settings > Scheduling Workspace
+    |--------------------------------------------------------------------------
+    |
+    | Lets Admin/Registrar point every scheduling module at a Planning
+    | Academic Term that can be months ahead of whatever term is
+    | officially Active — see SchedulingWorkspaceService. Dean,
+    | Assistant Dean, and OIC may view this page (so they always know
+    | which term scheduling is currently pointed at) but only
+    | Admin/Registrar may change it, hence the update route sits in
+    | its own role:Admin|Registrar sub-group below.
+    |
+    */
+
+    Route::middleware('role:Admin|Registrar|Dean|Assistant Dean|OIC')->group(function () {
+
+        Route::get('settings/scheduling-workspace', [SettingsController::class, 'schedulingWorkspace'])
+            ->name('settings.scheduling-workspace');
+
+    });
+
+    Route::middleware('role:Admin|Registrar')->group(function () {
+
+        Route::put('settings/scheduling-workspace', [SettingsController::class, 'updateSchedulingWorkspace'])
+            ->name('settings.scheduling-workspace.update');
+
+        // Alias for the Topbar's quick "Switch Working Term" dropdown —
+        // same controller method as above (see SettingsController's
+        // class docblock), just reachable from anywhere in the app
+        // without navigating to the Settings page first.
+        Route::put('working-term', [SettingsController::class, 'updateSchedulingWorkspace'])
+            ->name('working-term.update');
+
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -127,6 +164,12 @@ Route::middleware(['auth'])->group(function () {
         */
 
         Route::resource('academic-terms', AcademicTermController::class);
+
+        // The "Archive & Activate Next Term" action behind the Semester
+        // Ended banner — see SemesterTransitionService and
+        // HandleInertiaRequests' 'semesterTransition' shared prop.
+        Route::post('academic-terms/close-active', [AcademicTermController::class, 'closeActiveTerm'])
+            ->name('academic-terms.close-active');
 
         /*
         |--------------------------------------------------------------------------

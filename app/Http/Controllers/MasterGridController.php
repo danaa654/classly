@@ -9,6 +9,7 @@ use App\Services\GreedyScheduleService;
 use App\Services\MasterGridDataService;
 use App\Services\ScheduleRecommendationService;
 use App\Services\ScheduleValidationService;
+use App\Services\SchedulingWorkspaceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -50,6 +51,7 @@ class MasterGridController extends Controller implements HasMiddleware
         private readonly GreedyScheduleService $greedy,
         private readonly ScheduleValidationService $validator,
         private readonly ScheduleRecommendationService $recommender,
+        private readonly SchedulingWorkspaceService $workspace,
     ) {
     }
 
@@ -99,7 +101,13 @@ class MasterGridController extends Controller implements HasMiddleware
 
     public function index()
     {
-        return Inertia::render('MasterGrid/Index', $this->data->build());
+        // Admin/Registrar see the Planning Academic Term here (so they
+        // can lay out next semester's grid ahead of time); Dean/
+        // Assistant Dean/OIC always see the Active Academic Term —
+        // see SchedulingWorkspaceService::getTermForUser().
+        $term = $this->workspace->getTermForUser(auth()->user());
+
+        return Inertia::render('MasterGrid/Index', $this->data->build($term));
     }
 
     /**
@@ -117,11 +125,18 @@ class MasterGridController extends Controller implements HasMiddleware
             'section_id' => ['required', 'integer', 'exists:sections,id'],
         ]);
 
-        $activeTerm = AcademicTerm::active()->first();
+        $planningTerm = $this->workspace->getTermForUser(auth()->user());
 
-        abort_unless($activeTerm, 422, 'No active Academic Term — activate one before generating a schedule.');
+        abort_unless($planningTerm, 422, 'No Planning Academic Term is set — configure one in Settings > Scheduling Workspace before generating a schedule.');
 
-        $result = $this->greedy->generateForSection($activeTerm, $validated);
+        // Generate produces an in-memory preview only (nothing is
+        // persisted here), but blocking it up front — rather than only
+        // at Save — means Admin/Registrar reviewing an Archived term
+        // never gets led through a full Generate flow just to be
+        // stopped at the last step.
+        $this->workspace->assertWritable($planningTerm);
+
+        $result = $this->greedy->generateForSection($planningTerm, $validated);
 
         return response()->json($result);
     }
@@ -142,19 +157,19 @@ class MasterGridController extends Controller implements HasMiddleware
             'blocks' => ['required', 'array'],
         ]);
 
-        $activeTerm = AcademicTerm::active()->first();
+        $planningTerm = $this->workspace->getTermForUser(auth()->user());
 
-        abort_unless($activeTerm, 422, 'No active Academic Term.');
+        abort_unless($planningTerm, 422, 'No Planning Academic Term is set. Configure one in Settings > Scheduling Workspace.');
 
         $allBlocks = collect($validated['blocks']);
         $block = $validated['block'];
 
-        $outcome = $this->validator->validateBlock($block, $allBlocks, $activeTerm);
+        $outcome = $this->validator->validateBlock($block, $allBlocks, $planningTerm);
 
         $recommendations = null;
 
         if (! empty($outcome['conflicts'])) {
-            $recommendations = $this->recommender->recommend($block, $allBlocks, $activeTerm);
+            $recommendations = $this->recommender->recommend($block, $allBlocks, $planningTerm);
         }
 
         return response()->json([
@@ -187,13 +202,15 @@ class MasterGridController extends Controller implements HasMiddleware
             'blocks' => ['required', 'array', 'min:1'],
         ]);
 
-        $activeTerm = AcademicTerm::active()->first();
+        $planningTerm = $this->workspace->getTermForUser(auth()->user());
 
-        abort_unless($activeTerm, 422, 'No active Academic Term.');
+        abort_unless($planningTerm, 422, 'No Planning Academic Term is set. Configure one in Settings > Scheduling Workspace.');
+
+        $this->workspace->assertWritable($planningTerm);
 
         $blocks = collect($validated['blocks']);
 
-        $conflictsByOffering = $this->validator->validateAll($blocks, $activeTerm);
+        $conflictsByOffering = $this->validator->validateAll($blocks, $planningTerm);
 
         if (! empty($conflictsByOffering)) {
             return response()->json([
@@ -203,12 +220,12 @@ class MasterGridController extends Controller implements HasMiddleware
         }
 
         try {
-            DB::transaction(function () use ($blocks, $activeTerm) {
+            DB::transaction(function () use ($blocks, $planningTerm) {
                 foreach ($blocks as $block) {
                     Schedule::updateOrCreate(
                         ['subject_offering_id' => $block['subject_offering_id']],
                         [
-                            'academic_term_id' => $activeTerm->id,
+                            'academic_term_id' => $planningTerm->id,
                             'faculty_id' => $block['faculty_id'] ?? null,
                             'room_id' => $block['room_id'],
                             'day' => $block['day'],

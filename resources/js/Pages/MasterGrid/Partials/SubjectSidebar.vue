@@ -1,10 +1,15 @@
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { collegeClasses } from '@/Utils/collegeColors'
 
 const props = defineProps({
     collapsed: { type: Boolean, default: false },
     offerings: { type: Array, default: () => [] },
+    // Offerings already Scheduled/Completed/Archived for this term —
+    // excluded from the tray by default since there's nothing left to
+    // drag for them. Only shown when showScheduled is toggled on. See
+    // MasterGridDataService::scheduledOfferings().
+    scheduledOfferings: { type: Array, default: () => [] },
     collegeColors: { type: Object, default: () => ({}) },
 })
 
@@ -14,7 +19,25 @@ function toggle() {
     emit('update:collapsed', !props.collapsed)
 }
 
-const count = computed(() => props.offerings.length)
+// Off by default — the sidebar's normal job is an unscheduled "drag-in"
+// tray, and most of the time a Registrar doesn't want that cluttered
+// with things that are already done. This is purely a local view
+// preference, not persisted anywhere.
+const showScheduled = ref(false)
+
+// Unscheduled offerings first (these are draggable and are what the
+// Registrar actually still needs to act on), then — only when the
+// toggle is on — the already-Scheduled/Completed/Archived ones
+// appended after, so they read as a distinct, secondary group rather
+// than being shuffled in among the actionable ones.
+const visibleOfferings = computed(() =>
+    showScheduled.value
+        ? [...props.offerings, ...props.scheduledOfferings]
+        : props.offerings
+)
+
+const count = computed(() => visibleOfferings.value.length)
+const scheduledCount = computed(() => props.scheduledOfferings.length)
 </script>
 
 <template>
@@ -35,23 +58,43 @@ const count = computed(() => props.offerings.length)
             </button>
         </div>
 
+        <label
+            v-if="!collapsed && scheduledCount > 0"
+            class="flex items-center gap-1.5 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 shrink-0 text-[10px] font-semibold text-slate-500 cursor-pointer select-none"
+        >
+            <input type="checkbox" v-model="showScheduled" class="rounded" />
+            Show scheduled too ({{ scheduledCount }})
+        </label>
+
         <div v-if="!collapsed" class="flex-1 overflow-y-auto custom-scrollbar-theme p-2 space-y-2">
             <p v-if="count === 0" class="text-xs text-slate-400 text-center py-8">
                 No unscheduled Subject Offerings for this term.
             </p>
 
             <div
-                v-for="offering in offerings"
+                v-for="offering in visibleOfferings"
                 :key="offering.id"
-                class="subject-card rounded-lg border px-2.5 py-2 cursor-grab"
-                :class="[collegeClasses(offering.college_code).bg, collegeClasses(offering.college_code).border]"
-                draggable="true"
+                class="subject-card rounded-lg border px-2.5 py-2"
+                :class="[
+                    collegeClasses(offering.college_code).bg,
+                    collegeClasses(offering.college_code).border,
+                    offering.is_scheduled ? 'opacity-60 cursor-default' : 'cursor-grab',
+                ]"
+                :draggable="!offering.is_scheduled"
             >
                 <div class="flex items-center justify-between gap-2">
                     <p class="font-black text-[12px]" :class="collegeClasses(offering.college_code).text">
                         {{ offering.subject_code }}
+                        <span class="font-bold text-slate-500">· {{ offering.section_code }}</span>
                     </p>
                     <span
+                        v-if="offering.is_scheduled"
+                        class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase border bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-700 dark:border-slate-600"
+                    >
+                        {{ offering.overall_status }}
+                    </span>
+                    <span
+                        v-else
                         class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase border"
                         :class="collegeClasses(offering.college_code).badge"
                     >

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AcademicTermRequest;
 use App\Models\AcademicTerm;
+use App\Services\SemesterTransitionService;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -167,6 +168,21 @@ class AcademicTermController extends Controller implements HasMiddleware
                 ->with('warning', 'The active Academic Term cannot be deleted. Activate another Academic Term first.');
         }
 
+        // Rule 10: Archived terms are permanent historical record —
+        // they can never be deleted, even if they turned out to carry
+        // no scheduling data at all. This is deliberately unconditional
+        // (unlike Rule 9 below): an Archived term represents a semester
+        // that actually happened, and erasing that record — even an
+        // "empty" one — isn't something a Delete button should be able
+        // to do. If a term was archived by mistake, it should be
+        // restored to Draft/Published (a future "Restore" action),
+        // never deleted outright.
+        if ($academicTerm->status === 'Archived') {
+            return redirect()
+                ->route('academic-terms.index')
+                ->with('warning', 'Archived Academic Terms are permanent historical record and cannot be deleted.');
+        }
+
         // Rule 9: Terms already carrying real scheduling data must be
         // archived, not deleted, so that data is never orphaned.
         if ($academicTerm->hasSchedulingData()) {
@@ -180,5 +196,42 @@ class AcademicTermController extends Controller implements HasMiddleware
         return redirect()
             ->route('academic-terms.index')
             ->with('success', 'Academic Term deleted successfully.');
+    }
+
+    /**
+     * The "Archive & Activate Next Term" action behind the Semester
+     * Ended banner (see SemesterTransitionService, and
+     * HandleInertiaRequests' 'semesterTransition' shared prop that
+     * drives when the banner shows at all).
+     *
+     * Deliberately a single POST with no body — there is nothing for
+     * the Admin/Registrar to configure here beyond "yes, close it out
+     * now." Which term gets archived, and which (if any) gets
+     * activated, is entirely derived server-side from the Active/
+     * Planning terms at the moment this is called, so there is no way
+     * to pass the wrong id by accident.
+     *
+     * Re-checks isActiveTermOverdue() itself rather than trusting the
+     * banner was actually showing when this was clicked — the banner
+     * is a convenience, not the source of truth for whether this
+     * action is allowed to run.
+     */
+    public function closeActiveTerm(SemesterTransitionService $transitions)
+    {
+        if (! $transitions->isActiveTermOverdue()) {
+            return back()->with('warning', 'The Active Academic Term has not reached its Class End date yet.');
+        }
+
+        $result = $transitions->closeAndActivate();
+
+        $message = "{$result['archived']->display_name} has been archived.";
+
+        $message .= $result['activated']
+            ? " {$result['activated']->display_name} is now the Active Academic Term."
+            : ' No Planning Academic Term was ready to activate — activate one manually when it is.';
+
+        return redirect()
+            ->route('academic-terms.index')
+            ->with('success', $message);
     }
 }

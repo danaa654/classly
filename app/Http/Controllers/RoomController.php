@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\AcademicTerm;
 use App\Models\Room;
 use App\Models\SubjectOffering;
+use App\Services\RoomCapacityService;
+use App\Services\SchedulingWorkspaceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -15,6 +17,12 @@ use Illuminate\Routing\Controllers\Middleware;
 
 class RoomController extends Controller implements HasMiddleware
 {
+    public function __construct(
+        private readonly SchedulingWorkspaceService $workspace,
+        private readonly RoomCapacityService $capacity
+    ) {
+    }
+
     /**
      * Controller Middleware
      */
@@ -22,6 +30,11 @@ class RoomController extends Controller implements HasMiddleware
     {
         return [
 
+            // Baseline: everyone allowed to touch Rooms at all —
+            // Dean/Assistant Dean/OIC need this for index() (viewing
+            // the master list) and manageSubjects()/syncPreferredSubjects()
+            // (setting THIS TERM's room preferences for their own
+            // department's offerings).
             new Middleware(function ($request, $next) {
 
                 abort_unless(
@@ -40,6 +53,28 @@ class RoomController extends Controller implements HasMiddleware
 
             }),
 
+            // Narrower: the Room's actual master-data record — code,
+            // type, building, floor, capacity, available programs — is
+            // Admin/Registrar-owned inventory, the same way Academic
+            // Terms are (see AcademicTermController). Dean/Assistant
+            // Dean/OIC can view rooms and manage preferences for them,
+            // but must never create, edit, or delete the room record
+            // itself.
+            new Middleware(function ($request, $next) {
+
+                abort_unless(
+                    auth()->user()->hasAnyRole([
+                        'Admin',
+                        'Registrar',
+                    ]),
+                    403,
+                    'Unauthorized. Only Admin and Registrar can manage room records.'
+                );
+
+                return $next($request);
+
+            }, only: ['create', 'store', 'edit', 'update', 'destroy']),
+
         ];
     }
 
@@ -54,7 +89,15 @@ class RoomController extends Controller implements HasMiddleware
      */
     public function index(Request $request)
     {
-        $activeTerm = AcademicTerm::where('active', true)->first();
+        // Admin/Registrar see Room utilization for the Planning
+        // Academic Term (so they can lay out next semester's room
+        // assignments ahead of time); Dean/Assistant Dean/OIC always
+        // see the Active Academic Term — see
+        // SchedulingWorkspaceService::getTermForUser(). Kept as
+        // $activeTerm below (rather than renamed) since it's still
+        // "the one term this page currently cares about," just no
+        // longer unconditionally the literal Active term.
+        $activeTerm = $this->workspace->getTermForUser(auth()->user());
 
         $query = Room::with('roomGroups')->orderBy('room_code');
 
@@ -143,7 +186,17 @@ class RoomController extends Controller implements HasMiddleware
 
             'filters' => $request->only(['search', 'room_type', 'floor', 'room_group']),
 
-            'weeklyCapacityHours' => Room::WEEKLY_CAPACITY_HOURS,
+            'weeklyCapacityHours' => $this->capacity->weeklyCapacityHoursFor($activeTerm),
+
+            // Drives whether Rooms/Index shows "+ New Room" and the
+            // per-row Edit/Delete buttons at all — computed here rather
+            // than the frontend guessing at auth.user.roles, so there's
+            // exactly one place (this flag) that has to agree with the
+            // middleware above restricting create/store/edit/update/
+            // destroy to Admin/Registrar. Manage Subjects is
+            // deliberately NOT gated by this — Dean/Assistant Dean/OIC
+            // still need it to set their department's room preferences.
+            'canManageRooms' => auth()->user()->hasAnyRole(['Admin', 'Registrar']),
 
         ]);
     }
@@ -249,6 +302,22 @@ class RoomController extends Controller implements HasMiddleware
      */
     public function destroy(Room $room)
     {
+        // A Room with real, committed Schedule rows (Master Grid's Save
+        // Schedule step — see Room::schedules(), the hasMany to the
+        // `schedules` table) is actively in use: deleting it out from
+        // under those classes would orphan every one of them. This is
+        // the same "protect committed data, don't just let it vanish"
+        // rule AcademicTermController already applies to Academic Terms
+        // carrying scheduling data — archive/reassign first, don't
+        // delete. Preferred Subject Offerings (the pre-scheduling
+        // wishlist) do NOT block deletion by themselves; only an actual
+        // Schedule row does.
+        if ($room->schedules()->exists()) {
+            return redirect()
+                ->route('rooms.index')
+                ->with('error', "{$room->room_code} has classes already scheduled via Master Grid and cannot be deleted. Reassign or delete those schedules first.");
+        }
+
         $room->delete();
 
         return redirect()
@@ -288,7 +357,10 @@ class RoomController extends Controller implements HasMiddleware
     {
         $room->load('roomGroups');
 
-        $activeTerm = AcademicTerm::where('active', true)->first();
+        // Same role-aware resolution as index() — Admin/Registrar
+        // manage preferences for the Planning term; Dean/Assistant
+        // Dean/OIC see the Active term's preferences only.
+        $activeTerm = $this->workspace->getTermForUser(auth()->user());
 
         $offerings = collect();
         $scheduledHours = 0;
@@ -305,6 +377,12 @@ class RoomController extends Controller implements HasMiddleware
                     'subject.roomGroups',
                     'program:id,code',
                     'section:id,section_code',
+                    // Specialization (e.g. BSCRIM's FB/LD/QD/FI) lives on
+                    // the Curriculum, not the Offering or Section directly —
+                    // see Curriculum::specialization(). Only used for the
+                    // filter dropdown below; most offerings (programs with
+                    // no specializations) will simply resolve this to null.
+                    'curriculum.specialization:id,program_id,code,name',
                 ])
                 ->where('academic_term_id', $activeTerm->id)
                 ->where('room_type', $room->room_type)
@@ -385,6 +463,14 @@ class RoomController extends Controller implements HasMiddleware
                         'program_code' => $offering->program?->code,
                         'year_level' => $offering->year_level,
                         'section_code' => $offering->section?->section_code,
+
+                        // Null for every program that has no
+                        // Specializations defined (BSIT, BSED, BSHM,
+                        // BSTM today) — the modal only renders the
+                        // Specialization filter when at least one
+                        // visible offering actually has one.
+                        'specialization_code' => $offering->curriculum?->specialization?->code,
+                        'specialization_name' => $offering->curriculum?->specialization?->name,
                         'units' => $offering->units,
                         'hours' => $offering->hours,
                         'classification' => $offering->classification,
@@ -421,11 +507,19 @@ class RoomController extends Controller implements HasMiddleware
             'active_academic_term' => $activeTerm ? [
                 'id' => $activeTerm->id,
                 'display_name' => $activeTerm->display_name,
+                // Whether this is literally the Active term or a
+                // Planning draft — lets the Manage Subjects modal
+                // label itself correctly for Admin/Registrar working
+                // ahead of time. Always "Active" for Dean/Assistant
+                // Dean/OIC, since they never resolve to anything else.
+                'scheduling_status' => (($active = $this->workspace->getActiveTerm()) && $active->id === $activeTerm->id)
+                    ? 'Active'
+                    : 'Planning',
             ] : null,
 
             'offerings' => $offerings,
 
-            'weekly_capacity_hours' => Room::WEEKLY_CAPACITY_HOURS,
+            'weekly_capacity_hours' => $this->capacity->weeklyCapacityHoursFor($activeTerm),
 
             // Real, committed hours/count for this room (from
             // `schedules`), alongside the existing preference totals —
@@ -463,9 +557,14 @@ class RoomController extends Controller implements HasMiddleware
             'subject_offering_ids.*' => ['integer', 'exists:subject_offerings,id'],
         ]);
 
-        $activeTerm = AcademicTerm::where('active', true)->first();
+        // Admin/Registrar write against the Planning term (staffing
+        // rooms ahead of time); Dean/Assistant Dean/OIC write against
+        // whatever they're currently viewing — the Active term.
+        $activeTerm = $this->workspace->getTermForUser(auth()->user());
 
-        abort_unless($activeTerm, 422, 'There is no active Academic Term to manage preferences for.');
+        abort_unless($activeTerm, 422, 'There is no Academic Term to manage preferences for. Configure one in Settings > Scheduling Workspace.');
+
+        $this->workspace->assertWritable($activeTerm);
 
         $activeTermOfferingIds = SubjectOffering::where('academic_term_id', $activeTerm->id)
             ->where('room_type', $room->room_type)
@@ -474,6 +573,15 @@ class RoomController extends Controller implements HasMiddleware
         $selectedIds = collect($validated['subject_offering_ids'])
             ->intersect($activeTermOfferingIds)
             ->values();
+
+        // Reject the whole save (nothing gets written) if this
+        // selection would push the room past its term-derived weekly
+        // capacity — see RoomCapacityService. Checked against the
+        // re-validated $selectedIds, not the raw request input, so a
+        // stale/foreign offering id can't be used to dodge the check.
+        $capacityCheck = $this->capacity->checkCapacity($room, $activeTerm, $selectedIds);
+
+        abort_if($capacityCheck['exceeds'], 422, $capacityCheck['message']);
 
         // Only ever touch this term's rows — detach everything this room
         // currently prefers for the active term, then reattach the

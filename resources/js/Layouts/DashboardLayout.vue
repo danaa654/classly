@@ -2,6 +2,7 @@
 import Sidebar from '@/Components/Sidebar.vue'
 import Topbar from '@/Components/Topbar.vue'
 import AppFooter from '@/Components/AppFooter.vue'
+import SemesterTransitionBanner from '@/Components/SemesterTransitionBanner.vue'
 </script>
 
 <template>
@@ -16,6 +17,8 @@ import AppFooter from '@/Components/AppFooter.vue'
     <div class="flex-1 flex flex-col">
 
         <Topbar />
+
+        <SemesterTransitionBanner />
 
         <main class="flex-1 overflow-y-auto p-6">
             <slot />

@@ -427,7 +427,7 @@ class SubjectSeeder extends Seeder
             ['code' => 'SA101', 'title' => 'Systems Administration and Maintenance','lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'IAS101'],
             ['code' => 'CAP102','title' => 'Capstone Project and Research 2',       'lec' => 2, 'lab' => 3, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => 'CAP101'],
             // Prereq "4th Year Standing" (textual) — left null.
-            ['code' => 'SP101', 'title' => 'Social and Professional Issues',        'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Lecture', 'prereq' => null],
+            ['code' => 'SP101', 'title' => 'Social and Professional Issues',        'lec' => 3, 'lab' => 0, 'units' => 3, 'major' => true, 'room' => 'Computer Laboratory', 'prereq' => null],
 
             // PRACTICUM/OJT. Prereq "IAS 101; CC 106" (multiple) — left null. is_practicum
             // intentionally omitted (see header note).
