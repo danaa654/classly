@@ -1,9 +1,11 @@
 <script setup>
 import { computed, ref } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AssignSubjectModal from './Partials/AssignSubjectModal.vue';
 import CircularLoadIndicator from './Partials/CircularLoadIndicator.vue';
+import OverloadRequestModal from './Partials/OverloadRequestModal.vue';
+import PendingOverloadsPanel from './Partials/PendingOverloadsPanel.vue';
 
 const props = defineProps({
     planningTerm: { type: Object, default: null },
@@ -11,7 +13,26 @@ const props = defineProps({
     departments: { type: Array, required: true },
     teachingAssignments: { type: Array, required: true },
     subjectOfferings: { type: Array, required: true },
+    pendingOverloadRequests: { type: Array, default: () => [] },
+    recentActivity: { type: Array, default: () => [] },
 });
+
+/*
+|--------------------------------------------------------------------------
+| Faculty Load Overload — role check
+|--------------------------------------------------------------------------
+|
+| Admin/Registrar requests auto-approve immediately; Dean/Assistant
+| Dean/OIC requests land as pending — mirrors
+| FacultyLoadOverloadService's own role check server-side. This is
+| purely for copy/labels in the UI; the server re-validates
+| independently regardless of what's sent here.
+*/
+
+const currentUserRoles = computed(() => usePage().props.auth?.user?.roles ?? []);
+const isAdminOrRegistrar = computed(
+    () => currentUserRoles.value.includes('Admin') || currentUserRoles.value.includes('Registrar')
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -115,6 +136,49 @@ function scheduleOf(assignment) {
     return assignment.schedule ?? null;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Recent Activity
+|--------------------------------------------------------------------------
+|
+| "Just now" / "5m ago" / "3h ago" / "2d ago" for each entry in
+| props.recentActivity — small and dependency-free rather than pulling
+| in a date library for one relative-time string (mirrors the same
+| helper in Topbar.vue).
+*/
+
+function timeAgo(isoString) {
+    const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+}
+
+function activityFacultyName(entry) {
+    return entry.faculty?.full_name ?? entry.faculty_name_snapshot ?? 'a faculty member';
+}
+
+function activitySubjectTitle(entry) {
+    return entry.subject_offering?.subject?.descriptive_title ?? entry.subject_snapshot ?? 'a subject';
+}
+
+function activityEdpCode(entry) {
+    return entry.subject_offering?.edp_code ?? entry.edp_code_snapshot ?? null;
+}
+
+function isOverloadActivity(entry) {
+    return entry.action === 'overload_added';
+}
+
+function activityDotClass(entry) {
+    if (isOverloadActivity(entry)) return 'bg-sky-500';
+    return entry.action === 'assigned' ? 'bg-emerald-500' : 'bg-red-500';
+}
+
 function formatMinutes(minutes) {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
@@ -183,9 +247,18 @@ function minorLoad(facultyId) {
         .reduce((sum, a) => sum + unitsOf(a), 0);
 }
 
+// effective_max_units (max_units + any APPROVED Faculty Load
+// Overload) is what actually governs load display and eligibility —
+// falls back to max_units for safety if the prop hasn't been
+// hydrated with it for some reason.
+function effectiveMaxUnits(faculty) {
+    return faculty.effective_max_units ?? faculty.max_units;
+}
+
 function loadPercent(faculty) {
-    if (!faculty.max_units) return 0;
-    return (totalLoad(faculty.id) / faculty.max_units) * 100;
+    const cap = effectiveMaxUnits(faculty);
+    if (!cap) return 0;
+    return (totalLoad(faculty.id) / cap) * 100;
 }
 
 /*
@@ -245,9 +318,10 @@ function checkEligibility(faculty, offering) {
 
     const incomingUnits = subject?.units ?? 0;
     const projectedLoad = totalLoad(faculty.id) + incomingUnits;
+    const cap = effectiveMaxUnits(faculty);
 
-    if (projectedLoad > faculty.max_units) {
-        return { ok: false, reason: `Exceeds max units (${projectedLoad}/${faculty.max_units})` };
+    if (projectedLoad > cap) {
+        return { ok: false, reason: `Exceeds max units (${projectedLoad}/${cap})` };
     }
 
     return { ok: true, reason: null };
@@ -507,6 +581,22 @@ const modalOfferings = computed(() => {
     });
 });
 
+/*
+|--------------------------------------------------------------------------
+| Overload Request modal
+|--------------------------------------------------------------------------
+*/
+
+const showOverloadModal = ref(false);
+
+function openOverloadModal() {
+    showOverloadModal.value = true;
+}
+
+function closeOverloadModal() {
+    showOverloadModal.value = false;
+}
+
 function openAssignModal() {
     assignError.value = null;
     assignSuccess.value = null;
@@ -673,6 +763,9 @@ function handleUnassign(offering) {
                     </div>
                 </div>
 
+                <!-- Pending Overload Requests — Admin/Registrar only -->
+                <PendingOverloadsPanel v-if="isAdminOrRegistrar" :requests="pendingOverloadRequests" />
+
                 <div class="flex-1 overflow-y-auto p-2 custom-scrollbar-theme">
                     <p v-if="filteredFaculties.length === 0" class="px-2 py-6 text-center text-sm text-[var(--text-muted)]">
                         No faculty match your filters.
@@ -703,7 +796,8 @@ function handleUnassign(offering) {
                             </p>
                             <p class="truncate text-xs text-[var(--text-muted)]">{{ scopeLabels[faculty.faculty_scope] }}</p>
                             <p class="mt-0.5 text-xs font-medium text-[var(--text-secondary)]">
-                                {{ totalLoad(faculty.id) }} / {{ faculty.max_units }} units
+                                {{ totalLoad(faculty.id) }} / {{ effectiveMaxUnits(faculty) }} units
+                                <span v-if="faculty.approved_overload_units" class="text-emerald-600 dark:text-emerald-400">(+{{ faculty.approved_overload_units }})</span>
                             </p>
                         </div>
                     </button>
@@ -937,17 +1031,83 @@ function handleUnassign(offering) {
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-center text-center" style="min-height: 20vh;">
-                        <div>
-                            <div class="text-4xl">🧑‍🏫</div>
-                            <p class="mt-3 text-sm text-[var(--text-muted)]">
-                                Select a faculty member from the roster to view and manage their load.
+                    <!-- Recent Activity — this whole block only ever
+                         renders while no faculty is selected (see the
+                         v-if="!selectedFaculty" on the parent div), so
+                         it disappears the moment someone clicks a
+                         faculty in the roster and reappears when they
+                         click "Department Overview" again. -->
+                    <div class="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-sm transition-all duration-300 hover:shadow-md">
+                        <p class="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            Recent Activity
+                        </p>
+
+                        <div v-if="!recentActivity.length" class="flex items-center justify-center py-8 text-center">
+                            <p class="text-xs text-[var(--text-muted)]">
+                                No faculty loading activity yet this term.
                             </p>
                         </div>
+
+                        <ul v-else class="divide-y divide-[var(--card-border)]">
+                            <li
+                                v-for="entry in recentActivity"
+                                :key="entry.id"
+                                class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+                            >
+                                <span
+                                    class="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                                    :class="activityDotClass(entry)"
+                                ></span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-xs leading-snug text-[var(--text-primary)]">
+                                        <template v-if="isOverloadActivity(entry)">
+                                            <span class="font-semibold">{{ entry.performed_by?.name ?? 'Someone' }}</span>
+                                            added
+                                            <span class="font-semibold">{{ entry.units }} overload units</span>
+                                            to
+                                            <span class="font-semibold">{{ activityFacultyName(entry) }}</span>'s load
+                                        </template>
+                                        <template v-else>
+                                            <span class="font-semibold">{{ entry.performed_by?.name ?? 'Someone' }}</span>
+                                            {{ entry.action === 'assigned' ? 'assigned' : 'removed' }}
+                                            <span class="font-semibold">{{ activityFacultyName(entry) }}</span>
+                                            {{ entry.action === 'assigned' ? 'to' : 'from' }}
+                                            <span class="font-semibold">{{ activitySubjectTitle(entry) }}</span>
+                                            <span v-if="activityEdpCode(entry)" class="text-[var(--text-muted)]">
+                                                ({{ activityEdpCode(entry) }})
+                                            </span>
+                                        </template>
+                                    </p>
+                                    <p class="mt-0.5 text-[10px] text-[var(--text-muted)]">
+                                        {{ timeAgo(entry.created_at) }}
+                                    </p>
+                                </div>
+                            </li>
+                        </ul>
                     </div>
                 </div>
 
                 <template v-else>
+                    <!-- Back to Overview — clears the selected faculty so
+                         the Department Overview (including Recent
+                         Activity, which only renders in that empty
+                         state) is visible again. -->
+                    <button
+                        type="button"
+                        class="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--text-secondary)] transition-colors duration-150 hover:text-[var(--text-primary)]"
+                        @click="selectedFacultyId = null"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                            <path d="M19 12H5"></path>
+                            <path d="M12 19l-7-7 7-7"></path>
+                        </svg>
+                        Back to Overview
+                    </button>
+
                     <!-- Faculty Info Header -->
                     <div class="mb-6 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-sm">
                         <div class="flex flex-wrap items-start justify-between gap-4">
@@ -984,9 +1144,18 @@ function handleUnassign(offering) {
                             <div class="flex items-center gap-4">
                                 <CircularLoadIndicator :percent="loadPercent(selectedFaculty)" :size="72" :stroke-width="7" />
                                 <div class="text-sm">
-                                    <p class="text-[var(--text-muted)]">Max Units <span class="font-semibold text-[var(--text-primary)]">{{ selectedFaculty.max_units }}</span></p>
+                                    <p class="text-[var(--text-muted)]">
+                                        Max Units
+                                        <span class="font-semibold text-[var(--text-primary)]">{{ effectiveMaxUnits(selectedFaculty) }}</span>
+                                        <span v-if="selectedFaculty.approved_overload_units" class="text-xs text-emerald-600 dark:text-emerald-400">
+                                            ({{ selectedFaculty.max_units }} + {{ selectedFaculty.approved_overload_units }} overload)
+                                        </span>
+                                    </p>
                                     <p class="text-[var(--text-muted)]">Current <span class="font-semibold text-[var(--text-primary)]">{{ totalLoad(selectedFaculty.id) }}</span></p>
-                                    <p class="text-[var(--text-muted)]">Remaining <span class="font-semibold text-[var(--text-primary)]">{{ Math.max(selectedFaculty.max_units - totalLoad(selectedFaculty.id), 0) }}</span></p>
+                                    <p class="text-[var(--text-muted)]">Remaining <span class="font-semibold text-[var(--text-primary)]">{{ Math.max(effectiveMaxUnits(selectedFaculty) - totalLoad(selectedFaculty.id), 0) }}</span></p>
+                                    <p v-if="selectedFaculty.pending_overload_units" class="mt-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                        +{{ selectedFaculty.pending_overload_units }} overload pending review
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -1015,7 +1184,7 @@ function handleUnassign(offering) {
                         <div class="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Total Load</p>
                             <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">
-                                {{ totalLoad(selectedFaculty.id) }} / {{ selectedFaculty.max_units }}
+                                {{ totalLoad(selectedFaculty.id) }} / {{ effectiveMaxUnits(selectedFaculty) }}
                             </p>
                             <p class="text-xs text-[var(--text-muted)]">Units</p>
                         </div>
@@ -1032,7 +1201,7 @@ function handleUnassign(offering) {
                         <div class="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Remaining Capacity</p>
                             <p class="mt-1 text-xl font-bold text-[var(--text-primary)]">
-                                {{ Math.max(selectedFaculty.max_units - totalLoad(selectedFaculty.id), 0) }}
+                                {{ Math.max(effectiveMaxUnits(selectedFaculty) - totalLoad(selectedFaculty.id), 0) }}
                             </p>
                             <p class="text-xs text-[var(--text-muted)]">Units</p>
                         </div>
@@ -1063,14 +1232,25 @@ function handleUnassign(offering) {
                     <div class="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-sm">
                         <div class="flex items-center justify-between border-b border-[var(--card-border)] px-6 py-4">
                             <h3 class="text-base font-bold text-[var(--text-primary)]">Assigned Subjects</h3>
-                            <button
-                                type="button"
-                                :disabled="!planningTerm || loadPercent(selectedFaculty) >= 100 || !selectedFaculty.status"
-                                class="btn-save"
-                                @click="openAssignModal"
-                            >
-                                + Manage Load
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    :disabled="!selectedFaculty.status || selectedFaculty.available_overload_units === 0"
+                                    class="inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                    :title="selectedFaculty.available_overload_units === 0 ? 'Already at the overload cap' : ''"
+                                    @click="openOverloadModal"
+                                >
+                                    + Add Units
+                                </button>
+                                <button
+                                    type="button"
+                                    :disabled="!planningTerm || loadPercent(selectedFaculty) >= 100 || !selectedFaculty.status"
+                                    class="btn-save"
+                                    @click="openAssignModal"
+                                >
+                                    + Manage Load
+                                </button>
+                            </div>
                         </div>
 
                         <p v-if="!planningTerm" class="px-6 py-6 text-sm text-[var(--text-muted)]">
@@ -1184,6 +1364,14 @@ function handleUnassign(offering) {
             @close="closeAssignModal"
             @assign="handleAssign"
             @unassign="handleUnassign"
+        />
+
+        <!-- ==================== OVERLOAD REQUEST MODAL ==================== -->
+        <OverloadRequestModal
+            v-if="showOverloadModal && selectedFaculty"
+            :faculty="selectedFaculty"
+            :is-unscoped="isAdminOrRegistrar"
+            @close="closeOverloadModal"
         />
     </AppLayout>
 </template>

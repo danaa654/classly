@@ -266,6 +266,27 @@ class SubjectOffering extends Model
             return 'Assigned';
         }
 
+        // A committed Master Grid schedule (`schedules.room_id`) is the
+        // strongest possible signal a room is assigned — it means this
+        // offering is not merely preferred for a room, it is ACTUALLY
+        // meeting there, on a real day/time. This must be checked
+        // BEFORE the Room Preferences pivot below: an offering the
+        // Greedy Scheduler auto-picked a room for (rather than one a
+        // Registrar manually preferred beforehand via Manage Subjects)
+        // never gets a room_subject_offering row at all, so relying on
+        // that pivot alone left a fully Scheduled offering's Room
+        // column reading "Unassigned" — directly contradicting its own
+        // overall_status of "Scheduled" just one column over, since
+        // hasScheduleAssigned() below already correctly consults this
+        // same `schedules` table.
+        if (
+            Schema::hasTable('schedules')
+            && Schema::hasColumn('schedules', 'room_id')
+            && DB::table('schedules')->where('subject_offering_id', $this->id)->whereNotNull('room_id')->exists()
+        ) {
+            return 'Assigned';
+        }
+
         // Room Preferences module (Rooms > Manage Subjects) — a Room
         // preferring this Offering via the room_subject_offering pivot
         // (see Room::preferredSubjectOfferings()) counts as a Room

@@ -90,6 +90,28 @@ function dividesEvenly(row) {
     return row.total_hours_per_week > 0 && row.total_hours_per_week % row.meetings_per_week === 0
 }
 
+/**
+ * Suggested meetings/week, based on total weekly hours alone:
+ * 1–2 hrs -> 1x, 3–4 hrs -> 2x, 5+ hrs -> 3x. This is a HINT only — it
+ * never overwrites row.meetings_per_week on its own; the Registrar
+ * still picks the actual value via the dropdown (see applyRecommended()
+ * below for the one-click "take this suggestion" action).
+ */
+function recommendedMeetings(row) {
+    const hours = row.total_hours_per_week
+
+    if (!hours) return null
+    if (hours <= 2) return 1
+    if (hours <= 4) return 2
+    return 3
+}
+
+/** Applies the suggested value from recommendedMeetings() to this row. */
+function applyRecommended(row) {
+    const suggestion = recommendedMeetings(row)
+    if (suggestion) row.meetings_per_week = suggestion
+}
+
 /** Subjects that need a warning banner before Generate is allowed to run. */
 const unresolvedWarnings = computed(() =>
     subjectList.value.filter((row) => !row.has_qualified_faculty)
@@ -235,6 +257,15 @@ function generate() {
                                     >
                                         <option v-for="n in MEETING_OPTIONS" :key="n" :value="n">{{ n }}x</option>
                                     </select>
+                                    <button
+                                        v-if="recommendedMeetings(row) && recommendedMeetings(row) !== row.meetings_per_week"
+                                        type="button"
+                                        class="block mt-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                                        :title="`Based on ${row.total_hours_per_week} hrs/week`"
+                                        @click="applyRecommended(row)"
+                                    >
+                                        Suggested: {{ recommendedMeetings(row) }}x
+                                    </button>
                                 </td>
 
                                 <td class="px-3 py-2 align-top" :class="!dividesEvenly(row) ? 'text-amber-600 font-semibold' : ''">

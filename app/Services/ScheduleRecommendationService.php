@@ -136,9 +136,15 @@ class ScheduleRecommendationService
                     'full_name' => $faculty->full_name,
                     'department_id' => $faculty->department_id,
                     'current_load' => $load,
-                    'max_units' => $faculty->max_units,
+                    // effective_max_units (base max_units + any APPROVED
+                    // Faculty Load Overload) — matches the cap
+                    // TeachingAssignmentService and GreedyScheduleService
+                    // both enforce, so this suggestion label never shows a
+                    // faculty member as "over" a cap they've actually been
+                    // approved to exceed.
+                    'max_units' => $faculty->effective_max_units,
                     'same_department' => $faculty->department_id === $departmentId,
-                    'label' => "{$faculty->full_name} — Current Load: {$load}/{$faculty->max_units} units",
+                    'label' => "{$faculty->full_name} — Current Load: {$load}/{$faculty->effective_max_units} units",
                 ];
             })
             ->sort(function ($a, $b) {

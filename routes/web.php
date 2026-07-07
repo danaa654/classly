@@ -17,6 +17,7 @@ use App\Http\Controllers\RoomController;
 use App\Http\Controllers\SectionController;
 use App\Http\Controllers\AcademicTermController;
 use App\Http\Controllers\TeachingAssignmentController;
+use App\Http\Controllers\FacultyLoadOverloadController;
 use App\Http\Controllers\MasterGridController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
@@ -314,6 +315,35 @@ Route::middleware(['auth'])->group(function () {
 
         /*
         |--------------------------------------------------------------------------
+        | Faculty Load Overload
+        |--------------------------------------------------------------------------
+        |
+        | Request to raise ONE faculty member's effective teaching cap
+        | above their normal max_units — for short-staffed departments
+        | (e.g. CCS) that don't have enough faculty to keep everyone
+        | under the standard 24-unit ceiling. Anyone who can manage
+        | Faculty Loading can submit a request here; Admin/Registrar
+        | requests auto-approve immediately, Dean/Assistant Dean/OIC
+        | requests land as pending — see FacultyLoadOverloadService.
+        | Approving/declining a pending request is Admin/Registrar
+        | only, registered separately below alongside the other
+        | Admin|Registrar-only scheduling actions.
+        */
+
+        Route::post('faculty-load-overloads', [FacultyLoadOverloadController::class, 'store'])
+            ->name('faculty-load-overloads.store');
+
+        // Dismiss/mark-read for the "your request was reviewed"
+        // notification — any of this group's roles may dismiss their
+        // OWN notification (see markNotificationRead()'s scoping).
+        Route::post('faculty-load-overloads/notifications/{notification}/read', [FacultyLoadOverloadController::class, 'markNotificationRead'])
+            ->name('faculty-load-overloads.notifications.read');
+
+        Route::post('faculty-load-overloads/notifications/read-all', [FacultyLoadOverloadController::class, 'markAllNotificationsRead'])
+            ->name('faculty-load-overloads.notifications.read-all');
+
+        /*
+        |--------------------------------------------------------------------------
         | Master Grid Scheduling Workspace
         |--------------------------------------------------------------------------
         |
@@ -347,6 +377,15 @@ Route::middleware(['auth'])->group(function () {
         */
 
         Route::middleware('role:Admin|Registrar')->group(function () {
+
+            // Faculty Load Overload — review queue. A Dean/Assistant
+            // Dean/OIC hitting these directly still 403s here, even
+            // though they can reach faculty-load-overloads.store above.
+            Route::post('faculty-load-overloads/{facultyLoadOverload}/approve', [FacultyLoadOverloadController::class, 'approve'])
+                ->name('faculty-load-overloads.approve');
+
+            Route::post('faculty-load-overloads/{facultyLoadOverload}/decline', [FacultyLoadOverloadController::class, 'decline'])
+                ->name('faculty-load-overloads.decline');
 
             // Generate Schedule — Step 2 (Session Settings). GET fetches
             // the section's Subject Offerings + eligible faculty/rooms

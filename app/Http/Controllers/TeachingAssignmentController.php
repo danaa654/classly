@@ -6,6 +6,8 @@ use App\Http\Requests\TeachingAssignmentRequest;
 use App\Models\AcademicTerm;
 use App\Models\Department;
 use App\Models\Faculty;
+use App\Models\FacultyLoadActivity;
+use App\Models\FacultyLoadOverload;
 use App\Models\SubjectOffering;
 use App\Models\TeachingAssignment;
 use App\Models\User;
@@ -100,7 +102,12 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
 
             'planningTerm' => $planningTerm,
 
-            'faculties' => Faculty::with('department')
+            // 'loadOverloads' is eager-loaded here (not just fetched on
+            // demand) so every faculty card/row can show
+            // effective_max_units, approved_overload_units, etc.
+            // without an N+1 query — see Faculty's accessors, which
+            // prefer the already-loaded collection when present.
+            'faculties' => Faculty::with(['department', 'loadOverloads'])
                 ->when($departmentId, fn ($query) => $query->where(
                     fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
                 ))
@@ -169,6 +176,40 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
                     ->get()
                 : [],
 
+            // Faculty Load Overload requests still awaiting review —
+            // populated ONLY for Admin/Registrar (mirrors
+            // 'academicTermsForSwitcher' in HandleInertiaRequests: an
+            // empty array for everyone else keeps the review panel
+            // from rendering at all for Dean/Assistant Dean/OIC, who
+            // can submit requests but never approve/decline them).
+            'pendingOverloadRequests' => auth()->user()->hasAnyRole(['Admin', 'Registrar'])
+                ? FacultyLoadOverload::with(['faculty', 'requestedBy'])
+                    ->pending()
+                    ->orderBy('created_at')
+                    ->get()
+                : [],
+
+            // "Recent Activity" feed for the Faculty Loading overview
+            // — shown only in the empty state before any faculty is
+            // selected (see Index.vue's `v-if="!selectedFaculty"`
+            // panel). Scoped to the same faculty set as the roster
+            // above, so a Dean never sees activity for faculty they
+            // can't even manage. Not filtered by academic term: a
+            // scoped manager's history of who-assigned-what is useful
+            // context regardless of which term is currently being
+            // staffed, and the volume here is naturally low enough
+            // that a flat "most recent 15" needs no further filtering.
+            // See FacultyLoadActivity, and the logActivity() calls in
+            // store()/destroy() below for what writes into it.
+            'recentActivity' => FacultyLoadActivity::with(['faculty', 'subjectOffering.subject', 'overload', 'performedBy'])
+                ->when($departmentId, fn ($query) => $query->whereHas(
+                    'faculty',
+                    fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
+                ))
+                ->latest('created_at')
+                ->limit(15)
+                ->get(),
+
         ]);
     }
 
@@ -194,7 +235,14 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
 
         $this->service->assertBusinessRules($validated);
 
+        // Fetched here (not just referenced by ID) so logActivity()
+        // below has the subject's title/edp_code available for its
+        // snapshot without a second round trip.
+        $offering = SubjectOffering::with('subject')->find($validated['subject_offering_id']);
+
         TeachingAssignment::create($validated);
+
+        $this->logActivity(FacultyLoadActivity::ACTION_ASSIGNED, $faculty, $offering);
 
         return redirect()
             ->route('teaching-assignments.index')
@@ -210,9 +258,40 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
 
         $this->workspace->assertWritable($teachingAssignment->subjectOffering?->academicTerm);
 
+        // Captured before delete() — once the row is gone,
+        // $teachingAssignment->faculty/subjectOffering would still
+        // resolve via the FK columns still in memory, but grabbing
+        // them explicitly here keeps the intent obvious and safe
+        // against any future change to those accessors.
+        $faculty = $teachingAssignment->faculty;
+        $offering = $teachingAssignment->subjectOffering;
+
         $teachingAssignment->delete();
 
+        $this->logActivity(FacultyLoadActivity::ACTION_UNASSIGNED, $faculty, $offering);
+
         return back()->with('success', 'Assignment removed successfully.');
+    }
+
+    /**
+     * Write one row to the Faculty Loading audit trail. Snapshot
+     * columns are filled in alongside the live FKs so the Recent
+     * Activity feed keeps reading correctly even if the faculty
+     * member or subject offering referenced here is deleted later —
+     * see FacultyLoadActivity and its migration.
+     */
+    private function logActivity(string $action, ?Faculty $faculty, ?SubjectOffering $offering): void
+    {
+        FacultyLoadActivity::create([
+            'faculty_id' => $faculty?->id,
+            'subject_offering_id' => $offering?->id,
+            'performed_by' => auth()->id(),
+            'action' => $action,
+            'faculty_name_snapshot' => $faculty?->full_name,
+            'subject_snapshot' => $offering?->subject?->descriptive_title,
+            'edp_code_snapshot' => $offering?->edp_code,
+            'created_at' => now(),
+        ]);
     }
 
     /**

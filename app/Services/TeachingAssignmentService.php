@@ -177,9 +177,17 @@ class TeachingAssignmentService
         $incomingUnits = $offering->subject->units ?? 0;
         $projectedLoad = $currentLoad + $incomingUnits;
 
-        if ($projectedLoad > $faculty->max_units) {
+        // effective_max_units is max_units plus any APPROVED Faculty
+        // Load Overload (see Faculty::getEffectiveMaxUnitsAttribute())
+        // — a short-staffed department (e.g. CCS) may have raised this
+        // faculty member's real cap above the standard 24 units, and
+        // that raised cap is what actually governs assignment here,
+        // not the base column.
+        $cap = $faculty->effective_max_units;
+
+        if ($projectedLoad > $cap) {
             throw ValidationException::withMessages([
-                'faculty_id' => "This assignment would push {$faculty->full_name}'s load to {$projectedLoad} units, exceeding their maximum of {$faculty->max_units} units.",
+                'faculty_id' => "This assignment would push {$faculty->full_name}'s load to {$projectedLoad} units, exceeding their maximum of {$cap} units.",
             ]);
         }
     }

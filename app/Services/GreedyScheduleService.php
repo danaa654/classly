@@ -346,13 +346,36 @@ class GreedyScheduleService
     /**
      * Priority, highest first:
      *   1. Subjects with an assigned faculty (from Faculty Loading)
-     *   2. Laboratory subjects
-     *   3. Major subjects
-     *   4. Minor subjects
+     *   2. Among the rest, subjects with the FEWEST scope-eligible
+     *      auto-search faculty candidates ("scarcity") — see the note
+     *      below on why this was added.
+     *   3. Laboratory subjects
+     *   4. Major subjects
+     *   5. Minor subjects
      *
      * Implemented as a rank tuple per offering (0 = higher priority),
      * compared elementwise — PHP's <=> on equal-length arrays compares
      * index by index, so [0,1,0] sorts before [0,1,1], etc.
+     *
+     * ── Why scarcity was added ────────────────────────────────────
+     * Without it, two subjects needing the SAME small pool of eligible
+     * faculty (e.g. two CCS Major subjects with only 2-3 Departmental/
+     * Cross-Department faculty who qualify) were ordered by nothing
+     * more than lab/major/minor — purely incidental. Whichever one
+     * happened to sort first could claim the only faculty member with
+     * a free slot, even though it also had OTHER acceptable
+     * candidates, while the second subject — which had NO other viable
+     * candidate at all — was left with "No conflict-free day/time/room
+     * combination found" purely because it was processed second. This
+     * is exactly what happened to CAP102/SP101 after IAS102/SA101 had
+     * already claimed the two available CCS faculty ahead of them.
+     *
+     * Scarcity-first means the subject with the narrowest pool of
+     * eligible faculty is placed FIRST, while more flexible subjects
+     * are deliberately pushed later — a more flexible subject has more
+     * fallback options left over even if it goes last, whereas a
+     * scarce subject has none. This is still greedy (no backtracking),
+     * it just orders the greedy pass to fail less often.
      */
     private function applyPriorityOrder(Collection $offerings): Collection
     {
@@ -364,10 +387,23 @@ class GreedyScheduleService
     private function priorityRank(SubjectOffering $offering): array
     {
         $hasFaculty = $this->resolveAssignedFaculty($offering) ? 0 : 1;
+
+        // Only worth computing for offerings that will actually go
+        // through the auto-search (hasFaculty === 1) — an already-
+        // assigned offering's scarcity is irrelevant to its own rank,
+        // so this is left at 0 for those to avoid an unnecessary query.
+        // Uses an empty $facultyLoad on purpose: this is a scope-only
+        // eligibility count (faculty_scope/department/classification),
+        // which never depends on anyone's current load — only
+        // findPlacement()'s later, load-aware pass does.
+        $scarcity = $hasFaculty === 1
+            ? $this->resolveAutoFacultyCandidates($offering, [])->count()
+            : 0;
+
         $isLab = strtolower((string) $offering->room_type) === 'laboratory' ? 0 : 1;
         $isMajor = $offering->classification === SubjectOffering::CLASSIFICATION_MAJOR ? 0 : 1;
 
-        return [$hasFaculty, $isLab, $isMajor];
+        return [$hasFaculty, $scarcity, $isLab, $isMajor];
     }
 
     /*
@@ -984,13 +1020,26 @@ class GreedyScheduleService
 
     private function exceedsMaxLoad(Faculty $faculty, array $facultyLoad, int $additionalUnits): bool
     {
-        if (! $faculty->max_units) {
+        // Must match the cap TeachingAssignmentService::assertWithinMaxUnits()
+        // enforces for manual "Assign Subject" — effective_max_units (base
+        // max_units PLUS any APPROVED Faculty Load Overload — see
+        // Faculty::getEffectiveMaxUnitsAttribute()), not the raw max_units
+        // column. Comparing against max_units alone meant a faculty member
+        // with approved overload (e.g. 24 base + 9 overload = 33) who was
+        // already carrying load between 24 and 33 units got treated here as
+        // permanently over-capacity — excluded from every placement attempt,
+        // even though they were well within their real, approved cap. That
+        // silently starved the room/day/time search of otherwise-eligible
+        // faculty, which is what produced "No conflict-free day/time/room
+        // combination found" even when a valid faculty/slot combination did
+        // in fact exist.
+        if (! $faculty->effective_max_units) {
             return false;
         }
 
         $currentLoad = $facultyLoad[$faculty->id] ?? 0;
 
-        return ($currentLoad + $additionalUnits) > $faculty->max_units;
+        return ($currentLoad + $additionalUnits) > $faculty->effective_max_units;
     }
 
     /**

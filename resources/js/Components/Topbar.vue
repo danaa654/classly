@@ -42,10 +42,89 @@ function closeMenu() {
     menuOpen.value = false
 }
 
-// TODO: wire this up to a real notifications count once that feature
-// exists (e.g. page.props.unreadNotificationsCount). Left as a static
-// false for now so the bell renders without a badge.
-const unreadNotifications = computed(() => page.props.unreadNotificationsCount > 0)
+/*
+|--------------------------------------------------------------------------
+| Notifications — Faculty Load Overload
+|--------------------------------------------------------------------------
+|
+| Shared on every page by HandleInertiaRequests as
+| page.props.overloadNotifications (unread only, current user only).
+| Three shapes flow through this one list — distinguished by
+| notification.type:
+|
+|   - ...FacultyLoadOverloadRequested        — sent to Admin/Registrar
+|     when a Dean/Assistant Dean/OIC submits a new request. Clicking
+|     one jumps to Faculty Loading so it can actually be
+|     approved/declined there.
+|   - ...FacultyLoadOverloadReviewed         — sent to the requester
+|     once Admin/Registrar approves or declines. Read-only, dismiss
+|     only.
+|   - ...FacultyLoadOverloadAppliedByAdmin   — sent to a department's
+|     Dean/OIC when Admin/Registrar directly adds overload units to
+|     one of their faculty. Read-only, dismiss only — nothing to
+|     approve, it's already applied.
+|
+| If other notification types get added later, this is the one place
+| that needs to grow to merge them in.
+*/
+
+const notifications = computed(() => page.props.overloadNotifications ?? [])
+const unreadNotifications = computed(() => notifications.value.length > 0)
+
+function isRequestNotification(notification) {
+    return notification.type?.endsWith('FacultyLoadOverloadRequested')
+}
+
+function isAppliedNotification(notification) {
+    return notification.type?.endsWith('FacultyLoadOverloadAppliedByAdmin')
+}
+
+const notificationsOpen = ref(false)
+
+function toggleNotifications() {
+    notificationsOpen.value = !notificationsOpen.value
+}
+
+function closeNotifications() {
+    notificationsOpen.value = false
+}
+
+function dismissNotification(notification) {
+    router.post(route('faculty-load-overloads.notifications.read', notification.id), {}, {
+        preserveScroll: true,
+        preserveState: true,
+    })
+}
+
+function markAllNotificationsRead() {
+    router.post(route('faculty-load-overloads.notifications.read-all'), {}, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => { notificationsOpen.value = false },
+    })
+}
+
+// A pending-request notification is actionable — clicking it dismisses
+// it and takes the reviewer straight to Faculty Loading, where the
+// PendingOverloadsPanel actually has the Approve/Decline controls.
+function goToFacultyLoading(notification) {
+    dismissNotification(notification)
+    notificationsOpen.value = false
+    router.visit(route('teaching-assignments.index'))
+}
+
+// "Just now" / "5m ago" / "3h ago" / "2d ago" — small and dependency-free
+// rather than pulling in a date library for one relative-time string.
+function timeAgo(isoString) {
+    const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000)
+    if (seconds < 60) return 'Just now'
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    return `${days}d ago`
+}
 </script>
 
 <template>
@@ -114,17 +193,12 @@ const unreadNotifications = computed(() => page.props.unreadNotificationsCount >
                 </div>
             </div>
 
-            <!-- Working Academic Term — the scheduling workspace switcher.
-                 Visible to every authenticated user (Faculty need to know
-                 which term's schedules they're looking at), but the dropdown
-                 itself only opens for Admin/Registrar, since
-                 switcherOptions is empty for everyone else. -->
-            <div v-if="workingAcademicTerm || canSwitchWorkingTerm" class="relative brand-font">
+            <!-- Working Academic Term — the scheduling workspace switcher. -->
+            <div class="relative">
                 <button
                     type="button"
-                    class="flex items-center gap-1.5 sm:gap-2 rounded-full border px-2.5 sm:px-3 py-1 sm:py-1.5 transition-colors"
-                    :class="canSwitchWorkingTerm ? 'cursor-pointer hover:bg-indigo-500/10' : 'cursor-default'"
-                    style="background: rgba(99, 102, 241, 0.10); border-color: rgba(99, 102, 241, 0.3)"
+                    class="flex items-center gap-1.5 sm:gap-2 rounded-full border px-2.5 sm:px-3 py-1 sm:py-1.5 brand-font"
+                    style="background: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.25)"
                     @click="toggleMenu"
                 >
                     <span
@@ -195,25 +269,138 @@ const unreadNotifications = computed(() => page.props.unreadNotificationsCount >
             <ThemeToggle />
 
             <!-- Notifications -->
-            <button
-                type="button"
-                class="relative flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition-colors duration-150 hover:text-white hover:bg-white/10"
-                aria-label="Notifications"
-            >
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                    />
-                </svg>
-                <span
-                    v-if="unreadNotifications"
-                    class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2"
-                    style="--tw-ring-color: var(--sidebar-bg)"
-                ></span>
-            </button>
+            <div class="relative">
+                <button
+                    type="button"
+                    class="relative flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition-colors duration-150 hover:text-white hover:bg-white/10"
+                    aria-label="Notifications"
+                    @click="toggleNotifications"
+                >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                        />
+                    </svg>
+                    <span
+                        v-if="unreadNotifications"
+                        class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2"
+                        style="--tw-ring-color: var(--sidebar-bg)"
+                    ></span>
+                </button>
+
+                <!-- Backdrop to close the dropdown on outside click -->
+                <div v-if="notificationsOpen" class="fixed inset-0 z-40" @click="closeNotifications"></div>
+
+                <div
+                    v-if="notificationsOpen"
+                    class="absolute right-0 mt-2 w-80 max-h-[26rem] flex flex-col rounded-lg border border-white/10 shadow-xl z-50 overflow-hidden"
+                    style="background: var(--sidebar-bg)"
+                >
+                    <div class="flex items-center justify-between px-3 py-2 border-b border-white/10">
+                        <span class="text-[9px] font-bold uppercase tracking-widest text-white/40">
+                            Notifications
+                        </span>
+                        <button
+                            v-if="notifications.length"
+                            type="button"
+                            class="text-[10px] font-semibold text-indigo-300/80 hover:text-indigo-200"
+                            @click="markAllNotificationsRead"
+                        >
+                            Mark all as read
+                        </button>
+                    </div>
+
+                    <div class="overflow-y-auto">
+                        <p v-if="!notifications.length" class="px-3 py-6 text-center text-[12px] text-white/40">
+                            You're all caught up.
+                        </p>
+
+                        <div
+                            v-for="notification in notifications"
+                            :key="notification.id"
+                            class="flex items-start gap-2 px-3 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/5"
+                        >
+                            <!-- New request awaiting Admin/Registrar review -->
+                            <template v-if="isRequestNotification(notification)">
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"></span>
+
+                                <div class="min-w-0 flex-1 cursor-pointer" @click="goToFacultyLoading(notification)">
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-amber-300">
+                                        Overload Request Pending
+                                    </p>
+                                    <p class="mt-0.5 text-[12px] leading-snug text-white/80">
+                                        {{ notification.data.message }}
+                                    </p>
+                                    <p v-if="notification.data.reason" class="mt-1 text-[11px] italic leading-snug text-white/50">
+                                        "{{ notification.data.reason }}"
+                                    </p>
+                                    <div class="mt-1 text-[10px] text-white/40">
+                                        {{ timeAgo(notification.created_at) }}
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Admin/Registrar directly added overload units to a department faculty member -->
+                            <template v-else-if="isAppliedNotification(notification)">
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400"></span>
+
+                                <div class="min-w-0 flex-1 cursor-pointer" @click="goToFacultyLoading(notification)">
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-sky-300">
+                                        Overload Units Added
+                                    </p>
+                                    <p class="mt-0.5 text-[12px] leading-snug text-white/80">
+                                        {{ notification.data.message }}
+                                    </p>
+                                    <div class="mt-1 text-[10px] text-white/40">
+                                        {{ timeAgo(notification.created_at) }}
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Request reviewed (approved/declined) -->
+                            <template v-else>
+                                <span
+                                    class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
+                                    :class="notification.data.status === 'approved' ? 'bg-emerald-400' : 'bg-rose-400'"
+                                ></span>
+
+                                <div class="min-w-0 flex-1">
+                                    <p
+                                        class="text-[11px] font-bold uppercase tracking-wide"
+                                        :class="notification.data.status === 'approved' ? 'text-emerald-300' : 'text-rose-300'"
+                                    >
+                                        Overload {{ notification.data.status === 'approved' ? 'Approved' : 'Declined' }}
+                                    </p>
+                                    <p class="mt-0.5 text-[12px] leading-snug text-white/80">
+                                        {{ notification.data.message }}
+                                    </p>
+                                    <p v-if="notification.data.decline_reason" class="mt-1 text-[11px] italic leading-snug text-white/50">
+                                        "{{ notification.data.decline_reason }}"
+                                    </p>
+                                    <div class="mt-1 flex items-center gap-1.5 text-[10px] text-white/40">
+                                        <span v-if="notification.data.reviewed_by_name">{{ notification.data.reviewed_by_name }} &bull;</span>
+                                        <span>{{ timeAgo(notification.created_at) }}</span>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <button
+                                type="button"
+                                class="shrink-0 text-white/30 hover:text-white/70"
+                                aria-label="Dismiss"
+                                @click="dismissNotification(notification)"
+                            >
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 </template>

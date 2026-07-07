@@ -139,16 +139,22 @@ class ScheduleValidationService
         if ($block['faculty_id']) {
             $faculty = Faculty::find($block['faculty_id']);
 
-            if ($faculty && $faculty->max_units) {
+            // effective_max_units (base max_units + any APPROVED Faculty
+            // Load Overload) — same cap TeachingAssignmentService and
+            // GreedyScheduleService enforce. Comparing against the raw
+            // max_units column here would raise a false "over their max
+            // load" warning for a faculty member who has been legitimately
+            // approved to carry more.
+            if ($faculty && $faculty->effective_max_units) {
                 $loadedUnits = $allBlocks
                     ->where('faculty_id', $block['faculty_id'])
                     ->unique('subject_offering_id')
                     ->sum(fn ($b) => (int) ($b['units'] ?? 0));
 
-                if ($loadedUnits > $faculty->max_units) {
+                if ($loadedUnits > $faculty->effective_max_units) {
                     $warnings[] = [
                         'type' => self::TYPE_OVERLOAD,
-                        'message' => "{$faculty->full_name} is loaded {$loadedUnits}/{$faculty->max_units} units — over their max load.",
+                        'message' => "{$faculty->full_name} is loaded {$loadedUnits}/{$faculty->effective_max_units} units — over their max load.",
                         'current' => $this->summarize($block),
                     ];
                 }

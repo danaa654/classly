@@ -166,10 +166,22 @@ function save() {
     emit('save')
 }
 
-// Only successfully-placed rows can be edited — a 'skipped'/'unscheduled'
-// row has no faculty/room/day/time to edit yet.
+// Both a successfully-placed row ('preview') AND a failed row
+// ('unscheduled') can be edited — a failed row has no faculty/room/
+// day/time yet, but Edit Schedule handles that fine: every field
+// starts empty, and picking any of them triggers the exact same live
+// conflict-check as a normal edit, which is what actually populates
+// the Suggested Faculty/Room/Time panel. This is what lets someone
+// manually place a subject the Greedy Scheduler couldn't — e.g.
+// because the (at most) two other subjects processed just ahead of
+// it had already claimed every faculty/room/slot it could have used.
+//
+// A 'skipped' row (duplicate subject within this same run) is
+// deliberately excluded — that's not a resource-exhaustion failure to
+// work around, it's a real duplicate that shouldn't be scheduled
+// twice for the same section.
 function rowClickable(row) {
-    return row.status === 'preview'
+    return row.status === 'preview' || row.status === 'unscheduled'
 }
 
 // Editing a grouped multi-meeting row opens the modal with EVERY
@@ -303,7 +315,7 @@ function editBlock(row) {
                         before Save Changes — click the row to fix its faculty, room, day, or time.
                     </template>
                     <template v-else>
-                        Click any successful row above to edit its faculty, room, day, or time before saving.
+                        Click any row above — including a failed one — to set its faculty, room, day, or time.
                         Once saved, the same edit is still available anytime by clicking the block on the Master Grid.
                     </template>
                 </p>

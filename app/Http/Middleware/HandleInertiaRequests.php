@@ -146,6 +146,38 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
             ],
 
+            // Unread Faculty Load Overload notifications for the
+            // current user — shared on EVERY page (not just Faculty
+            // Loading), since the people involved could be off working
+            // anywhere else in the app when one of these fires. Three
+            // types feed into this single prop, merged and sorted
+            // together so the Topbar dropdown renders one unified
+            // list:
+            //
+            //   - FacultyLoadOverloadReviewed        — "your request
+            //     was approved/declined", sent to the requester.
+            //   - FacultyLoadOverloadRequested        — "a new request
+            //     needs your review", sent to every Admin/Registrar.
+            //   - FacultyLoadOverloadAppliedByAdmin   — "Admin/
+            //     Registrar added overload units to your department's
+            //     faculty member", sent to that department's Dean/OIC.
+            //
+            // Empty array for guests/unauthenticated requests. See
+            // FacultyLoadOverloadController::markNotificationRead()/
+            // markAllNotificationsRead() for how the frontend dismisses
+            // these, and Topbar.vue for how `notification.type` picks
+            // which card layout to render.
+            'overloadNotifications' => fn () => $user
+                ? $user->unreadNotifications()
+                    ->whereIn('type', [
+                        \App\Notifications\FacultyLoadOverloadReviewed::class,
+                        \App\Notifications\FacultyLoadOverloadRequested::class,
+                        \App\Notifications\FacultyLoadOverloadAppliedByAdmin::class,
+                    ])
+                    ->orderByDesc('created_at')
+                    ->get(['id', 'type', 'data', 'created_at'])
+                : [],
+
             'auth' => [
                 'user' => $user
                     ? [
