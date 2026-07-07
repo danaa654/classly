@@ -88,7 +88,7 @@ function timeLabel(minutes) {
                         :key="i"
                         type="button"
                         class="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 mb-1.5 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
-                        @click="emit('apply-time', { day: t.day, start_minutes: t.start_minutes, end_minutes: t.end_minutes })"
+                        @click="emit('apply-time', { days: t.days ?? [t.day], start_minutes: t.start_minutes, end_minutes: t.end_minutes })"
                     >
                         <p class="text-xs font-bold text-slate-700 dark:text-slate-200">{{ t.label }}</p>
                     </button>

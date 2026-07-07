@@ -36,7 +36,50 @@ const visibleOfferings = computed(() =>
         : props.offerings
 )
 
-const count = computed(() => visibleOfferings.value.length)
+/* ── Filters ──────────────────────────────────────────────────────
+   Same pattern as RoomSidebar's Program/Room Type dropdowns — three
+   independent filters, derived from whatever's actually present in
+   the offerings on the page, each narrowing the list further when
+   more than one is set. Empty selection = "All" (that filter is
+   skipped). */
+const programFilter = ref('')
+const classificationFilter = ref('')
+const roomTypeFilter = ref('')
+
+const programOptions = computed(() => {
+    const codes = new Set()
+    visibleOfferings.value.forEach((o) => o.program_code && codes.add(o.program_code))
+    return Array.from(codes).sort()
+})
+
+const classificationOptions = computed(() => {
+    const values = new Set()
+    visibleOfferings.value.forEach((o) => o.classification && values.add(o.classification))
+    return Array.from(values).sort()
+})
+
+const roomTypeOptions = computed(() => {
+    const values = new Set()
+    visibleOfferings.value.forEach((o) => o.room_type && values.add(o.room_type))
+    return Array.from(values).sort()
+})
+
+const filteredOfferings = computed(() =>
+    visibleOfferings.value
+        .filter((o) => !programFilter.value || o.program_code === programFilter.value)
+        .filter((o) => !classificationFilter.value || o.classification === classificationFilter.value)
+        .filter((o) => !roomTypeFilter.value || o.room_type === roomTypeFilter.value)
+)
+
+const hasActiveFilters = computed(() => !!programFilter.value || !!classificationFilter.value || !!roomTypeFilter.value)
+
+function clearFilters() {
+    programFilter.value = ''
+    classificationFilter.value = ''
+    roomTypeFilter.value = ''
+}
+
+const count = computed(() => filteredOfferings.value.length)
 const scheduledCount = computed(() => props.scheduledOfferings.length)
 </script>
 
@@ -70,12 +113,55 @@ const scheduledCount = computed(() => props.scheduledOfferings.length)
         </label>
 
         <div v-if="!collapsed" class="flex-1 overflow-y-auto custom-scrollbar-theme p-2 space-y-2">
-            <p v-if="count === 0" class="text-xs text-center py-8" style="color: var(--text-muted)">
+            <!-- Filters -->
+            <div class="space-y-1.5 pb-1">
+                <select
+                    v-model="programFilter"
+                    class="w-full rounded-lg border text-[11px] font-semibold px-2 py-1.5"
+                    style="background: var(--card-bg); border-color: var(--card-border); color: var(--text-primary)"
+                >
+                    <option value="">All Programs</option>
+                    <option v-for="code in programOptions" :key="code" :value="code">{{ code }}</option>
+                </select>
+
+                <select
+                    v-model="classificationFilter"
+                    class="w-full rounded-lg border text-[11px] font-semibold px-2 py-1.5"
+                    style="background: var(--card-bg); border-color: var(--card-border); color: var(--text-primary)"
+                >
+                    <option value="">All Classifications</option>
+                    <option v-for="value in classificationOptions" :key="value" :value="value">{{ value }}</option>
+                </select>
+
+                <select
+                    v-model="roomTypeFilter"
+                    class="w-full rounded-lg border text-[11px] font-semibold px-2 py-1.5"
+                    style="background: var(--card-bg); border-color: var(--card-border); color: var(--text-primary)"
+                >
+                    <option value="">All Room Types</option>
+                    <option v-for="value in roomTypeOptions" :key="value" :value="value">{{ value }}</option>
+                </select>
+
+                <button
+                    v-if="hasActiveFilters"
+                    type="button"
+                    class="text-[10px] font-bold hover:opacity-70"
+                    style="color: var(--text-muted)"
+                    @click="clearFilters"
+                >
+                    Clear filters ✕
+                </button>
+            </div>
+
+            <p v-if="visibleOfferings.length === 0" class="text-xs text-center py-8" style="color: var(--text-muted)">
                 No unscheduled Subject Offerings for this term.
+            </p>
+            <p v-else-if="count === 0" class="text-xs text-center py-8" style="color: var(--text-muted)">
+                No subjects match these filters.
             </p>
 
             <div
-                v-for="offering in visibleOfferings"
+                v-for="offering in filteredOfferings"
                 :key="offering.id"
                 class="subject-card rounded-lg px-2.5 py-2 transition-all duration-150 ease-out"
                 :class="offering.is_scheduled

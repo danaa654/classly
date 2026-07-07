@@ -11,6 +11,7 @@ use App\Services\MasterGridDataService;
 use App\Services\ScheduleRecommendationService;
 use App\Services\ScheduleValidationService;
 use App\Services\SchedulingWorkspaceService;
+use App\Services\SessionSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -53,6 +54,7 @@ class MasterGridController extends Controller implements HasMiddleware
         private readonly ScheduleValidationService $validator,
         private readonly ScheduleRecommendationService $recommender,
         private readonly SchedulingWorkspaceService $workspace,
+        private readonly SessionSettingsService $sessionSettings,
     ) {
     }
 
@@ -85,7 +87,14 @@ class MasterGridController extends Controller implements HasMiddleware
             // Generate Schedule...".
             new Middleware(function ($request, $next) {
 
-                if ($request->routeIs('master-grid.generate', 'master-grid.validate-block', 'master-grid.save')) {
+                if ($request->routeIs(
+                    'master-grid.generate',
+                    'master-grid.validate-block',
+                    'master-grid.save',
+                    'master-grid.remove-schedule',
+                    'master-grid.session-settings',
+                    'master-grid.session-settings.update'
+                )) {
                     abort_unless(
                         auth()->user()->hasAnyRole(['Admin', 'Registrar']),
                         403,
@@ -110,7 +119,26 @@ class MasterGridController extends Controller implements HasMiddleware
 
         return Inertia::render(
             'MasterGrid/Index',
-            $this->data->build($term, $this->managerDepartmentId(auth()->user()))
+            [
+                ...$this->data->build($term, $this->managerDepartmentId(auth()->user())),
+
+                // Drives every editing affordance client-side (the
+                // Generate Schedule button, and whether clicking a
+                // block opens it read-only or editable) — Dean/
+                // Assistant Dean/OIC may view the grid and open a
+                // block's details, but only Admin/Registrar can
+                // actually change anything, matching the same
+                // Admin/Registrar-only restriction already enforced
+                // server-side in middleware() above for generate/
+                // validate-block/save/session-settings. This is
+                // purely a UI convenience — the real enforcement
+                // stays in middleware(), so even if this flag were
+                // ever wrong, no write endpoint would open up because
+                // of it.
+                'can' => [
+                    'manage' => auth()->user()->hasAnyRole(['Admin', 'Registrar']),
+                ],
+            ]
         );
     }
 
@@ -132,6 +160,71 @@ class MasterGridController extends Controller implements HasMiddleware
         }
 
         return $user->department_id;
+    }
+
+    /**
+     * Step 2 of Generate Schedule — "Session Settings". Given the
+     * Target Selection from Step 1, returns every Subject Offering
+     * still needing to be scheduled for that section, along with
+     * enough data (eligible faculty, eligible rooms, current meetings/
+     * week, computed hours/meeting) for the modal to render its
+     * per-subject editing table. Read-only — nothing is written here.
+     */
+    public function sessionSettings(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'department_id' => ['required', 'integer', 'exists:departments,id'],
+            'program_id' => ['required', 'integer', 'exists:programs,id'],
+            'specialization_id' => ['nullable', 'integer', 'exists:specializations,id'],
+            'year_level' => ['required', 'integer', 'min:1', 'max:4'],
+            'section_id' => ['required', 'integer', 'exists:sections,id'],
+        ]);
+
+        $planningTerm = $this->workspace->getTermForUser(auth()->user());
+
+        abort_unless($planningTerm, 422, 'No Planning Academic Term is set — configure one in Settings > Scheduling Workspace before generating a schedule.');
+
+        $result = $this->sessionSettings->build($planningTerm, $validated);
+
+        return response()->json($result);
+    }
+
+    /**
+     * Persists whatever the Registrar/Admin edited in Session
+     * Settings — actual weekly duration and meetings/week per subject
+     * — right before Generate actually runs. Saved even on a
+     * re-Generate (Step 4's "Regenerate"), so the Greedy Scheduler
+     * always reads back the most recently confirmed settings for
+     * every offering in this batch.
+     *
+     * "hours" overrides subject_offerings.hours (which starts out
+     * copied from the curriculum at generation time — see
+     * SubjectOfferingGeneratorService) — real classroom time doesn't
+     * always match what the curriculum states (e.g. a subject listed
+     * at 5 hrs/week that's actually only taught 4), and this is the
+     * one place that correction belongs, since it flows directly into
+     * how the Greedy Scheduler computes each block's duration.
+     * Preferred Faculty/Room are NOT edited here — those still come
+     * from Faculty Loading / Manage Subjects, unchanged.
+     */
+    public function updateSessionSettings(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'subjects' => ['required', 'array', 'min:1'],
+            'subjects.*.subject_offering_id' => ['required', 'integer', 'exists:subject_offerings,id'],
+            'subjects.*.hours' => ['required', 'integer', 'min:1'],
+            'subjects.*.meetings_per_week' => ['required', 'integer', 'in:' . implode(',', SessionSettingsService::ALLOWED_MEETINGS_PER_WEEK)],
+        ]);
+
+        $planningTerm = $this->workspace->getTermForUser(auth()->user());
+
+        abort_unless($planningTerm, 422, 'No Planning Academic Term is set. Configure one in Settings > Scheduling Workspace.');
+
+        $this->workspace->assertWritable($planningTerm);
+
+        $this->sessionSettings->save($validated['subjects']);
+
+        return response()->json(['message' => 'Session settings saved.']);
     }
 
     /**
@@ -245,14 +338,36 @@ class MasterGridController extends Controller implements HasMiddleware
 
         try {
             DB::transaction(function () use ($blocks, $planningTerm) {
+                // A subject can now have multiple rows (one per meeting
+                // day — see GreedyScheduleService's "Multi-meeting
+                // subjects" docblock). If a subject previously saved as
+                // 2x/week gets regenerated as 1x/week, its old second
+                // day's row would otherwise be orphaned — never
+                // touched by the updateOrCreate below, since that only
+                // ever inserts/updates the days THIS batch actually
+                // contains. Delete any existing day for an offering in
+                // this batch that ISN'T one of the days being saved for
+                // it now, before writing the current set.
+                $daysByOffering = $blocks
+                    ->groupBy('subject_offering_id')
+                    ->map(fn ($rows) => $rows->pluck('day')->all());
+
+                foreach ($daysByOffering as $offeringId => $days) {
+                    Schedule::where('subject_offering_id', $offeringId)
+                        ->whereNotIn('day', $days)
+                        ->delete();
+                }
+
                 foreach ($blocks as $block) {
                     Schedule::updateOrCreate(
-                        ['subject_offering_id' => $block['subject_offering_id']],
+                        [
+                            'subject_offering_id' => $block['subject_offering_id'],
+                            'day' => $block['day'],
+                        ],
                         [
                             'academic_term_id' => $planningTerm->id,
                             'faculty_id' => $block['faculty_id'] ?? null,
                             'room_id' => $block['room_id'],
-                            'day' => $block['day'],
                             'start_minutes' => $block['start_minutes'],
                             'end_minutes' => $block['end_minutes'],
                             'created_by' => auth()->id(),
@@ -272,6 +387,49 @@ class MasterGridController extends Controller implements HasMiddleware
 
         return response()->json([
             'message' => 'Schedule generated successfully.',
+        ]);
+    }
+
+    /**
+     * Removes an already-committed Schedule block from the Master
+     * Grid — every meeting-day row for the given subject_offering_id
+     * (e.g. both the Monday and Wednesday rows of a 2x/week subject),
+     * scoped to the Working Term. The subject goes back to showing as
+     * unscheduled on the grid/Subject Sidebar; it can be re-generated
+     * or manually re-placed from there like any other unscheduled
+     * offering.
+     *
+     * Deliberately does NOT touch `teaching_assignments`. Removing a
+     * day/time/room placement is a different decision from un-
+     * assigning the faculty member — Faculty Loading is its own
+     * workspace with its own explicit "remove assignment" action, and
+     * silently clearing it here just because the grid placement was
+     * pulled would surprise a Registrar who only meant to re-schedule
+     * the same faculty member at a different time. If the Registrar
+     * really does want the faculty un-assigned too, that's still a
+     * separate, explicit action in Faculty Loading.
+     */
+    public function removeSchedule(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'subject_offering_id' => ['required', 'integer', 'exists:subject_offerings,id'],
+        ]);
+
+        $planningTerm = $this->workspace->getTermForUser(auth()->user());
+
+        abort_unless($planningTerm, 422, 'No Planning Academic Term is set. Configure one in Settings > Scheduling Workspace.');
+
+        $this->workspace->assertWritable($planningTerm);
+
+        $deleted = Schedule::forTerm($planningTerm->id)
+            ->where('subject_offering_id', $validated['subject_offering_id'])
+            ->delete();
+
+        abort_if($deleted === 0, 404, 'No committed schedule was found for this subject on the current Working Term.');
+
+        return response()->json([
+            'message' => 'Schedule removed — this subject is unscheduled again.',
+            'subject_offering_id' => (int) $validated['subject_offering_id'],
         ]);
     }
 

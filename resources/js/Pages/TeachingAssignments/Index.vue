@@ -357,6 +357,132 @@ const facultyCardPercent = computed(() => {
     return Math.round((facultyCardView.value.count / totalFacultyCount.value) * 100);
 });
 
+/*
+|--------------------------------------------------------------------------
+| Total Subjects / Assigned Subjects / Unassigned Left cards — click-to-
+| cycle through departments, same pattern as the Total Faculty card above.
+|--------------------------------------------------------------------------
+|
+| One bucket per active department (by name), plus a trailing "General
+| Education" bucket for offerings whose program carries no department_id
+| at all. Each bucket precomputes total/assigned/unassigned counts so all
+| three cards can cycle independently while still sharing the same
+| underlying buckets.
+*/
+
+function offeringDepartmentId(offering) {
+    return offering.section?.curriculum?.program?.department_id ?? null;
+}
+
+function summarizeOfferings(offerings) {
+    const assigned = offerings.filter((o) => assignedOfferingIds.value.has(o.id)).length;
+
+    return {
+        total: offerings.length,
+        assigned,
+        unassigned: Math.max(offerings.length - assigned, 0),
+    };
+}
+
+const offeringDeptBuckets = computed(() => [
+    ...props.departments.map((dept) => ({
+        key: `dept-${dept.id}`,
+        label: dept.name,
+        ...summarizeOfferings(props.subjectOfferings.filter((o) => offeringDepartmentId(o) === dept.id)),
+    })),
+    {
+        key: 'gened',
+        label: 'General Education',
+        ...summarizeOfferings(props.subjectOfferings.filter((o) => !offeringDepartmentId(o))),
+    },
+]);
+
+const subjectViewIndex = ref(-1);
+const assignedViewIndex = ref(-1);
+const unassignedViewIndex = ref(-1);
+
+function cycleView(indexRef) {
+    const lastIndex = offeringDeptBuckets.value.length - 1;
+    indexRef.value = indexRef.value >= lastIndex ? -1 : indexRef.value + 1;
+}
+
+const cycleSubjectView = () => cycleView(subjectViewIndex);
+const cycleAssignedView = () => cycleView(assignedViewIndex);
+const cycleUnassignedView = () => cycleView(unassignedViewIndex);
+
+const subjectCardView = computed(() => {
+    if (subjectViewIndex.value === -1) {
+        return {
+            label: 'Total Subjects',
+            count: totalSubjectOfferingCount.value,
+            caption: 'Total class offerings this term',
+            percent: 100,
+            percentLabel: '100% of active scope',
+        };
+    }
+
+    const bucket = offeringDeptBuckets.value[subjectViewIndex.value];
+    const percent = totalSubjectOfferingCount.value
+        ? Math.round((bucket.total / totalSubjectOfferingCount.value) * 100)
+        : 0;
+
+    return {
+        label: bucket.label,
+        count: bucket.total,
+        caption: `Class offerings under ${bucket.label}`,
+        percent,
+        percentLabel: `${percent}% of active scope`,
+    };
+});
+
+const assignedCardView = computed(() => {
+    if (assignedViewIndex.value === -1) {
+        const percent = assignedOfferingPercent.value;
+        return {
+            label: 'Assigned Subjects',
+            count: totalAssignedOfferingCount.value,
+            caption: 'Classes with a faculty member assigned',
+            percent,
+            percentLabel: `${percent}% of total`,
+        };
+    }
+
+    const bucket = offeringDeptBuckets.value[assignedViewIndex.value];
+    const percent = bucket.total ? Math.round((bucket.assigned / bucket.total) * 100) : 0;
+
+    return {
+        label: bucket.label,
+        count: bucket.assigned,
+        caption: `Assigned classes under ${bucket.label}`,
+        percent,
+        percentLabel: `${percent}% of total`,
+    };
+});
+
+const unassignedCardView = computed(() => {
+    if (unassignedViewIndex.value === -1) {
+        const percent = unassignedOfferingPercent.value;
+        return {
+            label: 'Unassigned Left',
+            count: totalUnassignedOfferingCount.value,
+            caption: 'Remaining classes without a faculty',
+            percent,
+            percentLabel: `${percent}% unassigned`,
+        };
+    }
+
+    const bucket = offeringDeptBuckets.value[unassignedViewIndex.value];
+    const percent = bucket.total ? Math.round((bucket.unassigned / bucket.total) * 100) : 0;
+
+    return {
+        label: bucket.label,
+        count: bucket.unassigned,
+        caption: `Unassigned classes under ${bucket.label}`,
+        percent,
+        percentLabel: `${percent}% unassigned`,
+    };
+});
+
 // Every offering assigned to the currently selected faculty member, keyed
 // by subject_offering_id, so the modal can show it as "Assigned" (with an
 // Unassign action) instead of just dropping it from the list.
@@ -649,10 +775,16 @@ function handleUnassign(offering) {
                             </div>
                         </button>
 
-                        <!-- Total Subjects -->
-                        <div class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300/60 hover:shadow-lg hover:shadow-indigo-500/10 dark:hover:border-indigo-500/40">
-                            <div class="flex items-start justify-between">
-                                <p class="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">Total Subjects</p>
+                        <!-- Total Subjects (click to cycle through departments) -->
+                        <button
+                            type="button"
+                            class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300/60 hover:shadow-lg hover:shadow-indigo-500/10 dark:hover:border-indigo-500/40"
+                            @click="cycleSubjectView"
+                        >
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="truncate text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                                    {{ subjectCardView.label }}
+                                </p>
                                 <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 dark:text-indigo-400">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                                         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
@@ -660,18 +792,44 @@ function handleUnassign(offering) {
                                     </svg>
                                 </div>
                             </div>
-                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">{{ totalSubjectOfferingCount }}</p>
-                            <p class="mt-2 text-xs leading-snug text-[var(--text-muted)]">Total class offerings this term</p>
+                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">
+                                {{ subjectCardView.count }}
+                            </p>
+                            <p class="mt-2 truncate text-xs leading-snug text-[var(--text-muted)]">{{ subjectCardView.caption }}</p>
                             <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
-                                <div class="h-full w-full rounded-full bg-indigo-500 transition-all duration-500 ease-out"></div>
+                                <div class="h-full rounded-full bg-indigo-500 transition-all duration-500 ease-out" :style="{ width: `${subjectCardView.percent}%` }"></div>
                             </div>
-                            <p class="mt-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400">100% of active scope</p>
-                        </div>
+                            <div class="mt-2 flex items-center justify-between gap-2">
+                                <p class="text-xs font-medium text-indigo-600 dark:text-indigo-400">{{ subjectCardView.percentLabel }}</p>
+                                <span class="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                                    Tap to filter →
+                                </span>
+                            </div>
+                            <!-- Position dots: which bucket is currently showing -->
+                            <div class="mt-2.5 flex items-center gap-1">
+                                <span
+                                    v-for="n in offeringDeptBuckets.length + 1"
+                                    :key="n"
+                                    class="h-1 rounded-full transition-all duration-300"
+                                    :class="
+                                        (n - 2) === subjectViewIndex
+                                            ? 'w-3 bg-indigo-500'
+                                            : 'w-1 bg-[var(--card-border)]'
+                                    "
+                                ></span>
+                            </div>
+                        </button>
 
-                        <!-- Assigned Subjects -->
-                        <div class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300/60 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:border-emerald-500/40">
-                            <div class="flex items-start justify-between">
-                                <p class="text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Assigned Subjects</p>
+                        <!-- Assigned Subjects (click to cycle through departments) -->
+                        <button
+                            type="button"
+                            class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300/60 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:border-emerald-500/40"
+                            @click="cycleAssignedView"
+                        >
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="truncate text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                                    {{ assignedCardView.label }}
+                                </p>
                                 <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 dark:text-emerald-400">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -679,18 +837,44 @@ function handleUnassign(offering) {
                                     </svg>
                                 </div>
                             </div>
-                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">{{ totalAssignedOfferingCount }}</p>
-                            <p class="mt-2 text-xs leading-snug text-[var(--text-muted)]">Classes with a faculty member assigned</p>
+                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">
+                                {{ assignedCardView.count }}
+                            </p>
+                            <p class="mt-2 truncate text-xs leading-snug text-[var(--text-muted)]">{{ assignedCardView.caption }}</p>
                             <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
-                                <div class="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out" :style="{ width: `${assignedOfferingPercent}%` }"></div>
+                                <div class="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out" :style="{ width: `${assignedCardView.percent}%` }"></div>
                             </div>
-                            <p class="mt-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ assignedOfferingPercent }}% of total</p>
-                        </div>
+                            <div class="mt-2 flex items-center justify-between gap-2">
+                                <p class="text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ assignedCardView.percentLabel }}</p>
+                                <span class="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                                    Tap to filter →
+                                </span>
+                            </div>
+                            <!-- Position dots: which bucket is currently showing -->
+                            <div class="mt-2.5 flex items-center gap-1">
+                                <span
+                                    v-for="n in offeringDeptBuckets.length + 1"
+                                    :key="n"
+                                    class="h-1 rounded-full transition-all duration-300"
+                                    :class="
+                                        (n - 2) === assignedViewIndex
+                                            ? 'w-3 bg-emerald-500'
+                                            : 'w-1 bg-[var(--card-border)]'
+                                    "
+                                ></span>
+                            </div>
+                        </button>
 
-                        <!-- Unassigned Subjects -->
-                        <div class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-red-300/60 hover:shadow-lg hover:shadow-red-500/10 dark:hover:border-red-500/40">
-                            <div class="flex items-start justify-between">
-                                <p class="text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">Unassigned Left</p>
+                        <!-- Unassigned Subjects (click to cycle through departments) -->
+                        <button
+                            type="button"
+                            class="group relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-red-300/60 hover:shadow-lg hover:shadow-red-500/10 dark:hover:border-red-500/40"
+                            @click="cycleUnassignedView"
+                        >
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="truncate text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
+                                    {{ unassignedCardView.label }}
+                                </p>
                                 <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 dark:text-red-400">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                                         <circle cx="12" cy="12" r="10"></circle>
@@ -699,13 +883,33 @@ function handleUnassign(offering) {
                                     </svg>
                                 </div>
                             </div>
-                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">{{ totalUnassignedOfferingCount }}</p>
-                            <p class="mt-2 text-xs leading-snug text-[var(--text-muted)]">Remaining classes without a faculty</p>
+                            <p class="mt-3 text-4xl font-black tabular-nums text-[var(--text-primary)] transition-transform duration-200 group-hover:scale-[1.04]">
+                                {{ unassignedCardView.count }}
+                            </p>
+                            <p class="mt-2 truncate text-xs leading-snug text-[var(--text-muted)]">{{ unassignedCardView.caption }}</p>
                             <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--page-bg)]">
-                                <div class="h-full rounded-full bg-red-500 transition-all duration-500 ease-out" :style="{ width: `${unassignedOfferingPercent}%` }"></div>
+                                <div class="h-full rounded-full bg-red-500 transition-all duration-500 ease-out" :style="{ width: `${unassignedCardView.percent}%` }"></div>
                             </div>
-                            <p class="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">{{ unassignedOfferingPercent }}% unassigned</p>
-                        </div>
+                            <div class="mt-2 flex items-center justify-between gap-2">
+                                <p class="text-xs font-medium text-red-600 dark:text-red-400">{{ unassignedCardView.percentLabel }}</p>
+                                <span class="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                                    Tap to filter →
+                                </span>
+                            </div>
+                            <!-- Position dots: which bucket is currently showing -->
+                            <div class="mt-2.5 flex items-center gap-1">
+                                <span
+                                    v-for="n in offeringDeptBuckets.length + 1"
+                                    :key="n"
+                                    class="h-1 rounded-full transition-all duration-300"
+                                    :class="
+                                        (n - 2) === unassignedViewIndex
+                                            ? 'w-3 bg-red-500'
+                                            : 'w-1 bg-[var(--card-border)]'
+                                    "
+                                ></span>
+                            </div>
+                        </button>
                     </div>
 
                     <!-- Status Legend -->

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AcademicTerm;
 use App\Models\Faculty;
 use App\Models\Room;
+use App\Models\Schedule;
 use App\Models\Section;
 use App\Models\SubjectOffering;
 use App\Models\TeachingAssignment;
@@ -52,9 +53,43 @@ use Illuminate\Support\Facades\Log;
  * ScheduleValidationService right before committing. This service's
  * only job is to produce a good first draft; every conflict check here
  * is against the blocks generated within THIS SAME preview run.
+ *
+ * ── Multi-meeting subjects (meetings_per_week) ──────────────────────
+ * A subject configured in Session Settings to meet 2x or 3x a week
+ * produces MULTIPLE result rows here — one per meeting day, all
+ * sharing subject_offering_id/faculty_id/room_id/start_minutes/
+ * end_minutes, differing only in `day` — never a single row spanning
+ * several days. This mirrors exactly how `schedules` now stores them
+ * (see the migration making schedules unique on [subject_offering_id,
+ * day] instead of subject_offering_id alone) and how the Master Grid
+ * already renders/edits one block per row.
+ *
+ * Per spec, a subject's SAME faculty, SAME room, and SAME time-of-day
+ * are used across every one of its meetings — day-combinations are
+ * restricted to standard pairings (1x: any single day; 2x: MW / TTh /
+ * WF / MTh; 3x: MWF or TThS), and placement only accepts a combo if
+ * EVERY day in it is simultaneously free for that faculty/room/section
+ * at the same start/end — see resolveDayCombos() and findPlacement().
  */
 class GreedyScheduleService
 {
+    /**
+     * Standard day-combinations per spec, tried in this order. Each
+     * combo is only offered as a candidate if every day in it is
+     * actually a working day for the term (see resolveDayCombos()).
+     */
+    private const DAY_COMBOS_2X = [
+        ['monday', 'wednesday'],
+        ['tuesday', 'thursday'],
+        ['wednesday', 'friday'],
+        ['monday', 'thursday'],
+    ];
+
+    private const DAY_COMBOS_3X = [
+        ['monday', 'wednesday', 'friday'],
+        ['tuesday', 'thursday', 'saturday'],
+    ];
+
     /**
      * Entry point. Generates a draft schedule for one Section.
      *
@@ -88,7 +123,20 @@ class GreedyScheduleService
         // candidateRooms() for why that happened.
         $roomUsage = [];
 
-        $placedBlocks = [];
+        // Seeded from every Schedule row already committed for this
+        // term — across ALL sections, not just the one being
+        // generated. Without this, the algorithm only knows about
+        // blocks it places during THIS run and happily assigns a
+        // room/faculty/section slot that's already taken by a
+        // previously-saved class elsewhere in the term. That produced
+        // previews the algorithm itself marked "success" but that
+        // immediately failed validation the moment
+        // ScheduleValidationService checked them against the real
+        // `schedules` table (which it does check) — the Schedule
+        // Preview would show CONFLICT rows straight out of Generate,
+        // before the Registrar ever touched anything. See
+        // initialCommittedBlocks() below.
+        $placedBlocks = $this->initialCommittedBlocks($term);
         $scheduledSubjectIds = [];
         $results = [];
 
@@ -100,25 +148,50 @@ class GreedyScheduleService
                 continue;
             }
 
-            $durationMinutes = (int) $offering->hours * 60;
+            $meetings = $offering->meetings_per_week ?: SubjectOffering::DEFAULT_MEETINGS_PER_WEEK;
+            $totalMinutes = (int) $offering->hours * 60;
 
-            if ($durationMinutes <= 0) {
+            if ($totalMinutes <= 0) {
                 $this->debug("Processing: {$this->subjectLabel($offering)}\n\nRejected — Subject Offering has no hours configured.");
 
                 $results[] = $this->presentBlock($offering, null, 'unscheduled', 'Subject Offering has no hours configured.');
                 continue;
             }
 
+            // Same duration on every meeting of a subject — per spec, a
+            // subject is never split into uneven per-meeting durations
+            // even when total hours don't divide evenly (Session
+            // Settings warns about that at edit time; here we just
+            // round to the nearest minute so the algorithm always has
+            // a single, consistent per-meeting length to place).
+            $meetingMinutes = (int) round($totalMinutes / $meetings);
+
+            $dayCombos = $this->resolveDayCombos($meetings, $grid['working_days']);
+
+            if (empty($dayCombos)) {
+                $this->debug("Rejected: {$this->subjectLabel($offering)}\n\nReason:\nNo valid day-combination for {$meetings}x/week given this term's working days.");
+
+                $results[] = $this->presentBlock(
+                    $offering,
+                    null,
+                    'unscheduled',
+                    "No valid day-combination for {$meetings}x/week meetings — this term doesn't have enough compatible working days enabled."
+                );
+                continue;
+            }
+
             $assignedFaculty = $this->resolveAssignedFaculty($offering);
 
             $this->debug(sprintf(
-                "Processing: %s\n\nFaculty:\n%s\n\nPreferred Room:\n%s",
+                "Processing: %s (%dx/week, %d min/meeting)\n\nFaculty:\n%s\n\nPreferred Room:\n%s",
                 $this->subjectLabel($offering),
+                $meetings,
+                $meetingMinutes,
                 $assignedFaculty ? "{$assignedFaculty->full_name} (Source: Faculty Loading)" : 'None assigned — will search automatically.',
                 $this->preferredRoomCode($offering) ?? 'None set — will search automatically.'
             ));
 
-            $placement = $this->findPlacement($offering, $section, $grid, $durationMinutes, $assignedFaculty, $facultyLoad, $placedBlocks, $roomUsage);
+            $placement = $this->findPlacement($offering, $section, $grid, $dayCombos, $meetingMinutes, $assignedFaculty, $facultyLoad, $placedBlocks, $roomUsage);
 
             if (! $placement) {
                 $reason = $this->unscheduledReason($offering, $assignedFaculty);
@@ -132,35 +205,49 @@ class GreedyScheduleService
             /** @var Faculty|null $usedFaculty */
             $usedFaculty = $placement['faculty'];
 
-            $placedBlocks[] = [
-                'room_id' => $placement['room']->id,
-                'faculty_id' => $usedFaculty?->id,
-                'section_id' => $offering->section_id,
-                'day' => $placement['day'],
-                'start' => $placement['start'],
-                'end' => $placement['end'],
-            ];
+            foreach ($placement['days'] as $day) {
+                $placedBlocks[] = [
+                    'room_id' => $placement['room']->id,
+                    'faculty_id' => $usedFaculty?->id,
+                    'section_id' => $offering->section_id,
+                    'day' => $day,
+                    'start' => $placement['start'],
+                    'end' => $placement['end'],
+                ];
+
+                $roomUsage[$placement['room']->id] = ($roomUsage[$placement['room']->id] ?? 0) + 1;
+            }
 
             if ($usedFaculty) {
                 $facultyLoad[$usedFaculty->id] = ($facultyLoad[$usedFaculty->id] ?? 0) + (int) $offering->units;
             }
 
-            $roomUsage[$placement['room']->id] = ($roomUsage[$placement['room']->id] ?? 0) + 1;
-
             $scheduledSubjectIds[] = $offering->subject_id;
 
             $this->debug(sprintf(
-                "Accepted: %s\n\nFaculty: %s (%s)\nRoom: %s\nDay: %s\nTime: %s - %s",
+                "Accepted: %s\n\nFaculty: %s (%s)\nRoom: %s\nDays: %s\nTime: %s - %s",
                 $this->subjectLabel($offering),
                 $usedFaculty?->full_name ?? 'Unassigned',
                 $placement['faculty_source'] ?? 'none',
                 $placement['room']->room_code,
-                ucfirst($placement['day']),
+                implode(', ', array_map('ucfirst', $placement['days'])),
                 $this->label($placement['start']),
                 $this->label($placement['end'])
             ));
 
-            $results[] = $this->presentBlock($offering, $placement, 'preview', null);
+            // One result row PER MEETING DAY — see the class docblock's
+            // "Multi-meeting subjects" note for why this is a flat list
+            // of rows rather than one row carrying several days.
+            foreach ($placement['days'] as $day) {
+                $results[] = $this->presentBlock($offering, [
+                    'room' => $placement['room'],
+                    'faculty' => $usedFaculty,
+                    'faculty_source' => $placement['faculty_source'],
+                    'day' => $day,
+                    'start' => $placement['start'],
+                    'end' => $placement['end'],
+                ], 'preview', null);
+            }
         }
 
         $scheduledCount = count($scheduledSubjectIds);
@@ -464,6 +551,48 @@ class GreedyScheduleService
             ->all();
     }
 
+    /**
+     * Every Schedule row already committed for this term, in the same
+     * shape $placedBlocks entries use ('room_id', 'faculty_id',
+     * 'section_id', 'day', 'start', 'end') — across ALL sections, not
+     * just the one currently being generated.
+     *
+     * This is what makes the algorithm's own room/faculty/section
+     * conflict checks (hasConflict()/comboHasConflict()) actually
+     * aware of everything that's already been Saved on the Master
+     * Grid, the same "preview + already-saved" merge
+     * ScheduleValidationService::allKnownBlocksForTerm() already does
+     * for post-generation validation. Before this, generateForSection()
+     * started $placedBlocks at [] every run — perfectly happy to place
+     * a subject in a room/time another section already occupies, or
+     * to double-book a section against its own already-scheduled
+     * subjects, because nothing here ever told it those blocks
+     * existed. The conflict was only ever caught afterward, when the
+     * Schedule Preview modal separately re-validates against the real
+     * `schedules` table — which is why "successfully generated" rows
+     * could still show CONFLICT the moment the preview rendered.
+     *
+     * A currently-being-regenerated offering's OWN prior row is
+     * naturally excluded here for free: loadOfferings() only ever
+     * hands generateForSection() offerings that are NOT already
+     * Scheduled, so a subject with an existing Schedule row never
+     * reaches this run to begin with.
+     */
+    private function initialCommittedBlocks(AcademicTerm $term): array
+    {
+        return Schedule::forTerm($term->id)
+            ->get()
+            ->map(fn (Schedule $s) => [
+                'room_id' => $s->room_id,
+                'faculty_id' => $s->faculty_id,
+                'section_id' => $s->subjectOffering?->section_id,
+                'day' => $s->day,
+                'start' => $s->start_minutes,
+                'end' => $s->end_minutes,
+            ])
+            ->all();
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Time Grid (derived from the Active Academic Term)
@@ -698,6 +827,7 @@ class GreedyScheduleService
         SubjectOffering $offering,
         ?Section $section,
         array $grid,
+        array $dayCombos,
         int $duration,
         ?Faculty $assignedFaculty,
         array $facultyLoad,
@@ -711,7 +841,7 @@ class GreedyScheduleService
 
         if ($assignedUsable) {
             foreach ($rooms as $room) {
-                foreach ($grid['working_days'] as $day) {
+                foreach ($dayCombos as $combo) {
                     foreach ($grid['starts'] as $start) {
                         if (! $this->isValidBlock($grid, $start, $duration)) {
                             continue;
@@ -719,7 +849,7 @@ class GreedyScheduleService
 
                         $end = $start + $duration;
 
-                        if ($this->hasConflict($placedBlocks, $day, $start, $end, $room->id, $assignedFaculty->id, $offering->section_id)) {
+                        if ($this->comboHasConflict($placedBlocks, $combo, $start, $end, $room->id, $assignedFaculty->id, $offering->section_id)) {
                             continue;
                         }
 
@@ -727,7 +857,7 @@ class GreedyScheduleService
                             'room' => $room,
                             'faculty' => $assignedFaculty,
                             'faculty_source' => 'assigned',
-                            'day' => $day,
+                            'days' => $combo,
                             'start' => $start,
                             'end' => $end,
                         ];
@@ -751,7 +881,7 @@ class GreedyScheduleService
         }
 
         foreach ($rooms as $room) {
-            foreach ($grid['working_days'] as $day) {
+            foreach ($dayCombos as $combo) {
                 foreach ($grid['starts'] as $start) {
                     if (! $this->isValidBlock($grid, $start, $duration)) {
                         continue;
@@ -759,9 +889,10 @@ class GreedyScheduleService
 
                     $end = $start + $duration;
 
-                    if ($this->hasConflict($placedBlocks, $day, $start, $end, $room->id, null, $offering->section_id)) {
-                        // Room or section already taken at this slot —
-                        // no faculty choice will fix that, skip ahead.
+                    if ($this->comboHasConflict($placedBlocks, $combo, $start, $end, $room->id, null, $offering->section_id)) {
+                        // Room or section already taken on at least one
+                        // day of this combo — no faculty choice will
+                        // fix that, skip ahead.
                         continue;
                     }
 
@@ -770,7 +901,7 @@ class GreedyScheduleService
                             continue;
                         }
 
-                        if ($this->hasConflict($placedBlocks, $day, $start, $end, $room->id, $candidate->id, $offering->section_id)) {
+                        if ($this->comboHasConflict($placedBlocks, $combo, $start, $end, $room->id, $candidate->id, $offering->section_id)) {
                             continue;
                         }
 
@@ -778,7 +909,7 @@ class GreedyScheduleService
                             'room' => $room,
                             'faculty' => $candidate,
                             'faculty_source' => 'auto',
-                            'day' => $day,
+                            'days' => $combo,
                             'start' => $start,
                             'end' => $end,
                         ];
@@ -788,6 +919,67 @@ class GreedyScheduleService
         }
 
         return null;
+    }
+
+    /**
+     * Every standard day-combination for $meetings/week that this
+     * term's working days can actually support — 1x offers every
+     * individual working day as its own candidate; 2x/3x only offer
+     * the fixed pairings/triples from DAY_COMBOS_2X/DAY_COMBOS_3X, and
+     * only ones where EVERY day in the pairing is enabled for the
+     * term. Falls back to 1x-style single-day combos for any
+     * meetings count outside 1–3 (defensive; Session Settings' dropdown
+     * never actually offers anything else).
+     *
+     * @return array<int,array<int,string>> list of combos, each combo
+     *         a list of lowercase day field names.
+     */
+    private function resolveDayCombos(int $meetings, array $workingDays): array
+    {
+        if ($meetings <= 1) {
+            return array_map(fn ($day) => [$day], $workingDays);
+        }
+
+        $fixed = $meetings === 3 ? self::DAY_COMBOS_3X : self::DAY_COMBOS_2X;
+
+        $combos = array_values(array_filter(
+            $fixed,
+            fn ($combo) => empty(array_diff($combo, $workingDays))
+        ));
+
+        // No standard combo fits this term's working days (e.g. 3x
+        // requested but the term only runs Mon–Wed) — rather than
+        // silently falling back to a WRONG meeting count, this is
+        // reported as unscheduled by the caller (empty array signals
+        // "no valid combo exists").
+        return $combos;
+    }
+
+    /**
+     * Whether ANY day in $combo would conflict (room, faculty, or
+     * section already booked, same day+overlapping time) against
+     * everything placed so far. All days in a combo share the same
+     * faculty/room/time by construction — this only needs to check
+     * each day independently against $placedBlocks, since sibling days
+     * of THIS SAME combo aren't in $placedBlocks yet (they're only
+     * added once the whole combo is accepted — see the main loop).
+     */
+    private function comboHasConflict(
+        array $placedBlocks,
+        array $combo,
+        int $start,
+        int $end,
+        int $roomId,
+        ?int $facultyId,
+        int $sectionId
+    ): bool {
+        foreach ($combo as $day) {
+            if ($this->hasConflict($placedBlocks, $day, $start, $end, $roomId, $facultyId, $sectionId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function exceedsMaxLoad(Faculty $faculty, array $facultyLoad, int $additionalUnits): bool
@@ -878,6 +1070,7 @@ class GreedyScheduleService
             'room_type' => $offering->room_type,
             'units' => $offering->units,
             'hours' => $offering->hours,
+            'meetings_per_week' => $offering->meetings_per_week ?: SubjectOffering::DEFAULT_MEETINGS_PER_WEEK,
 
             'faculty_id' => $faculty?->id,
             'faculty_name' => $faculty?->full_name,

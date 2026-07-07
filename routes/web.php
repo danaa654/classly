@@ -348,6 +348,16 @@ Route::middleware(['auth'])->group(function () {
 
         Route::middleware('role:Admin|Registrar')->group(function () {
 
+            // Generate Schedule — Step 2 (Session Settings). GET fetches
+            // the section's Subject Offerings + eligible faculty/rooms
+            // for the editing table; PUT persists meetings/week and any
+            // preferred faculty/room overrides just before Generate runs.
+            Route::get('master-grid/session-settings', [MasterGridController::class, 'sessionSettings'])
+                ->name('master-grid.session-settings');
+
+            Route::put('master-grid/session-settings', [MasterGridController::class, 'updateSessionSettings'])
+                ->name('master-grid.session-settings.update');
+
             Route::post('master-grid/generate', [MasterGridController::class, 'generate'])
                 ->name('master-grid.generate');
 
@@ -361,6 +371,16 @@ Route::middleware(['auth'])->group(function () {
 
             Route::post('master-grid/save', [MasterGridController::class, 'save'])
                 ->name('master-grid.save');
+
+            // Removes an already-committed Schedule block (all meeting-
+            // day rows for the subject offering) from the Master Grid,
+            // sending it back to "unscheduled" — the Faculty Loading
+            // assignment (teaching_assignments) is deliberately left
+            // untouched, since removing a TIME/ROOM placement is not
+            // the same decision as un-assigning the faculty member. See
+            // MasterGridController::removeSchedule().
+            Route::delete('master-grid/schedule', [MasterGridController::class, 'removeSchedule'])
+                ->name('master-grid.remove-schedule');
 
         });
 

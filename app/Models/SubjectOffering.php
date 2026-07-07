@@ -43,6 +43,16 @@ class SubjectOffering extends Model
     public const CLASSIFICATION_MAJOR = 'Major';
     public const CLASSIFICATION_MINOR = 'Minor';
 
+    /**
+     * Fallback used wherever meetings_per_week hasn't been explicitly
+     * set in Session Settings yet (including every row that existed
+     * before that column shipped) — one meeting carrying the full
+     * weekly duration, the safest assumption since it never requires
+     * splitting a subject across day-combinations that haven't been
+     * chosen.
+     */
+    public const DEFAULT_MEETINGS_PER_WEEK = 1;
+
     protected $fillable = [
         'academic_term_id',
         'curriculum_id',
@@ -54,6 +64,7 @@ class SubjectOffering extends Model
         'semester',
         'units',
         'hours',
+        'meetings_per_week',
         'classification',
         'room_type',
         'edp_code',
@@ -67,6 +78,7 @@ class SubjectOffering extends Model
             'semester' => 'integer',
             'units' => 'integer',
             'hours' => 'integer',
+            'meetings_per_week' => 'integer',
         ];
     }
 
@@ -80,6 +92,7 @@ class SubjectOffering extends Model
         'faculty_status',
         'room_status',
         'overall_status',
+        'hours_per_meeting',
     ];
 
     /*
@@ -217,6 +230,26 @@ class SubjectOffering extends Model
     | these check for the relevant table/column before trusting it,
     | rather than hard-failing if either hasn't been built out yet.
     */
+
+    /**
+     * Auto-computed "hours per meeting" shown (read-only) in Session
+     * Settings — total weekly duration divided by however many times
+     * a week the Registrar has this subject meeting. Deliberately NOT
+     * rounded: a subject that doesn't divide evenly (e.g. 3 hrs ÷ 2
+     * meetings) surfaces as 1.5 here, and it's Session Settings' job
+     * to warn about that and let the Registrar decide, not this
+     * accessor's job to silently round it away.
+     */
+    public function getHoursPerMeetingAttribute(): float
+    {
+        $meetings = $this->meetings_per_week ?: self::DEFAULT_MEETINGS_PER_WEEK;
+
+        if ($meetings <= 0 || ! $this->hours) {
+            return 0;
+        }
+
+        return round(((float) $this->hours) / $meetings, 2);
+    }
 
     public function getFacultyStatusAttribute(): string
     {

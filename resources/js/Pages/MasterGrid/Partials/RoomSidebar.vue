@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { collegeLabel } from '@/Utils/collegeColors'
 import { accentColor } from '@/Utils/roomAccentColor'
 
@@ -16,11 +16,47 @@ function toggle() {
     emit('update:collapsed', !props.collapsed)
 }
 
-const count = computed(() => props.rooms.length)
-
 function isSelected(room) {
     return props.selectedRoom?.id === room.id
 }
+
+/* ── Filters ──────────────────────────────────────────────────────
+   Two independent dropdowns, both derived straight from the rooms
+   already on the page — no new backend data needed, since
+   room_group_codes/room_type are exactly what the sidebar's own
+   badges already render. Picking both narrows the list to rooms
+   matching EITHER filter's own condition, same as any standard
+   filter pair (empty selection = "All", meaning that filter is
+   simply skipped). */
+const programFilter = ref('')
+const typeFilter = ref('')
+
+const programOptions = computed(() => {
+    const codes = new Set()
+    props.rooms.forEach((room) => (room.room_group_codes ?? []).forEach((code) => codes.add(code)))
+    return Array.from(codes).sort()
+})
+
+const typeOptions = computed(() => {
+    const types = new Set()
+    props.rooms.forEach((room) => room.room_type && types.add(room.room_type))
+    return Array.from(types).sort()
+})
+
+const filteredRooms = computed(() =>
+    props.rooms
+        .filter((room) => !programFilter.value || (room.room_group_codes ?? []).includes(programFilter.value))
+        .filter((room) => !typeFilter.value || room.room_type === typeFilter.value)
+)
+
+const hasActiveFilters = computed(() => !!programFilter.value || !!typeFilter.value)
+
+function clearFilters() {
+    programFilter.value = ''
+    typeFilter.value = ''
+}
+
+const count = computed(() => filteredRooms.value.length)
 </script>
 
 <template>
@@ -44,12 +80,46 @@ function isSelected(room) {
         </div>
 
         <div v-if="!collapsed" class="flex-1 overflow-y-auto custom-scrollbar-theme p-2 space-y-2">
-            <p v-if="count === 0" class="text-xs text-center py-8" style="color: var(--text-muted)">
+            <!-- Filters -->
+            <div class="space-y-1.5 pb-1">
+                <select
+                    v-model="programFilter"
+                    class="w-full rounded-lg border text-[11px] font-semibold px-2 py-1.5"
+                    style="background: var(--card-bg); border-color: var(--card-border); color: var(--text-primary)"
+                >
+                    <option value="">All Programs</option>
+                    <option v-for="code in programOptions" :key="code" :value="code">{{ code }}</option>
+                </select>
+
+                <select
+                    v-model="typeFilter"
+                    class="w-full rounded-lg border text-[11px] font-semibold px-2 py-1.5"
+                    style="background: var(--card-bg); border-color: var(--card-border); color: var(--text-primary)"
+                >
+                    <option value="">All Room Types</option>
+                    <option v-for="type in typeOptions" :key="type" :value="type">{{ type }}</option>
+                </select>
+
+                <button
+                    v-if="hasActiveFilters"
+                    type="button"
+                    class="text-[10px] font-bold hover:opacity-70"
+                    style="color: var(--text-muted)"
+                    @click="clearFilters"
+                >
+                    Clear filters ✕
+                </button>
+            </div>
+
+            <p v-if="rooms.length === 0" class="text-xs text-center py-8" style="color: var(--text-muted)">
                 No active rooms.
+            </p>
+            <p v-else-if="count === 0" class="text-xs text-center py-8" style="color: var(--text-muted)">
+                No rooms match these filters.
             </p>
 
             <button
-                v-for="room in rooms"
+                v-for="room in filteredRooms"
                 :key="room.id"
                 type="button"
                 class="room-card w-full text-left rounded-lg px-2.5 py-2 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm"

@@ -94,9 +94,14 @@ function timeRangeLabel(event) {
 const rowLineByStartMinutes = computed(() => {
     const map = new Map()
     timeRows.value.forEach((row, index) => {
-        if (row.type !== 'lunch') {
-            map.set(row.startMinutes, index + 2)
-        }
+        // Every row — including the lunch band — occupies a real grid
+        // line (see the v-for below, which renders a cell/band for
+        // EVERY row in order). Excluding lunch here used to mean any
+        // event ending exactly when lunch starts (e.g. 8:00 AM –
+        // 12:00 PM) couldn't resolve its end line, fell back to
+        // finalLine, and got stretched all the way to the bottom of
+        // the table instead of stopping at lunch.
+        map.set(row.startMinutes, index + 2)
     })
     return map
 })
@@ -220,7 +225,7 @@ const gridTemplateColumns = computed(
                      being repeated per overlapping row. -->
                 <div
                     v-for="{ event, gridColumn, gridRow } in positionedEvents"
-                    :key="event.subject_offering_id"
+                    :key="event.subject_offering_id + '-' + event.day"
                     class="rounded-md border px-2 py-1.5 m-0.5 overflow-hidden z-[5] flex flex-col items-center justify-center text-center gap-0.5 !text-black dark:!text-black"
                     :class="[
                         collegeClasses(event.college_code).block,

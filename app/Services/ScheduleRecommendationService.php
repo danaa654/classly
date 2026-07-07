@@ -22,6 +22,29 @@ use Illuminate\Support\Facades\DB;
  */
 class ScheduleRecommendationService
 {
+    /**
+     * Standard day-combinations for a 2x/3x-per-week subject — must
+     * stay identical to GreedyScheduleService::DAY_COMBOS_2X/3X. That
+     * class can't be depended on directly here (it's the scheduling
+     * engine, not a shared lookup table), so this is a deliberate,
+     * cross-referenced duplicate: a suggested time for a 2x subject
+     * must land on one of the SAME standard pairings the Greedy
+     * Scheduler itself is allowed to place, or the suggestion could
+     * recommend a combo the algorithm would never have produced.
+     * Keep both lists in sync if the spec's pairings ever change.
+     */
+    private const DAY_COMBOS_2X = [
+        ['monday', 'wednesday'],
+        ['tuesday', 'thursday'],
+        ['wednesday', 'friday'],
+        ['monday', 'thursday'],
+    ];
+
+    private const DAY_COMBOS_3X = [
+        ['monday', 'wednesday', 'friday'],
+        ['tuesday', 'thursday', 'saturday'],
+    ];
+
     public function __construct(
         private readonly ScheduleValidationService $validator
     ) {
@@ -186,9 +209,27 @@ class ScheduleRecommendationService
     |--------------------------------------------------------------------------
     |
     | Walks the term's working days/start-times (same grid the Greedy
-    | Scheduler builds), starting from the block's current day, and
-    | returns the nearest slots where THIS SAME faculty + room + section
-    | are all simultaneously free.
+    | Scheduler builds) and returns the nearest slots where THIS SAME
+    | faculty + room + section are all simultaneously free.
+    |
+    | meetings_per_week-aware: a subject that meets 2x/3x a week must
+    | keep the SAME faculty/room/time across every one of its meeting
+    | days (see GreedyScheduleService's "Multi-meeting subjects"
+    | docblock) — a suggestion naming only one day would be incomplete
+    | and, if applied as-is, would leave the subject's other meeting
+    | day(s) sitting at whatever time they were at before. So for a
+    | 2x/3x subject this returns a full day-combo (e.g. ['wednesday',
+    | 'thursday']) per suggestion, built from the same standard
+    | pairings the Greedy Scheduler itself uses (DAY_COMBOS_2X/3X
+    | above) — and a suggestion is only ever offered if EVERY day in
+    | the combo is simultaneously free for that faculty/room/section,
+    | never just the first one.
+    |
+    | Diversified one-suggestion-per-combo (mirroring the old one-
+    | suggestion-per-day cap): the first combo/day that has a free
+    | slot contributes exactly one suggestion, then the search moves
+    | on to the next combo/day, so results spread out instead of
+    | stacking multiple near-identical times from the same combo.
     */
     private function suggestTimes(array $block, Collection $allBlocks, AcademicTerm $term, int $limit = 2): array
     {
@@ -203,26 +244,27 @@ class ScheduleRecommendationService
         $dayFields = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
         $workingDays = array_values(array_filter($dayFields, fn ($f) => (bool) $term->{$f}));
 
-        // Rotate so we search starting from the block's current day.
-        $currentIndex = array_search($block['day'], $workingDays, true);
-        if ($currentIndex !== false) {
-            $workingDays = array_merge(
-                array_slice($workingDays, $currentIndex),
-                array_slice($workingDays, 0, $currentIndex)
-            );
-        }
-
         [$schoolStart, $schoolEnd] = $this->validator->schoolHours($term);
         [$lunchStart, $lunchEnd] = $this->validator->lunchWindow($term);
         $interval = $term->time_interval ?: 30;
-
-        $suggestions = [];
 
         if ($schoolStart === null || $schoolEnd === null) {
             return [];
         }
 
-        foreach ($workingDays as $day) {
+        $meetings = (int) ($block['meetings_per_week'] ?? 1) ?: 1;
+        $combos = $this->resolveDayCombos($meetings, $workingDays, $block['day'] ?? null);
+
+        if (empty($combos)) {
+            return [];
+        }
+
+        $suggestions = [];
+
+        foreach ($combos as $combo) {
+            // At most one suggestion per combo — as soon as we find
+            // the first slot where every day in this combo is free,
+            // stop scanning this combo and move on to the next one.
             for ($start = $schoolStart; $start + $duration <= $schoolEnd; $start += $interval) {
                 $end = $start + $duration;
 
@@ -230,38 +272,119 @@ class ScheduleRecommendationService
                     continue;
                 }
 
-                if ($day === $block['day'] && $start === $block['start_minutes']) {
-                    continue; // that's the current, conflicting slot
+                // Skip the exact slot this block is already sitting
+                // on (only possible to exactly match for a 1x/week
+                // subject, where the combo is a single day).
+                if ($combo === [$block['day'] ?? null] && $start === $block['start_minutes']) {
+                    continue;
                 }
 
-                $candidate = array_merge($block, [
-                    'day' => $day,
-                    'start_minutes' => $start,
-                    'end_minutes' => $end,
-                ]);
+                $comboIsFree = true;
 
-                $conflictFree = ! $this->hasOverlap($allBlocks, $candidate, 'faculty_id', $block['faculty_id'] ?? null, $day, $start, $end)
-                    && ! $this->hasOverlap($allBlocks, $candidate, 'room_id', $block['room_id'] ?? null, $day, $start, $end)
-                    && ! $this->hasOverlap($allBlocks, $candidate, 'section_id', $block['section_id'] ?? null, $day, $start, $end);
+                foreach ($combo as $day) {
+                    $candidate = array_merge($block, [
+                        'day' => $day,
+                        'start_minutes' => $start,
+                        'end_minutes' => $end,
+                    ]);
 
-                if (! $conflictFree) {
+                    $dayIsFree = ! $this->hasOverlap($allBlocks, $candidate, 'faculty_id', $block['faculty_id'] ?? null, $day, $start, $end)
+                        && ! $this->hasOverlap($allBlocks, $candidate, 'room_id', $block['room_id'] ?? null, $day, $start, $end)
+                        && ! $this->hasOverlap($allBlocks, $candidate, 'section_id', $block['section_id'] ?? null, $day, $start, $end);
+
+                    if (! $dayIsFree) {
+                        $comboIsFree = false;
+                        break;
+                    }
+                }
+
+                if (! $comboIsFree) {
                     continue;
                 }
 
                 $suggestions[] = [
-                    'day' => $day,
+                    'days' => $combo,
+                    // Kept for backward compatibility with anything
+                    // still reading a single `day` — always the
+                    // combo's first day (for a 1x subject, its only
+                    // day).
+                    'day' => $combo[0],
                     'start_minutes' => $start,
                     'end_minutes' => $end,
-                    'label' => ucfirst($day) . ' ' . $this->validator->label($start) . '–' . $this->validator->label($end),
+                    'label' => $this->comboLabel($combo) . ' ' . $this->validator->label($start) . '–' . $this->validator->label($end),
                 ];
 
-                if (count($suggestions) >= $limit) {
-                    return $suggestions;
-                }
+                // Found this combo's one slot — stop scanning it and
+                // move on to the next combo.
+                break;
+            }
+
+            if (count($suggestions) >= $limit) {
+                return $suggestions;
             }
         }
 
         return $suggestions;
+    }
+
+    /**
+     * Every standard day-combination for $meetings/week that fits
+     * within this term's working days — mirrors GreedyScheduleService::
+     * resolveDayCombos() exactly (same fixed pairings, same "every day
+     * in the combo must be a working day" filter). Rotated so combos
+     * containing the block's current day are tried first, purely so a
+     * conflicted block's suggestions tend to stay close to whichever
+     * days it's already on rather than jumping to a totally unrelated
+     * pairing first.
+     *
+     * @return array<int, array<int, string>>
+     */
+    private function resolveDayCombos(int $meetings, array $workingDays, ?string $preferredDay): array
+    {
+        if ($meetings <= 1) {
+            $days = $workingDays;
+
+            if ($preferredDay && ($index = array_search($preferredDay, $days, true)) !== false) {
+                $days = array_merge([$preferredDay], array_slice($days, 0, $index), array_slice($days, $index + 1));
+            }
+
+            return array_map(fn ($day) => [$day], $days);
+        }
+
+        $fixed = $meetings === 3 ? self::DAY_COMBOS_3X : self::DAY_COMBOS_2X;
+
+        $combos = array_values(array_filter(
+            $fixed,
+            fn ($combo) => empty(array_diff($combo, $workingDays))
+        ));
+
+        if ($preferredDay) {
+            usort($combos, function ($a, $b) use ($preferredDay) {
+                $aHas = in_array($preferredDay, $a, true) ? 0 : 1;
+                $bHas = in_array($preferredDay, $b, true) ? 0 : 1;
+
+                return $aHas <=> $bHas;
+            });
+        }
+
+        return $combos;
+    }
+
+    /**
+     * "Wednesday" for a single-day combo, "Wednesday & Thursday" for a
+     * 2x combo, "Monday, Wednesday & Friday" for a 3x combo.
+     */
+    private function comboLabel(array $combo): string
+    {
+        $names = array_map(fn ($day) => ucfirst($day), $combo);
+
+        if (count($names) === 1) {
+            return $names[0];
+        }
+
+        $last = array_pop($names);
+
+        return implode(', ', $names) . ' & ' . $last;
     }
 
     /**

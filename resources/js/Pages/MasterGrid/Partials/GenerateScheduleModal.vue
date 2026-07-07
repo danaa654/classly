@@ -80,10 +80,10 @@ function close() {
     emit('close')
 }
 
-function generate() {
+function proceedToSessionSettings() {
     if (!canGenerate.value || props.generating) return
 
-    emit('generate', {
+    emit('session-settings', {
         department_id: departmentId.value,
         program_id: programId.value,
         specialization_id: specializationId.value,
@@ -102,8 +102,9 @@ function generate() {
             </div>
 
             <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                Runs the Greedy Scheduling Algorithm for this section only. Nothing is saved —
-                the result appears as a preview on the Master Grid that you can review first.
+                Pick a section, then review its Session Settings before the Greedy Scheduling
+                Algorithm runs. Nothing is saved until you review the generated preview on the
+                Master Grid and explicitly confirm it.
             </p>
 
             <div class="space-y-3">
@@ -172,9 +173,9 @@ function generate() {
                     :disabled="!canGenerate || generating"
                     class="px-4 py-1.5 rounded-lg text-sm font-bold text-white transition"
                     :class="canGenerate && !generating ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'"
-                    @click="generate"
+                    @click="proceedToSessionSettings"
                 >
-                    {{ generating ? 'Generating…' : 'Generate' }}
+                    {{ generating ? 'Loading…' : 'Session Settings' }}
                 </button>
             </div>
         </div>

@@ -164,6 +164,17 @@ class ScheduleValidationService
      * for every block that has at least one conflict; an empty array
      * means the whole set is safe to save.
      *
+     * A subject meeting 2x/3x a week now contributes MULTIPLE blocks
+     * here (one per meeting day, same subject_offering_id — see
+     * GreedyScheduleService's "Multi-meeting subjects" docblock), so
+     * this merges conflicts from every one of a subject's meeting rows
+     * into that same key rather than letting a later meeting's result
+     * silently overwrite an earlier meeting's conflicts. The frontend
+     * still only needs subject_offering_id to highlight the right
+     * blocks (see Index.vue's `Object.keys(conflicts).map(Number)`),
+     * so the key shape here is unchanged — only same-key entries now
+     * accumulate instead of replacing.
+     *
      * @param  Collection<int,array>  $blocks
      * @return array<int,array>
      */
@@ -175,7 +186,9 @@ class ScheduleValidationService
             $outcome = $this->validateBlock($block, $blocks, $term);
 
             if (! empty($outcome['conflicts'])) {
-                $result[$block['subject_offering_id']] = $outcome['conflicts'];
+                $offeringId = $block['subject_offering_id'];
+
+                $result[$offeringId] = array_merge($result[$offeringId] ?? [], $outcome['conflicts']);
             }
         }
 
@@ -213,6 +226,7 @@ class ScheduleValidationService
                 'room_id' => $s->room_id,
                 'room_code' => $s->room?->room_code,
                 'section_id' => $s->subjectOffering?->section_id,
+                'section_code' => $s->subjectOffering?->section?->section_code,
                 'subject_code' => $s->subjectOffering?->subject?->subject_code,
                 'units' => $s->subjectOffering?->subject?->units ?? 0,
                 'day' => $s->day,
@@ -306,7 +320,12 @@ class ScheduleValidationService
         $preview = $allBlocks
             ->reject(fn ($b) => $b['subject_offering_id'] === $block['subject_offering_id'])
             ->filter(fn ($b) => ($b['day'] ?? null) === $block['day'])
-            ->filter(fn ($b) => $this->overlaps($block, $b));
+            ->filter(fn ($b) => $this->overlaps($block, $b))
+            // Not yet committed to `schedules` — still just sitting in
+            // the in-memory preview batch, so it (and therefore this
+            // conflict) can still be fixed by editing either side
+            // before Save Schedule ever runs.
+            ->map(fn ($b) => array_merge($b, ['is_saved' => false]));
 
         $saved = Schedule::forTerm($term->id)
             ->where('day', $block['day'])
@@ -323,10 +342,17 @@ class ScheduleValidationService
                 'room_id' => $s->room_id,
                 'room_code' => $s->room?->room_code,
                 'section_id' => $s->subjectOffering?->section_id,
+                'section_code' => $s->subjectOffering?->section?->section_code,
                 'subject_code' => $s->subjectOffering?->subject?->subject_code,
                 'day' => $s->day,
                 'start_minutes' => $s->start_minutes,
                 'end_minutes' => $s->end_minutes,
+                // Already committed and live on the Master Grid — a
+                // conflict against this can't be waved through as
+                // "fix it later," since there's nothing left to edit
+                // on this side without a separate Remove Schedule/Edit
+                // Schedule action against the real, saved row.
+                'is_saved' => true,
             ]);
 
         return $preview->merge($saved)->values();
@@ -363,6 +389,13 @@ class ScheduleValidationService
             'day' => $block['day'] ?? null,
             'start_minutes' => $block['start_minutes'] ?? null,
             'end_minutes' => $block['end_minutes'] ?? null,
+            // Whether this block is already committed to the
+            // `schedules` table (true) vs still just sitting in the
+            // in-memory preview batch (false) — see overlappingOthers().
+            // Absent entirely for $current (the block being edited
+            // itself was never summarized with this key), which is
+            // fine: only `conflicting` is ever checked for it.
+            'is_saved' => $block['is_saved'] ?? false,
         ];
     }
 }

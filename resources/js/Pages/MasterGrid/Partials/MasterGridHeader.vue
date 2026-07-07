@@ -9,6 +9,13 @@ const props = defineProps({
     // (see Index.vue's applyEdit) — every edit commits immediately now,
     // there is no separate "unsaved draft" state to Cancel or Save.
     saving: { type: Boolean, default: false },
+    // Admin/Registrar only — Dean/Assistant Dean/OIC can view the
+    // grid and open a block's details, but never see Generate
+    // Schedule at all (it's the entry point to writing new blocks,
+    // and the backend already rejects generate/save for them — see
+    // MasterGridController::middleware()). Hiding it here just avoids
+    // showing a button that would only ever end in a 403.
+    canManage: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['clear-room', 'generate'])
@@ -70,6 +77,7 @@ const schoolHoursLabel = computed(() => {
                 </button>
 
                 <button
+                    v-if="canManage"
                     type="button"
                     class="btn-info"
                     :disabled="saving"

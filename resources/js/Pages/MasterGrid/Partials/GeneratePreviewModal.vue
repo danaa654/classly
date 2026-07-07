@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import ScheduleSuccessOverlay from '@/Components/ScheduleSuccessOverlay.vue'
 
 /**
  * Shown right after a successful Generate call — BEFORE anything
@@ -43,9 +44,15 @@ const props = defineProps({
     // else a second ago). Without this, the generic banner above the
     // table was the only signal given, and it named zero rows.
     conflicts: { type: Object, default: null },
+    // True for the ~3 seconds right after Save Changes has actually
+    // succeeded — shows the confetti/success overlay on top of this
+    // modal instead of closing it instantly. Index.vue owns the timer
+    // (via ScheduleSuccessOverlay's 'done' event) so the modal only
+    // ever closes once the celebration has actually finished playing.
+    justSaved: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['save', 'discard', 'edit-block'])
+const emit = defineEmits(['save', 'discard', 'edit-block', 'saved-celebration-done'])
 
 const blocks = computed(() => props.result?.blocks ?? [])
 
@@ -54,18 +61,91 @@ const placedBlocks = computed(() => blocks.value.filter((b) => b.status === 'pre
 const scheduledCount = computed(() => props.result?.scheduled_count ?? 0)
 const unscheduledCount = computed(() => props.result?.unscheduled_count ?? 0)
 
+const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
+function capitalize(day) {
+    return day ? day[0].toUpperCase() + day.slice(1) : day
+}
+
+/**
+ * Collapses a subject's multiple meeting rows (2x/3x per week — see
+ * GreedyScheduleService's "Multi-meeting subjects" docblock) into ONE
+ * display row per subject, combining their days into a single label
+ * ("Monday - Wednesday") since they always share the same faculty,
+ * room, and time by construction. `unscheduled`/`skipped` rows never
+ * group (there's only ever one such row per offering) and pass through
+ * unchanged. The underlying per-day rows are kept on `.blocks` so
+ * saveConflictsFor()/editBlock() can still reach the real data —
+ * grouping only ever changes what's DISPLAYED, never what's saved.
+ */
+const displayRows = computed(() => {
+    const groups = new Map()
+    const order = []
+
+    blocks.value.forEach((block, index) => {
+        const key = block.status === 'preview'
+            ? ['preview', block.subject_offering_id, block.faculty_id, block.room_id, block.start_minutes, block.end_minutes].join(':')
+            : `solo-${index}`
+
+        if (!groups.has(key)) {
+            groups.set(key, { ...block, days: block.day ? [block.day] : [], blocks: [block] })
+            order.push(key)
+        } else {
+            const group = groups.get(key)
+            if (block.day && !group.days.includes(block.day)) group.days.push(block.day)
+            group.blocks.push(block)
+        }
+    })
+
+    return order.map((key) => {
+        const group = groups.get(key)
+        group.days.sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b))
+        return group
+    })
+})
+
+function dayLabel(row) {
+    if (!row.days.length) return '—'
+    return row.days.map(capitalize).join(' - ')
+}
+
 /**
  * The specific conflict reason(s) Save Schedule rejected THIS block
  * for, or null if this block wasn't part of the rejected batch (or
  * nothing has failed yet). Keys of props.conflicts come back from
  * Laravel as strings even though subject_offering_id is numeric, so
- * this coerces both sides before comparing.
+ * this coerces both sides before comparing. Works unchanged for a
+ * grouped multi-meeting row too — conflicts are already merged across
+ * a subject's meeting rows onto the same subject_offering_id key (see
+ * ScheduleValidationService::validateAll()).
  */
 function saveConflictsFor(block) {
     if (!props.conflicts) return null
     const entry = props.conflicts[block.subject_offering_id] ?? props.conflicts[String(block.subject_offering_id)]
     return entry && entry.length ? entry : null
 }
+
+/**
+ * Conflicts recorded LIVE, right when the person applied an edit from
+ * inside this still-unsaved preview (see Index.vue's applyEdit — a
+ * 'preview' context edit is allowed through even with a conflict,
+ * tagging the affected meeting-day block with its own `conflicts`
+ * array instead of trapping the person in the Edit Schedule modal).
+ * Distinct from saveConflictsFor() above, which only ever exists AFTER
+ * a real Save Changes attempt came back 422 — this one shows up the
+ * moment the edit is applied, before Save Changes is ever clicked.
+ */
+function liveConflictsFor(row) {
+    const reasons = row.blocks.flatMap((b) => b.conflicts ?? [])
+    return reasons.length ? reasons : null
+}
+
+/** Any row still carrying an unresolved live conflict — Save Changes
+ * stays disabled until every row is clean, since attempting to save a
+ * batch that's already known to conflict would just fail anyway. */
+const hasUnresolvedConflicts = computed(() =>
+    displayRows.value.some((row) => row.status === 'preview' && liveConflictsFor(row))
+)
 
 function timeLabel(minutes) {
     if (minutes === null || minutes === undefined) return '—'
@@ -88,19 +168,26 @@ function save() {
 
 // Only successfully-placed rows can be edited — a 'skipped'/'unscheduled'
 // row has no faculty/room/day/time to edit yet.
-function rowClickable(block) {
-    return block.status === 'preview'
+function rowClickable(row) {
+    return row.status === 'preview'
 }
 
-function editBlock(block) {
-    if (props.saving || !rowClickable(block)) return
-    emit('edit-block', block)
+// Editing a grouped multi-meeting row opens the modal with EVERY
+// underlying meeting instance (e.g. both the Monday and Wednesday rows
+// for a 2x/week subject) — not just the first one. This is what lets
+// Edit Schedule apply a faculty/room/time change to every meeting day
+// at once instead of only the day that happened to be first in the
+// group, which used to leave sibling days silently pointing at the
+// OLD faculty/room after Apply Changes.
+function editBlock(row) {
+    if (props.saving || !rowClickable(row)) return
+    emit('edit-block', row.blocks)
 }
 </script>
 
 <template>
     <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[88vh] flex flex-col">
+        <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[88vh] flex flex-col">
 
             <!-- Header -->
             <div class="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
@@ -146,11 +233,11 @@ function editBlock(block) {
                     </thead>
                     <tbody>
                         <tr
-                            v-for="block in blocks"
-                            :key="block.subject_offering_id"
+                            v-for="(block, index) in displayRows"
+                            :key="block.subject_offering_id + '-' + (block.days.join(',') || index)"
                             class="border-b border-slate-100 dark:border-slate-700/60"
                             :class="[
-                                block.status !== 'preview' || saveConflictsFor(block) ? 'bg-red-50/60 dark:bg-red-900/10' : '',
+                                block.status !== 'preview' || saveConflictsFor(block) || liveConflictsFor(block) ? 'bg-red-50/60 dark:bg-red-900/10' : '',
                                 rowClickable(block) ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40' : '',
                             ]"
                             :title="rowClickable(block) ? 'Click to edit faculty, room, day, or time' : ''"
@@ -170,7 +257,7 @@ function editBlock(block) {
                                 <span v-else class="text-slate-400 italic">Unassigned</span>
                             </td>
                             <td class="px-4 py-2 text-slate-600 dark:text-slate-300">{{ block.room_code ?? '—' }}</td>
-                            <td class="px-4 py-2 text-slate-600 dark:text-slate-300">{{ block.day ? block.day[0].toUpperCase() + block.day.slice(1) : '—' }}</td>
+                            <td class="px-4 py-2 text-slate-600 dark:text-slate-300">{{ dayLabel(block) }}</td>
                             <td class="px-4 py-2 text-slate-600 dark:text-slate-300">
                                 <template v-if="block.start_minutes !== null">
                                     {{ timeLabel(block.start_minutes) }} – {{ timeLabel(block.end_minutes) }}
@@ -179,7 +266,7 @@ function editBlock(block) {
                             </td>
                             <td class="px-4 py-2">
                                 <span
-                                    v-if="block.status === 'preview' && !saveConflictsFor(block)"
+                                    v-if="block.status === 'preview' && !saveConflictsFor(block) && !liveConflictsFor(block)"
                                     class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
                                 >
                                     Success
@@ -189,7 +276,7 @@ function editBlock(block) {
                                         Conflict
                                     </span>
                                     <span
-                                        v-for="(conflict, i) in saveConflictsFor(block)"
+                                        v-for="(conflict, i) in (saveConflictsFor(block) ?? liveConflictsFor(block))"
                                         :key="i"
                                         class="text-[10px] text-red-500 dark:text-red-400 mt-0.5"
                                     >
@@ -211,8 +298,14 @@ function editBlock(block) {
             <!-- Footer -->
             <div class="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700 shrink-0">
                 <p class="text-[11px] text-slate-400">
-                    Click any successful row above to edit its faculty, room, day, or time before saving.
-                    Once saved, the same edit is still available anytime by clicking the block on the Master Grid.
+                    <template v-if="hasUnresolvedConflicts">
+                        <span class="text-red-500 dark:text-red-400 font-semibold">Resolve the conflict(s) highlighted above</span>
+                        before Save Changes — click the row to fix its faculty, room, day, or time.
+                    </template>
+                    <template v-else>
+                        Click any successful row above to edit its faculty, room, day, or time before saving.
+                        Once saved, the same edit is still available anytime by clicking the block on the Master Grid.
+                    </template>
                 </p>
                 <div class="flex gap-2">
                     <button
@@ -226,13 +319,19 @@ function editBlock(block) {
                     <button
                         type="button"
                         class="px-4 py-1.5 rounded-lg text-sm font-bold text-white transition bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed"
-                        :disabled="saving || placedBlocks.length === 0"
+                        :disabled="saving || placedBlocks.length === 0 || hasUnresolvedConflicts"
                         @click="save"
                     >
                         {{ saving ? 'Saving…' : `Save Changes (${placedBlocks.length})` }}
                     </button>
                 </div>
             </div>
+
+            <ScheduleSuccessOverlay
+                :show="justSaved"
+                message="Schedule Saved Successfully!"
+                @done="emit('saved-celebration-done')"
+            />
 
         </div>
     </div>

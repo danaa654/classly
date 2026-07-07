@@ -181,6 +181,8 @@ class MasterGridDataService
                         'year_level' => $s->subjectOffering?->year_level,
                         'program_code' => $s->subjectOffering?->program?->code,
                         'units' => $s->subjectOffering?->units,
+                        'hours' => $s->subjectOffering?->hours,
+                        'meetings_per_week' => $s->subjectOffering?->meetings_per_week ?: SubjectOffering::DEFAULT_MEETINGS_PER_WEEK,
                         'room_type' => $s->subjectOffering?->room_type,
                         'classification' => $s->subjectOffering?->classification,
                         'faculty_id' => $s->faculty_id,
