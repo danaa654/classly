@@ -269,9 +269,18 @@ class MasterGridController extends Controller implements HasMiddleware
      */
     public function validateBlock(Request $request): JsonResponse
     {
+        // 'blocks' is deliberately `present` rather than `required` —
+        // Laravel's `required` rule treats an empty array as "missing"
+        // (see the Laravel validation docs' definition of "empty" for
+        // arrays), but an empty sibling list is completely legitimate
+        // here: it's exactly what the very first block ever dropped
+        // onto an otherwise-empty Room View looks like. `present`
+        // still demands the key exist in the request at all — it just
+        // stops rejecting the valid case of "there's nothing to
+        // compare against yet."
         $validated = $request->validate([
             'block' => ['required', 'array'],
-            'blocks' => ['required', 'array'],
+            'blocks' => ['present', 'array'],
         ]);
 
         $planningTerm = $this->workspace->getTermForUser(auth()->user());

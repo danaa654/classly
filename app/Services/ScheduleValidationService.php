@@ -20,8 +20,8 @@ use Illuminate\Support\Collection;
  * A "block" is a plain array shaped like GreedyScheduleService's
  * presentBlock() output plus whatever the Registrar edited:
  *
- *   subject_offering_id, section_id, program_id, room_type,
- *   classification, units, hours,
+ *   subject_offering_id, section_id, program_id, program_code,
+ *   room_type, classification, units, hours,
  *   faculty_id, faculty_name,
  *   room_id, room_code,
  *   day (lowercase field: 'monday'..'sunday'),
@@ -36,6 +36,7 @@ class ScheduleValidationService
     public const TYPE_LUNCH = 'lunch_break_violation';
     public const TYPE_DAY = 'non_working_day';
     public const TYPE_ROOM_TYPE = 'invalid_room_type';
+    public const TYPE_ROOM_PROGRAM = 'room_not_allowed_for_program';
     public const TYPE_OVERLOAD = 'faculty_overload';
 
     /**
@@ -54,6 +55,38 @@ class ScheduleValidationService
      */
     public function validateBlock(array $block, Collection $allBlocks, AcademicTerm $term): array
     {
+        // Every key the rest of this method (and overlappingOthers()
+        // below) touches, defaulted to null/empty up front. The
+        // frontend builds several DIFFERENT shapes of "block" — a
+        // fresh drag-and-drop placement, a Greedy preview row, an
+        // already-saved Schedule row being re-edited — and it has
+        // twice now missed a field one of those shapes needs (first
+        // section_id, this time something else). Rather than patch
+        // this one field at a time forever, every key is guaranteed
+        // to exist here: a genuinely missing field now just reads as
+        // null (and is treated as "not set" by every check below,
+        // same as it always was when the key WAS present but empty)
+        // instead of throwing an "Undefined array key" ErrorException
+        // that surfaces to the person as the unhelpful, generic
+        // "Could not check for conflicts. Please try again."
+        $block = array_merge([
+            'subject_offering_id' => null,
+            'section_id' => null,
+            'program_id' => null,
+            'program_code' => null,
+            'room_type' => null,
+            'classification' => null,
+            'units' => null,
+            'hours' => null,
+            'faculty_id' => null,
+            'faculty_name' => null,
+            'room_id' => null,
+            'room_code' => null,
+            'day' => null,
+            'start_minutes' => null,
+            'end_minutes' => null,
+        ], $block);
+
         $conflicts = [];
         $warnings = [];
 
@@ -103,12 +136,20 @@ class ScheduleValidationService
             }
         }
 
-        // 4. Invalid room type
-        if (! empty($block['room_type']) && ! empty($block['room_code'])) {
-            $room = Room::where('room_code', $block['room_code'])->first()
-                ?? ($block['room_id'] ? Room::find($block['room_id']) : null);
+        // 4. Invalid room type, and 4b. Room not allowed for this
+        // program — both keyed off the same Room lookup, since a room
+        // can fail either check independently of the other (Ground
+        // Zero and a CCS lecture hall can both be "Laboratory" rooms
+        // while only one of them is actually allowed to host BSIT).
+        $room = null;
 
-            if ($room && $room->room_type !== $block['room_type']) {
+        if (! empty($block['room_code']) || ! empty($block['room_id'])) {
+            $room = Room::where('room_code', $block['room_code'] ?? null)->first()
+                ?? ($block['room_id'] ? Room::find($block['room_id']) : null);
+        }
+
+        if ($room) {
+            if (! empty($block['room_type']) && $room->room_type !== $block['room_type']) {
                 $conflicts[] = $this->conflict(
                     self::TYPE_ROOM_TYPE,
                     $block,
@@ -116,21 +157,46 @@ class ScheduleValidationService
                     "{$room->room_code} is a {$room->room_type} room, but this subject requires {$block['room_type']}."
                 );
             }
+
+            // A room's Allowed Programs (room_group_room — see
+            // Room::roomGroups()) is either "General" (every program),
+            // one or more specific program codes ("Shared"), or exactly
+            // one ("Exclusive") — completely independent of Room Type.
+            // Ground Zero being a Laboratory doesn't make it available
+            // to every OTHER Laboratory subject; it only ever hosts
+            // whatever program(s) its own Allowed list names.
+            if (! empty($block['program_code'])) {
+                $allowedCodes = $room->room_group_codes;
+
+                $allowed = in_array('General', $allowedCodes, true)
+                    || in_array($block['program_code'], $allowedCodes, true);
+
+                if (! $allowed) {
+                    $reservedFor = $allowedCodes ? implode(', ', $allowedCodes) : 'a different program';
+
+                    $conflicts[] = $this->conflict(
+                        self::TYPE_ROOM_PROGRAM,
+                        $block,
+                        null,
+                        "{$room->room_code} is not allowed for {$block['program_code']} — it's reserved for {$reservedFor}."
+                    );
+                }
+            }
         }
 
         // Everything else needs something to compare against.
         $others = $this->overlappingOthers($block, $allBlocks, $term);
 
         foreach ($others as $other) {
-            if ($block['faculty_id'] && $other['faculty_id'] === $block['faculty_id']) {
+            if ($block['faculty_id'] && ($other['faculty_id'] ?? null) === $block['faculty_id']) {
                 $conflicts[] = $this->conflict(self::TYPE_FACULTY, $block, $other, $this->facultyName($block) . ' is already teaching at this time.');
             }
 
-            if ($block['room_id'] && $other['room_id'] === $block['room_id']) {
+            if ($block['room_id'] && ($other['room_id'] ?? null) === $block['room_id']) {
                 $conflicts[] = $this->conflict(self::TYPE_ROOM, $block, $other, ($block['room_code'] ?? 'This room') . ' is already occupied at this time.');
             }
 
-            if ($block['section_id'] && $other['section_id'] === $block['section_id']) {
+            if ($block['section_id'] && ($other['section_id'] ?? null) === $block['section_id']) {
                 $conflicts[] = $this->conflict(self::TYPE_SECTION, $block, $other, 'This section already has another class scheduled at this time.');
             }
         }
@@ -324,7 +390,7 @@ class ScheduleValidationService
     private function overlappingOthers(array $block, Collection $allBlocks, AcademicTerm $term): Collection
     {
         $preview = $allBlocks
-            ->reject(fn ($b) => $b['subject_offering_id'] === $block['subject_offering_id'])
+            ->reject(fn ($b) => ($b['subject_offering_id'] ?? null) === $block['subject_offering_id'])
             ->filter(fn ($b) => ($b['day'] ?? null) === $block['day'])
             ->filter(fn ($b) => $this->overlaps($block, $b))
             // Not yet committed to `schedules` — still just sitting in
@@ -366,7 +432,8 @@ class ScheduleValidationService
 
     private function overlaps(array $a, array $b): bool
     {
-        return $a['start_minutes'] < $b['end_minutes'] && $a['end_minutes'] > $b['start_minutes'];
+        return ($a['start_minutes'] ?? 0) < ($b['end_minutes'] ?? 0)
+            && ($a['end_minutes'] ?? 0) > ($b['start_minutes'] ?? 0);
     }
 
     private function facultyName(array $block): string

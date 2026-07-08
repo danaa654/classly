@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useTimetableGrid } from '@/Composables/useTimetableGrid'
 
 const props = defineProps({
@@ -13,6 +13,7 @@ const props = defineProps({
     blocks: { type: Array, default: () => [] },
     academicTerm: { type: Object, default: null },
     faculties: { type: Array, default: () => [] },
+    departments: { type: Array, default: () => [] },
     rooms: { type: Array, default: () => [] },
     conflicts: { type: Array, default: () => [] },
     warnings: { type: Array, default: () => [] },
@@ -40,6 +41,15 @@ const props = defineProps({
     // True while a Remove Schedule request is in flight — disables
     // the Remove/Cancel/Apply buttons so a double-click can't fire two
     // deletes or a delete racing an Apply.
+    // True only for a "fresh placement" — a subject dragged straight
+    // onto the grid, or a Failed row being manually resolved from the
+    // Schedule Preview — where NOTHING has been committed for this
+    // offering yet, so Hours/Meetings-per-week are still safe to
+    // adjust here. False for editing an already-saved grid block:
+    // changing meeting count there means restructuring multiple
+    // existing day-rows, which this modal deliberately does not
+    // attempt (see the docblock above onMeetingsChange below).
+    allowSessionSettings: { type: Boolean, default: false },
     removing: { type: Boolean, default: false },
 })
 
@@ -57,12 +67,25 @@ const { workingDays, timeRows } = useTimetableGrid(computed(() => props.academic
 // Only real (non-lunch) rows give valid start/end options.
 const slotOptions = computed(() => timeRows.value.filter((r) => r.type === 'slot'))
 
+// Same bounds as SessionSettingsModal — kept in lockstep so a subject
+// dragged straight onto the grid can never be given an Hours/Meetings
+// combination Session Settings itself wouldn't allow.
+const MEETING_OPTIONS = [1, 2, 3]
+const HOURS_MIN = 2
+const HOURS_MAX = 5
+
 const draft = reactive({
     faculty_id: null,
     room_id: null,
     days: [],            // one entry per meeting instance, index-aligned with props.blocks
     start_minutes: null,
     end_minutes: null,   // auto-computed from start + duration whenever duration is known
+    // Only meaningful/editable when allowSessionSettings is true — see
+    // that prop's docblock. Initialized from the offering's real
+    // hours/meetings_per_week either way so durationMinutes below has
+    // something to compute from even when these fields are hidden.
+    hours: null,
+    meetings_per_week: null,
 })
 
 /**
@@ -74,8 +97,14 @@ const draft = reactive({
  * instead of guessing.
  */
 const durationMinutes = computed(() => {
-    const hours = props.block?.hours
-    const meetings = props.block?.meetings_per_week || props.blocks.length || null
+    // When allowSessionSettings is on, draft.hours/meetings_per_week
+    // are live-editable — the duration must track THOSE, not the
+    // static original block values, or changing Hours/Meetings here
+    // would visibly do nothing to the Start/End fields right below it.
+    const hours = props.allowSessionSettings ? draft.hours : props.block?.hours
+    const meetings = props.allowSessionSettings
+        ? draft.meetings_per_week
+        : (props.block?.meetings_per_week || props.blocks.length || null)
 
     if (!hours || !meetings) return null
 
@@ -200,6 +229,12 @@ function recomputeEnd() {
     // manual End picker (rendered only in this fallback case) owns it.
 }
 
+// Draggable modal offset — declared here (ahead of the immediate
+// watcher below, which resets it) rather than down by its handler
+// functions, since `reactive()` has to have already run before that
+// watcher's very first, immediate invocation touches it.
+const dragOffset = reactive({ x: 0, y: 0 })
+
 watch(() => props.blocks, (blocks) => {
     if (!blocks.length) return
 
@@ -208,6 +243,13 @@ watch(() => props.blocks, (blocks) => {
     draft.days = blocks.map((b) => b.day)
     draft.start_minutes = blocks[0].start_minutes
     draft.end_minutes = blocks[0].end_minutes
+    draft.hours = blocks[0].hours ?? null
+    draft.meetings_per_week = blocks[0].meetings_per_week || blocks.length || 1
+    facultyOverride.value = false
+    facultyDepartmentFilter.value = null
+    facultyDropdownOpen.value = false
+    dragOffset.x = 0
+    dragOffset.y = 0
 
     recomputeEnd()
 }, { immediate: true })
@@ -222,6 +264,46 @@ function onStartChange() {
 }
 
 function onDayChange() {
+    emitChange()
+}
+
+/**
+ * Only reachable when allowSessionSettings is true — i.e. this is a
+ * fresh placement, not an edit of an already-saved multi-day block
+ * (see that prop's docblock for why the two cases are kept separate).
+ * Growing meetings_per_week resizes draft.days to match, seeding each
+ * new slot with the first working day not already picked (falling
+ * back to the first working day at all if every day is somehow
+ * already used) — a placeholder the Registrar is expected to actually
+ * review, not a finished answer. Shrinking just truncates the array;
+ * nothing here has been saved yet, so there's no risk of silently
+ * losing a real committed schedule row.
+ */
+function onMeetingsChange() {
+    const target = draft.meetings_per_week || 1
+    const usedDays = new Set(draft.days.filter(Boolean))
+
+    while (draft.days.length < target) {
+        const nextDay = workingDays.value.map((d) => d.field).find((f) => !usedDays.has(f))
+            ?? workingDays.value[0]?.field
+            ?? ''
+        draft.days.push(nextDay)
+        usedDays.add(nextDay)
+    }
+
+    if (draft.days.length > target) {
+        draft.days = draft.days.slice(0, target)
+    }
+
+    recomputeEnd()
+    emitChange()
+}
+
+function onHoursChange() {
+    if (draft.hours < HOURS_MIN) draft.hours = HOURS_MIN
+    if (draft.hours > HOURS_MAX) draft.hours = HOURS_MAX
+
+    recomputeEnd()
     emitChange()
 }
 
@@ -295,6 +377,27 @@ function formatMinutes(minutes) {
 
 function facultyLabel(f) {
     return [f.first_name, f.last_name].filter(Boolean).join(' ')
+}
+
+/**
+ * "Departmental • CCS", "Cross-Department • CTE", "General Education"
+ * — a short, at-a-glance tag for what a faculty member actually IS,
+ * shown next to their name in the dropdown so picking one (especially
+ * during an Override) doesn't require already knowing everyone's
+ * scope by heart. Reuses the same department abbreviation lookup the
+ * Override filter's departmentOptions already builds, so the two
+ * never disagree about what a college is called.
+ */
+function facultyScopeLabel(f) {
+    const deptAbbr = props.departments.find((d) => d.id === f.department_id)?.abbreviation
+        || props.departments.find((d) => d.id === f.department_id)?.name
+        || null
+
+    if (f.faculty_scope === 'general') return 'General Education'
+    if (f.faculty_scope === 'departmental') return `Departmental${deptAbbr ? ` • ${deptAbbr}` : ''}`
+    if (f.faculty_scope === 'cross_department') return `Cross-Department${deptAbbr ? ` • ${deptAbbr}` : ''}`
+
+    return null
 }
 
 function formatDay(day) {
@@ -384,6 +487,193 @@ const eligibleFaculties = computed(() => {
 
     return list
 })
+
+/**
+ * Faculty Eligibility Override
+ * --------------------------------------------------------------
+ * eligibleFaculties above encodes the normal Scope/Department rule
+ * table (see the docblock above it), and — because Master Grid's
+ * save() writes straight to `schedules`/`teaching_assignments`
+ * without ever calling TeachingAssignmentService's business rules
+ * (those only run for the separate Faculty Loading module) — that
+ * client-side filter is, in practice, the ONLY thing standing between
+ * a Registrar and picking a faculty member outside those rules.
+ *
+ * That's normally exactly what should happen — but real scheduling
+ * occasionally needs a legitimate exception (a Major section covered
+ * by an outside-department Cross-Department faculty member, or by
+ * General Education, because the home department genuinely doesn't
+ * have anyone free). Rather than silently allow it everywhere (which
+ * would defeat the point of eligibleFaculties existing at all) or
+ * hard-block it entirely (which would make a real, occasional need
+ * impossible without a database change), this is an explicit,
+ * visible, per-edit opt-in: checking "Override Eligibility" swaps the
+ * Faculty dropdown to every active faculty member, full stop, with a
+ * standing amber warning while it's on. It always resets to off the
+ * next time this modal opens (see the props.blocks watcher below), so
+ * an override is a deliberate choice made fresh each time, never an
+ * accidentally-sticky setting.
+ */
+const facultyOverride = ref(false)
+
+const allActiveFaculties = computed(() => props.faculties.filter((f) => f.status !== false))
+
+/**
+ * Department filter for the override list specifically. Checking
+ * Override Eligibility widens the pool to every college at once,
+ * which for a school this size is a long, unsorted wall of names to
+ * scroll — exactly the problem this narrows back down, without
+ * reinstating the Scope/Department eligibility rule itself. Defaults
+ * to the offering's OWN department the moment override is switched on
+ * (see onFacultyOverrideToggle) — that's the common case ("I just
+ * need a CCS name Scope rules are hiding, not literally anyone in the
+ * building") — and can be widened to any other college, or back to
+ * every department at once, from there.
+ *
+ * null = All Departments. The string 'none' is a sentinel for
+ * General Education / no department (Faculty.department_id is
+ * literally null for them, which doesn't work as a <select> option
+ * value on its own).
+ */
+const facultyDepartmentFilter = ref(null)
+
+const departmentOptions = computed(() => [
+    ...props.departments.map((d) => ({ id: d.id, label: d.abbreviation || d.name })),
+    { id: 'none', label: 'General Education (No Department)' },
+])
+
+function onFacultyOverrideToggle() {
+    facultyDepartmentFilter.value = facultyOverride.value
+        ? (props.block?.department_id ?? 'none')
+        : null
+}
+
+const overrideFaculties = computed(() => {
+    if (facultyDepartmentFilter.value === null) return allActiveFaculties.value
+
+    if (facultyDepartmentFilter.value === 'none') {
+        return allActiveFaculties.value.filter((f) => !f.department_id)
+    }
+
+    return allActiveFaculties.value.filter((f) => f.department_id === facultyDepartmentFilter.value)
+})
+
+const facultyOptions = computed(() => facultyOverride.value ? overrideFaculties.value : eligibleFaculties.value)
+
+/**
+ * Custom Faculty dropdown
+ * --------------------------------------------------------------
+ * A native <select>'s option list is rendered entirely by the OS/
+ * browser — its position, width, and even which monitor it appears
+ * on are outside CSS's reach, which is exactly why it was popping up
+ * wherever the browser felt like (including over the browser chrome
+ * itself) instead of predictably beside the field. This replaces it
+ * with a plain absolutely-positioned panel we render and control
+ * ourselves: always left-aligned with the trigger button, always
+ * bounded under it, with its own scroll — plus a search box, since
+ * scrolling a 20+ name list either way is painful.
+ */
+const facultyDropdownOpen = ref(false)
+const facultySearch = ref('')
+const facultyDropdownRoot = ref(null)
+
+const filteredFacultyOptions = computed(() => {
+    const query = facultySearch.value.trim().toLowerCase()
+    if (!query) return facultyOptions.value
+
+    return facultyOptions.value.filter((f) => facultyLabel(f).toLowerCase().includes(query))
+})
+
+const selectedFacultyLabel = computed(() => {
+    if (!draft.faculty_id) return 'Unassigned'
+    const current = props.faculties.find((f) => f.id === draft.faculty_id)
+    return current ? facultyLabel(current) : 'Unassigned'
+})
+
+const selectedFacultyScopeLabel = computed(() => {
+    if (!draft.faculty_id) return null
+    const current = props.faculties.find((f) => f.id === draft.faculty_id)
+    return current ? facultyScopeLabel(current) : null
+})
+
+function toggleFacultyDropdown() {
+    if (props.readOnly) return
+    facultyDropdownOpen.value = !facultyDropdownOpen.value
+    facultySearch.value = ''
+}
+
+function selectFaculty(facultyId) {
+    draft.faculty_id = facultyId
+    facultyDropdownOpen.value = false
+    emitChange()
+}
+
+function onDocumentClick(event) {
+    if (facultyDropdownOpen.value && facultyDropdownRoot.value && !facultyDropdownRoot.value.contains(event.target)) {
+        facultyDropdownOpen.value = false
+    }
+}
+
+document.addEventListener('click', onDocumentClick)
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
+
+/**
+ * Draggable modal
+ * --------------------------------------------------------------
+ * Edit Schedule often opens ON TOP of Schedule Preview (editing a
+ * generated row) or the Master Grid itself (editing a saved block) —
+ * both of which the person frequently wants to glance at WHILE the
+ * edit form is open, to cross-check a room/time against what's
+ * already there. Rather than closing the modal to look and reopening
+ * it, the header can be dragged to slide the whole modal out of the
+ * way without losing the in-progress edit.
+ *
+ * Implementation: the modal box keeps its normal flexbox-centered
+ * position (unchanged) and this only adds a translate() ON TOP of
+ * that — dragOffset starts at {0, 0} (dead center, exactly like
+ * before) and accumulates however far the header's been dragged.
+ * Deliberately unclamped (no bounds checking) — "freedom to drag"
+ * was the ask, and the header staying grabbable is enough to always
+ * be able to drag it back.
+ */
+const isDragging = ref(false)
+let dragStart = null
+
+function onHeaderMouseDown(event) {
+    // Don't start a drag from the close (✕) button — that's a click,
+    // not a handle.
+    if (event.target.closest('button')) return
+
+    isDragging.value = true
+    dragStart = {
+        mouseX: event.clientX,
+        mouseY: event.clientY,
+        offsetX: dragOffset.x,
+        offsetY: dragOffset.y,
+    }
+
+    document.addEventListener('mousemove', onHeaderMouseMove)
+    document.addEventListener('mouseup', onHeaderMouseUp)
+}
+
+function onHeaderMouseMove(event) {
+    if (!isDragging.value || !dragStart) return
+
+    dragOffset.x = dragStart.offsetX + (event.clientX - dragStart.mouseX)
+    dragOffset.y = dragStart.offsetY + (event.clientY - dragStart.mouseY)
+}
+
+function onHeaderMouseUp() {
+    isDragging.value = false
+    dragStart = null
+    document.removeEventListener('mousemove', onHeaderMouseMove)
+    document.removeEventListener('mouseup', onHeaderMouseUp)
+}
+
+onBeforeUnmount(() => {
+    document.removeEventListener('mousemove', onHeaderMouseMove)
+    document.removeEventListener('mouseup', onHeaderMouseUp)
+})
 </script>
 
 <template>
@@ -391,8 +681,17 @@ const eligibleFaculties = computed(() => {
         <div
             class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full p-5 max-h-[90vh] overflow-y-auto transition-all duration-150"
             :class="hasConflicts ? 'max-w-3xl' : 'max-w-lg'"
+            :style="{
+                transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+                transitionProperty: isDragging ? 'none' : undefined,
+            }"
         >
-            <div class="flex items-center justify-between mb-1">
+            <div
+                class="flex items-center justify-between mb-1 -m-1 p-1 rounded-lg select-none"
+                :class="isDragging ? 'cursor-grabbing' : 'cursor-grab'"
+                title="Drag to move this window"
+                @mousedown="onHeaderMouseDown"
+            >
                 <h3 class="font-black text-slate-800 dark:text-slate-100">
                     {{ readOnly ? 'Schedule Details' : 'Edit Schedule' }}
                 </h3>
@@ -429,12 +728,136 @@ const eligibleFaculties = computed(() => {
 
                     <!-- Editable fields -->
                     <div class="space-y-3">
+                        <!--
+                            Hours / Meetings per week — only for a fresh
+                            placement (drag-and-drop onto the grid, or
+                            resolving a Failed row from Schedule Preview).
+                            See allowSessionSettings' docblock for why an
+                            already-saved block never shows this.
+                        -->
+                        <div v-if="allowSessionSettings" class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Hours / Week</label>
+                                <input
+                                    v-model.number="draft.hours"
+                                    type="number"
+                                    :min="HOURS_MIN"
+                                    :max="HOURS_MAX"
+                                    :disabled="readOnly"
+                                    class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm px-2 py-1.5 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    @change="onHoursChange"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Meetings / Week</label>
+                                <select
+                                    v-model.number="draft.meetings_per_week"
+                                    :disabled="readOnly"
+                                    class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm px-2 py-1.5 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    @change="onMeetingsChange"
+                                >
+                                    <option v-for="n in MEETING_OPTIONS" :key="n" :value="n">{{ n }}x</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Faculty</label>
-                            <select v-model.number="draft.faculty_id" :disabled="readOnly" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm px-2 py-1.5 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:opacity-60 disabled:cursor-not-allowed" @change="emitChange">
-                                <option :value="null">Unassigned</option>
-                                <option v-for="f in eligibleFaculties" :key="f.id" :value="f.id">{{ facultyLabel(f) }}</option>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500">Faculty</label>
+                                <label
+                                    v-if="!readOnly"
+                                    class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide cursor-pointer select-none"
+                                    :class="facultyOverride ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'"
+                                >
+                                    <input v-model="facultyOverride" type="checkbox" class="rounded" @change="onFacultyOverrideToggle" />
+                                    Override Eligibility
+                                </label>
+                            </div>
+
+                            <select
+                                v-if="facultyOverride"
+                                v-model="facultyDepartmentFilter"
+                                :disabled="readOnly"
+                                class="w-full rounded-lg border border-amber-400 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-600 text-slate-800 dark:text-slate-100 text-xs px-2 py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                            >
+                                <option :value="null">All Departments</option>
+                                <option v-for="d in departmentOptions" :key="d.id" :value="d.id">{{ d.label }}</option>
                             </select>
+
+                            <div ref="facultyDropdownRoot" class="relative">
+                                <button
+                                    type="button"
+                                    :disabled="readOnly"
+                                    class="w-full flex items-center justify-between rounded-lg border text-left text-slate-800 dark:text-slate-100 text-sm px-2 py-1.5 focus:outline-none focus:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    :class="facultyOverride
+                                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-600 focus:border-amber-500 focus:ring-amber-400/30'
+                                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:border-[#D4A62A] focus:ring-[#D4A62A]/30'"
+                                    @click="toggleFacultyDropdown"
+                                >
+                                    <span class="flex items-baseline gap-1.5 min-w-0">
+                                        <span :class="draft.faculty_id ? '' : 'text-slate-400'" class="truncate">{{ selectedFacultyLabel }}</span>
+                                        <span v-if="selectedFacultyScopeLabel" class="shrink-0 text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                            {{ selectedFacultyScopeLabel }}
+                                        </span>
+                                    </span>
+                                    <span class="text-slate-400 text-xs shrink-0">▾</span>
+                                </button>
+
+                                <!--
+                                    Left-aligned, bounded to the modal, own
+                                    scroll — a plain in-page panel we render
+                                    and position ourselves, unlike a native
+                                    <select>'s option list (rendered by the
+                                    OS/browser, with no CSS control over
+                                    where it lands — which is what let it
+                                    pop up over the browser chrome itself
+                                    instead of predictably beside the field).
+                                -->
+                                <div
+                                    v-if="facultyDropdownOpen"
+                                    class="absolute left-0 top-full mt-1 z-50 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg overflow-hidden"
+                                >
+                                    <input
+                                        v-model="facultySearch"
+                                        type="text"
+                                        placeholder="Search faculty…"
+                                        autofocus
+                                        class="w-full border-b border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none"
+                                        @click.stop
+                                    />
+                                    <div class="max-h-56 overflow-y-auto py-1">
+                                        <button
+                                            type="button"
+                                            class="block w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                                            :class="!draft.faculty_id ? 'font-semibold text-[#D4A62A]' : 'text-slate-700 dark:text-slate-200'"
+                                            @click="selectFaculty(null)"
+                                        >
+                                            Unassigned
+                                        </button>
+                                        <button
+                                            v-for="f in filteredFacultyOptions"
+                                            :key="f.id"
+                                            type="button"
+                                            class="flex w-full items-baseline justify-between gap-2 text-left px-3 py-1.5 text-sm hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                                            :class="f.id === draft.faculty_id ? 'font-semibold text-[#D4A62A]' : 'text-slate-700 dark:text-slate-200'"
+                                            @click="selectFaculty(f.id)"
+                                        >
+                                            <span class="truncate">{{ facultyLabel(f) }}</span>
+                                            <span class="shrink-0 text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                                {{ facultyScopeLabel(f) }}
+                                            </span>
+                                        </button>
+                                        <p v-if="!filteredFacultyOptions.length" class="px-3 py-2 text-xs text-slate-400">
+                                            No faculty match "{{ facultySearch }}".
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p v-if="facultyOverride" class="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-1">
+                                ⚠ Outside the normal Major/Minor + Department eligibility rules. Use only for a
+                                genuine exception (e.g. a Cross-Department or General Education faculty covering this
+                                {{ isMajor ? 'Major' : 'Minor' }}).
+                            </p>
                         </div>
 
                         <div>

@@ -147,6 +147,28 @@ class SubjectOffering extends Model
     }
 
     /**
+     * The committed Master Grid schedule block for this Offering, if
+     * one has been saved yet. Unlike TeachingAssignment::schedule()
+     * (a hasOneThrough, since a Teaching Assignment has no direct FK
+     * to Schedule), this is a direct hasOne — `schedules` already
+     * carries subject_offering_id itself. A 2x/week subject has two
+     * Schedule rows (one per meeting day); hasOne only surfaces the
+     * first, but that's all getOverallStatusAttribute()/room_status
+     * need — they only ever ask "does at least one exist?", never
+     * "give me every meeting day."
+     *
+     * Eager-load this (`with('schedule')`) anywhere offerings are
+     * listed in bulk so the status accessors below can read it
+     * in-memory instead of firing a query per offering — see
+     * MasterGridDataService, which was doing exactly that before this
+     * relation existed.
+     */
+    public function schedule()
+    {
+        return $this->hasOne(Schedule::class);
+    }
+
+    /**
      * The Room(s) that currently prefer this Offering, via the
      * room_subject_offering pivot — the inverse of
      * Room::preferredSubjectOfferings(). subject_offering_id is
@@ -260,7 +282,7 @@ class SubjectOffering extends Model
     {
         if (
             $this->teachingAssignment
-            && Schema::hasColumn('teaching_assignments', 'room_id')
+            && self::hasColumnCached('teaching_assignments', 'room_id')
             && $this->teachingAssignment->room_id
         ) {
             return 'Assigned';
@@ -276,14 +298,14 @@ class SubjectOffering extends Model
         // never gets a room_subject_offering row at all, so relying on
         // that pivot alone left a fully Scheduled offering's Room
         // column reading "Unassigned" — directly contradicting its own
-        // overall_status of "Scheduled" just one column over, since
-        // hasScheduleAssigned() below already correctly consults this
-        // same `schedules` table.
-        if (
-            Schema::hasTable('schedules')
-            && Schema::hasColumn('schedules', 'room_id')
-            && DB::table('schedules')->where('subject_offering_id', $this->id)->whereNotNull('room_id')->exists()
-        ) {
+        // overall_status of "Scheduled" just one column over.
+        //
+        // Reuses hasScheduleAssigned() (below) rather than repeating
+        // its own DB::table() query — that method already prefers the
+        // eager-loaded `schedule` relation when present, so this stays
+        // a plain in-memory check whenever offerings are listed with
+        // `with('schedule')`, instead of firing a query per offering.
+        if ($this->hasScheduleAssigned()) {
             return 'Assigned';
         }
 
@@ -293,8 +315,16 @@ class SubjectOffering extends Model
         // assignment here, the same way a Teaching Assignment counts as
         // a Faculty assignment above. No day/time has been decided yet
         // either way — this is still a preference, not a schedule.
-        if (
-            Schema::hasTable('room_subject_offering')
+        //
+        // Prefers the eager-loaded `preferredByRooms` relation (see
+        // getPreferredRoomAttribute() above) over a fresh pivot query,
+        // for the same reason as hasScheduleAssigned() below.
+        if ($this->relationLoaded('preferredByRooms')) {
+            if ($this->preferredByRooms->isNotEmpty()) {
+                return 'Assigned';
+            }
+        } elseif (
+            self::hasTableCached('room_subject_offering')
             && DB::table('room_subject_offering')->where('subject_offering_id', $this->id)->exists()
         ) {
             return 'Assigned';
@@ -304,8 +334,8 @@ class SubjectOffering extends Model
         // dedicated room_assignments table, kept in case that ever
         // replaces the pivot above.
         if (
-            Schema::hasTable('room_assignments')
-            && Schema::hasColumn('room_assignments', 'subject_offering_id')
+            self::hasTableCached('room_assignments')
+            && self::hasColumnCached('room_assignments', 'subject_offering_id')
             && DB::table('room_assignments')->where('subject_offering_id', $this->id)->exists()
         ) {
             return 'Assigned';
@@ -332,9 +362,33 @@ class SubjectOffering extends Model
      *
      * Requires academicTerm and teachingAssignment to be loaded (or
      * loadable) — eager-load both wherever offerings are listed to
-     * avoid N+1 queries.
+     * avoid N+1 queries. For bulk listings (Master Grid, Subject
+     * Offerings index with a status filter), also eager-load
+     * `schedule` and `preferredByRooms` — see hasScheduleAssigned()
+     * and getRoomStatusAttribute() above — so this entire accessor
+     * resolves purely from already-loaded relations, with zero
+     * queries per offering.
+     *
+     * Cached per-instance after the first call: this is a plain
+     * get{Studly}Attribute-style accessor, which Eloquent does NOT
+     * memoize on its own (unlike a real column), so calling
+     * ->overall_status more than once on the same instance would
+     * otherwise re-run this whole method — including every check
+     * below it — from scratch each time. Several callers (Master
+     * Grid's status partitioning + per-offering row builder, Subject
+     * Offerings' status filter) read this more than once per
+     * offering in the same request, so caching it here is what makes
+     * repeated reads free instead of silently repeating the same
+     * work N times.
      */
+    private ?string $overallStatusCache = null;
+
     public function getOverallStatusAttribute(): string
+    {
+        return $this->overallStatusCache ??= $this->computeOverallStatus();
+    }
+
+    private function computeOverallStatus(): string
     {
         $term = $this->academicTerm;
 
@@ -369,17 +423,51 @@ class SubjectOffering extends Model
     }
 
     /**
-     * Defensive the same way room_status is — the Scheduler doesn't
-     * exist yet, so this simply returns false today and starts
-     * reporting Scheduled the moment a 'schedules' table with a
-     * subject_offering_id column ships, with no change needed here.
+     * Whether a committed Master Grid schedule row exists for this
+     * Offering. Prefers the eager-loaded `schedule` relation (see
+     * schedule() above) when present — a plain in-memory null-check,
+     * zero queries. Falls back to a direct DB::table() query only for
+     * call sites that access a single offering's overall_status
+     * without eager-loading `schedule` first (unchanged behavior from
+     * before this relation existed).
      */
     private function hasScheduleAssigned(): bool
     {
-        if (! Schema::hasTable('schedules') || ! Schema::hasColumn('schedules', 'subject_offering_id')) {
+        if ($this->relationLoaded('schedule')) {
+            return $this->schedule !== null;
+        }
+
+        if (! self::hasTableCached('schedules') || ! self::hasColumnCached('schedules', 'subject_offering_id')) {
             return false;
         }
 
         return DB::table('schedules')->where('subject_offering_id', $this->id)->exists();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Schema Check Memoization
+    |--------------------------------------------------------------------------
+    |
+    | Schema::hasTable()/hasColumn() are NOT cached by Laravel — each
+    | call re-queries the database's information_schema. The status
+    | accessors above call these defensively on every offering (there
+    | is no migration-state column to check instead), so without this
+    | cache, listing 200+ offerings could fire 200+ *additional*
+    | information_schema round-trips on top of the status queries
+    | themselves. Schema never changes mid-request (a migration
+    | requires a deploy/restart), so a static, process-lifetime cache
+    | is always safe.
+     */
+    private static array $schemaCache = [];
+
+    private static function hasTableCached(string $table): bool
+    {
+        return self::$schemaCache['table:' . $table] ??= Schema::hasTable($table);
+    }
+
+    private static function hasColumnCached(string $table, string $column): bool
+    {
+        return self::$schemaCache['column:' . $table . '.' . $column] ??= Schema::hasColumn($table, $column);
     }
 }

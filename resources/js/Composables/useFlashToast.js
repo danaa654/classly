@@ -1,6 +1,16 @@
 import { ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 
+// Module-level refs = a tiny singleton store, shared by every component
+// that calls useFlashToast() — same pattern as useAppShell.js. This
+// matters here specifically because AppLayout is the only place that
+// actually renders <Toast :toast="toast" />; any other component (e.g.
+// a page calling show() manually for instant client-side feedback, like
+// Master Grid's drag-and-drop) needs its show() to update that SAME
+// ref, not a private one nobody is displaying.
+const toast = ref(null)
+let timer = null
+
 /**
  * Shared toast state, driven either by the server (session flash data
  * relayed through Inertia) or manually via show() for instant
@@ -22,8 +32,6 @@ import { usePage } from '@inertiajs/vue3'
  */
 export function useFlashToast() {
     const page = usePage()
-    const toast = ref(null)
-    let timer = null
 
     function show(message, type = 'success') {
         if (! message) {

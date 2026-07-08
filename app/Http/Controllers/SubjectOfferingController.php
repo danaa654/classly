@@ -74,6 +74,17 @@ class SubjectOfferingController extends Controller implements HasMiddleware
                 'program:id,code',
                 'academicTerm:id,status,class_end_date',
                 'teachingAssignment',
+                // Added alongside the fix in SubjectOffering.php:
+                // overall_status/room_status now read these two
+                // relations in-memory when eager-loaded, instead of
+                // firing a raw query per offering. index() below calls
+                // ->get()->filter(...) against overall_status whenever
+                // a status filter is applied — that used to mean one
+                // to three extra queries PER OFFERING on top of the
+                // full unpaginated fetch already required to filter on
+                // a derived value.
+                'schedule',
+                'preferredByRooms',
             ])
             ->when($academicTermId, fn ($q) => $q->where('academic_term_id', $academicTermId))
             ->when($programId, fn ($q) => $q->where('program_id', $programId))

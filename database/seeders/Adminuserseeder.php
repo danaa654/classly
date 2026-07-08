@@ -14,7 +14,7 @@ class AdminUserSeeder extends Seeder
             ['email' => 'admin@classly.test'],
             [
                 'name' => 'System Admin',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('admin@classly.test'),
                 'email_verified_at' => now(),
             ]
         );

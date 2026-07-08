@@ -11,9 +11,18 @@ const props = defineProps({
     // MasterGridDataService::scheduledOfferings().
     scheduledOfferings: { type: Array, default: () => [] },
     collegeColors: { type: Object, default: () => ({}) },
+    // Admin/Registrar only (see Index.vue's canManage) — gates BOTH
+    // the draggable attribute and the dragstart handler. Dean/
+    // Assistant Dean/OIC still see the same cards (read-only context
+    // about what's left to schedule), just without a grab cursor or
+    // any drag behavior — dropping one on the grid would only ever
+    // 403 at the backend anyway (see MasterGridController's
+    // Admin/Registrar-only write middleware), so there is no reason
+    // to invite the gesture for them at all.
+    canManage: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:collapsed'])
+const emit = defineEmits(['update:collapsed', 'drag-start', 'drag-end'])
 
 function toggle() {
     emit('update:collapsed', !props.collapsed)
@@ -81,6 +90,34 @@ function clearFilters() {
 
 const count = computed(() => filteredOfferings.value.length)
 const scheduledCount = computed(() => props.scheduledOfferings.length)
+
+/**
+ * Stashes the offering's id on the native drag event as JSON — read
+ * back by Timetable.vue's drop handler (see its own dragstart/drop
+ * docblock) to know exactly which Subject Offering was dropped onto
+ * which grid cell. Only ever wired up when canManage is true and the
+ * offering isn't already scheduled — draggable="false" on every other
+ * card already stops the browser from firing dragstart at all, this
+ * is just belt-and-suspenders against a stray call.
+ */
+function onDragStart(event, offering) {
+    if (!props.canManage || offering.is_scheduled) return
+
+    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.setData('application/json', JSON.stringify({ subjectOfferingId: offering.id }))
+    emit('drag-start', offering)
+}
+
+/**
+ * Fires whenever the drag gesture ends, no matter how — a successful
+ * drop, a drop rejected by Timetable (room-type mismatch), or the
+ * card just being released outside any valid drop target entirely.
+ * Index.vue uses this to clear draggedOffering so the "no-drop"
+ * cursor/banner in Timetable don't linger once the drag is over.
+ */
+function onDragEnd() {
+    emit('drag-end')
+}
 </script>
 
 <template>
@@ -164,7 +201,7 @@ const scheduledCount = computed(() => props.scheduledOfferings.length)
                 v-for="offering in filteredOfferings"
                 :key="offering.id"
                 class="subject-card rounded-lg px-2.5 py-2 transition-all duration-150 ease-out"
-                :class="offering.is_scheduled
+                :class="offering.is_scheduled || !canManage
                     ? 'opacity-60 cursor-default'
                     : 'cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-md'"
                 :style="{
@@ -173,7 +210,9 @@ const scheduledCount = computed(() => props.scheduledOfferings.length)
                     borderLeft: '4px solid var(--subject-accent)',
                     '--subject-accent': accentColor(offering.college_code),
                 }"
-                :draggable="!offering.is_scheduled"
+                :draggable="canManage && !offering.is_scheduled"
+                @dragstart="onDragStart($event, offering)"
+                @dragend="onDragEnd"
             >
                 <div class="flex items-center justify-between gap-2">
                     <p class="font-black text-[12px]" style="color: var(--text-primary)">

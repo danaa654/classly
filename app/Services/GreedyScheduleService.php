@@ -180,6 +180,20 @@ class GreedyScheduleService
                 continue;
             }
 
+            // "Spread wider" policy — prefer whichever valid day-combo
+            // currently leaves this SECTION'S week most evenly loaded,
+            // rather than always trying the fixed list in the same
+            // order (which is what made everything default to Mon/Wed
+            // and pile up there: DAY_COMBOS_2X always tries Mon/Wed
+            // first, for every subject, every section, with no memory
+            // of what that section already has that day). This is a
+            // soft preference, not a hard rule — findPlacement() below
+            // still falls through to every other combo/room/time if
+            // the lightest-day choice has no actual room/faculty
+            // availability, so a subject is never left unscheduled
+            // just to keep the week balanced.
+            $dayCombos = $this->sortDayCombosByLoad($dayCombos, $placedBlocks, $offering->section_id);
+
             $assignedFaculty = $this->resolveAssignedFaculty($offering);
 
             $this->debug(sprintf(
@@ -218,7 +232,15 @@ class GreedyScheduleService
                 $roomUsage[$placement['room']->id] = ($roomUsage[$placement['room']->id] ?? 0) + 1;
             }
 
-            if ($usedFaculty) {
+            // Only the 'auto' path adds NEW load here — an 'assigned'
+            // placement's units are already part of $facultyLoad from
+            // initialFacultyLoad() (that's the whole reason
+            // assignedFacultyOverCap() above doesn't add them again
+            // either). Incrementing here too would push a faculty
+            // member pre-assigned to two or three subjects artificially
+            // over cap by the time this run reaches their second or
+            // third one, for the exact same double-counting reason.
+            if ($usedFaculty && $placement['faculty_source'] === 'auto') {
                 $facultyLoad[$usedFaculty->id] = ($facultyLoad[$usedFaculty->id] ?? 0) + (int) $offering->units;
             }
 
@@ -872,8 +894,26 @@ class GreedyScheduleService
     ): ?array {
         $rooms = $this->candidateRooms($offering, $section, $roomUsage);
 
+        // Deliberately NOT exceedsMaxLoad() here — that method adds
+        // $offering->units on TOP of $facultyLoad's current total,
+        // which is correct for an AUTO candidate (see the 'auto'
+        // branch below, genuinely new load for them) but WRONG for
+        // $assignedFaculty specifically: resolveAssignedFaculty() only
+        // ever returns non-null because an active Teaching Assignment
+        // for THIS EXACT offering already exists, and
+        // initialFacultyLoad() sums every active Teaching Assignment a
+        // faculty holds — meaning this offering's units are already
+        // baked into $facultyLoad[$assignedFaculty->id] before we ever
+        // get here. Adding them again double-counted this one
+        // offering, which made ANY faculty member loaded right up to
+        // (or over) their cap — i.e. exactly the normal, intended end
+        // state of Faculty Loading — fail this check for literally
+        // every subject they were ever pre-assigned, silently falling
+        // back to an auto-picked faculty member with no indication
+        // anywhere that the Registrar's own Teaching Assignment choice
+        // had been overridden.
         $assignedUsable = $assignedFaculty
-            && ! $this->exceedsMaxLoad($assignedFaculty, $facultyLoad, (int) $offering->units);
+            && ! $this->assignedFacultyOverCap($assignedFaculty, $facultyLoad);
 
         if ($assignedUsable) {
             foreach ($rooms as $room) {
@@ -992,6 +1032,55 @@ class GreedyScheduleService
     }
 
     /**
+     * Reorders $dayCombos (from resolveDayCombos() above — either the
+     * fixed 2x/3x pairings or the one-day-per-combo list used for 1x)
+     * so the combo that currently leaves $sectionId's week most evenly
+     * loaded is tried FIRST, instead of always trying the fixed list
+     * in its original order.
+     *
+     * Scored per combo as [worst single day's current load, combo's
+     * total current load] and sorted ascending on both — "worst single
+     * day" first because the goal is avoiding any one day becoming a
+     * marathon for this section, not merely minimizing a sum that a
+     * single very-heavy day could still hide inside. The original list
+     * order is the final tie-break (via a stable sort), so behavior
+     * stays deterministic and explainable rather than shuffling
+     * identically-loaded combos around run to run.
+     *
+     * $placedBlocks is the SAME running list findPlacement() already
+     * conflict-checks against — every entry already carries
+     * section_id/day/start/end, so this reads current load straight
+     * off it rather than maintaining a second, parallel tally that
+     * could drift out of sync.
+     */
+    private function sortDayCombosByLoad(array $dayCombos, array $placedBlocks, int $sectionId): array
+    {
+        $sectionBlocks = array_filter($placedBlocks, fn ($b) => $b['section_id'] === $sectionId);
+
+        $loadByDay = [];
+        foreach ($sectionBlocks as $b) {
+            $loadByDay[$b['day']] = ($loadByDay[$b['day']] ?? 0) + ($b['end'] - $b['start']);
+        }
+
+        $scored = array_map(function ($combo, $index) use ($loadByDay) {
+            $loads = array_map(fn ($day) => $loadByDay[$day] ?? 0, $combo);
+
+            return [
+                'combo' => $combo,
+                'worst' => max($loads),
+                'total' => array_sum($loads),
+                'index' => $index, // stable tie-break, preserves original order
+            ];
+        }, $dayCombos, array_keys($dayCombos));
+
+        usort($scored, fn ($a, $b) => $a['worst'] <=> $b['worst']
+            ?: $a['total'] <=> $b['total']
+            ?: $a['index'] <=> $b['index']);
+
+        return array_column($scored, 'combo');
+    }
+
+    /**
      * Whether ANY day in $combo would conflict (room, faculty, or
      * section already booked, same day+overlapping time) against
      * everything placed so far. All days in a combo share the same
@@ -1040,6 +1129,33 @@ class GreedyScheduleService
         $currentLoad = $facultyLoad[$faculty->id] ?? 0;
 
         return ($currentLoad + $additionalUnits) > $faculty->effective_max_units;
+    }
+
+    /**
+     * Whether $faculty's CURRENT committed load already exceeds their
+     * effective cap, on its own — used only for the pre-assigned-
+     * faculty path in findPlacement(), where $facultyLoad already
+     * includes this exact offering's units (see the long comment at
+     * that call site for why). Deliberately does not take an
+     * `$additionalUnits` parameter the way exceedsMaxLoad() does —
+     * there's nothing additional to add here; the offering is already
+     * accounted for.
+     *
+     * Reads from the same live $facultyLoad array exceedsMaxLoad()
+     * does (not a fresh DB query), so it still reflects anything this
+     * SAME generation run has already added for this faculty member
+     * earlier — e.g. if they were auto-picked for a different offering
+     * moments ago, that increment is already visible here too.
+     */
+    private function assignedFacultyOverCap(Faculty $faculty, array $facultyLoad): bool
+    {
+        if (! $faculty->effective_max_units) {
+            return false;
+        }
+
+        $currentLoad = $facultyLoad[$faculty->id] ?? 0;
+
+        return $currentLoad > $faculty->effective_max_units;
     }
 
     /**

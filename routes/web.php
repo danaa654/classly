@@ -19,6 +19,7 @@ use App\Http\Controllers\AcademicTermController;
 use App\Http\Controllers\TeachingAssignmentController;
 use App\Http\Controllers\FacultyLoadOverloadController;
 use App\Http\Controllers\MasterGridController;
+use App\Http\Controllers\BlockScheduleController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
 /*
@@ -422,6 +423,83 @@ Route::middleware(['auth'])->group(function () {
                 ->name('master-grid.remove-schedule');
 
         });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Block Schedule
+        |--------------------------------------------------------------------------
+        |
+        | Level 0 landing (block-schedule.landing) splits into two
+        | folders: Section Schedule (the original Department -> Block
+        | -> weekly-schedule drill-down, unchanged below, just moved
+        | under /block-schedule/sections) and Faculty Schedule
+        | (block-schedule.faculty — scaffolded placeholder only, no
+        | drill-down behind it yet). Same viewers as Master Grid —
+        | Admin/Registrar/Dean/Assistant Dean/OIC all have a stake in
+        | seeing it, and BlockScheduleController scopes Dean/OIC to
+        | their own department the same way Faculty Loading and
+        | Master Grid already do.
+        |
+        */
+
+        Route::get('block-schedule', [BlockScheduleController::class, 'landing'])
+            ->name('block-schedule.landing');
+
+        Route::get('block-schedule/sections', [BlockScheduleController::class, 'index'])
+            ->name('block-schedule.index');
+
+        Route::get('block-schedule/sections/{department}', [BlockScheduleController::class, 'sections'])
+            ->name('block-schedule.sections');
+
+        // Printable Class List for the WHOLE department — every Block
+        // in one document, grouped by Block, rather than one Block per
+        // page. Must stay above the {section} wildcard below, same
+        // reasoning as block-schedule/faculty/general further down:
+        // otherwise Laravel tries (and fails) to route-model-bind
+        // "print" as a Section ID. See
+        // BlockScheduleController::printSections().
+        Route::get('block-schedule/sections/{department}/print', [BlockScheduleController::class, 'printSections'])
+            ->name('block-schedule.sections.print');
+
+        Route::get('block-schedule/sections/{department}/{section}', [BlockScheduleController::class, 'show'])
+            ->name('block-schedule.show');
+
+        // Faculty Schedule — Department -> Faculty -> weekly schedule,
+        // mirroring Section Schedule above but reading off
+        // TeachingAssignment instead of Section. See
+        // BlockScheduleController::facultyIndex()/facultyList()/
+        // facultyShow().
+        Route::get('block-schedule/faculty', [BlockScheduleController::class, 'facultyIndex'])
+            ->name('block-schedule.faculty');
+
+        // General Education (department_id = null) faculty get their
+        // own folder rather than any real Department — these routes
+        // MUST stay above the {department} wildcard below, or Laravel
+        // will try (and fail) to route-model-bind "general" as a
+        // Department ID. See BlockScheduleController::facultyGeneralList()/
+        // facultyGeneralShow().
+        Route::get('block-schedule/faculty/general', [BlockScheduleController::class, 'facultyGeneralList'])
+            ->name('block-schedule.faculty.general');
+
+        // Must stay above general/{faculty} below, same reasoning as
+        // every other literal-vs-wildcard route in this file — see
+        // BlockScheduleController::printFacultyGeneral().
+        Route::get('block-schedule/faculty/general/print', [BlockScheduleController::class, 'printFacultyGeneral'])
+            ->name('block-schedule.faculty.general.print');
+
+        Route::get('block-schedule/faculty/general/{faculty}', [BlockScheduleController::class, 'facultyGeneralShow'])
+            ->name('block-schedule.faculty.general.show');
+
+        Route::get('block-schedule/faculty/{department}', [BlockScheduleController::class, 'facultyList'])
+            ->name('block-schedule.faculty.list');
+
+        // Must stay above {department}/{faculty} below — see
+        // BlockScheduleController::printFacultyList().
+        Route::get('block-schedule/faculty/{department}/print', [BlockScheduleController::class, 'printFacultyList'])
+            ->name('block-schedule.faculty.list.print');
+
+        Route::get('block-schedule/faculty/{department}/{faculty}', [BlockScheduleController::class, 'facultyShow'])
+            ->name('block-schedule.faculty.show');
 
         // Future Modules
         // Route::resource('schedules', ScheduleController::class);

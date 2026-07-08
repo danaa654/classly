@@ -10,6 +10,7 @@ use App\Models\Room;
 use App\Models\Schedule;
 use App\Models\SubjectOffering;
 use App\Services\RoomCapacityService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -84,6 +85,41 @@ class MasterGridDataService
         $preferredRoomByOffering = $this->preferredRoomByOffering($activeTerm->id);
         $preferredFacultyByOffering = $this->preferredFacultyByOffering($activeTerm->id);
 
+        // "Scheduled" for this split means Scheduled/Completed/Archived
+        // — same list presentOffering()'s 'is_scheduled' flag already
+        // uses below, kept as one constant so the two can never drift
+        // apart.
+        $scheduledStatuses = [
+            SubjectOffering::STATUS_SCHEDULED,
+            SubjectOffering::STATUS_COMPLETED,
+            SubjectOffering::STATUS_ARCHIVED,
+        ];
+
+        // Fetched ONCE and split in memory below, rather than two
+        // separate SubjectOffering::with([...])->get() calls (the old
+        // unscheduledOfferings()/scheduledOfferings() shape) — those
+        // ran the exact same 5-relation eager-loaded query twice over
+        // the same ~200+ rows just to throw half of each result away.
+        // Also eager-loads `schedule` and `preferredByRooms` (on top
+        // of the relations presentOffering() itself needs) so
+        // SubjectOffering::getOverallStatusAttribute()/room_status
+        // resolve purely from already-loaded relations instead of
+        // firing a query per offering — see SubjectOffering.php.
+        [$scheduledOfferings, $unscheduledOfferings] = $this
+            ->offeringsForTerm($activeTerm->id, $departmentId)
+            ->partition(fn (SubjectOffering $offering) => in_array($offering->overall_status, $scheduledStatuses, true));
+
+        // Pre-fetched ONCE for every schedulable room, grouped by
+        // room_id, instead of presentRoom() running its own
+        // Schedule::where('room_id', ...)->get() per room inside the
+        // ->map() below — that was one query per room (dozens of
+        // rooms) where one grouped query does the same job.
+        $schedulesByRoom = Schema::hasTable('schedules')
+            ? Schedule::where('academic_term_id', $activeTerm->id)
+                ->get(['room_id', 'start_minutes', 'end_minutes'])
+                ->groupBy('room_id')
+            : collect();
+
         return [
 
             'activeTerm' => $activeTerm,
@@ -95,7 +131,7 @@ class MasterGridDataService
             // Greedy Scheduler's future Save step writes real schedule
             // rows, those offerings naturally drop out of this list on
             // their own, no extra flag needed.
-            'subjectOfferings' => $this->unscheduledOfferings($activeTerm->id, $departmentId)
+            'subjectOfferings' => $unscheduledOfferings
                 ->map(fn (SubjectOffering $offering) => $this->presentOffering(
                     $offering,
                     $programDepartmentMap,
@@ -116,7 +152,7 @@ class MasterGridDataService
             // to check. Shares presentOffering() so the card shape
             // (and therefore faculty_assigned, preferred_room_code,
             // etc.) is identical either way.
-            'scheduledOfferings' => $this->scheduledOfferings($activeTerm->id, $departmentId)
+            'scheduledOfferings' => $scheduledOfferings
                 ->map(fn (SubjectOffering $offering) => $this->presentOffering(
                     $offering,
                     $programDepartmentMap,
@@ -129,7 +165,7 @@ class MasterGridDataService
                 ->with('roomGroups')
                 ->orderBy('room_code')
                 ->get()
-                ->map(fn (Room $room) => $this->presentRoom($room, $activeTerm, $programDepartmentMap))
+                ->map(fn (Room $room) => $this->presentRoom($room, $activeTerm, $programDepartmentMap, $schedulesByRoom))
                 ->values(),
 
             'departments' => Department::where('active', true)->orderBy('name')->get(['id', 'name', 'abbreviation']),
@@ -209,67 +245,46 @@ class MasterGridDataService
     }
 
     /**
-     * Subject Offerings for the active term, excluding anything already
-     * Scheduled/Completed/Archived. Eager-loads everything the card and
-     * the college color-mapping need in one shot to avoid N+1 queries.
+     * Every Subject Offering for the active term (both unscheduled
+     * and already-scheduled) in ONE query — replaces the old
+     * unscheduledOfferings()/scheduledOfferings() pair, which ran this
+     * exact same eager-loaded query twice and only differed in which
+     * half of the results they kept. build() now fetches once here
+     * and partitions the single collection in memory instead.
+     *
+     * Eager-loads `schedule` and `preferredByRooms` in addition to
+     * what presentOffering() itself needs — those two let
+     * SubjectOffering::getOverallStatusAttribute()/room_status read
+     * already-loaded relations instead of firing a raw query per
+     * offering (see SubjectOffering.php's hasScheduleAssigned()/
+     * getRoomStatusAttribute()). Without them, every offering here
+     * would cost up to 3 extra queries just to answer "is this
+     * scheduled / does a room prefer this," on top of whatever this
+     * query itself costs — the single biggest source of query bloat
+     * on this page before this fix.
      *
      * $departmentId scopes to a single department (plus General
      * Education, whose Subject Offerings carry a program with no
      * department at all) when given — see build()'s doc comment for
      * why this exists and why Rooms don't get the same treatment.
      */
-    private function unscheduledOfferings(int $academicTermId, ?int $departmentId = null)
+    private function offeringsForTerm(int $academicTermId, ?int $departmentId = null)
     {
-        $excluded = [
-            SubjectOffering::STATUS_SCHEDULED,
-            SubjectOffering::STATUS_COMPLETED,
-            SubjectOffering::STATUS_ARCHIVED,
-        ];
-
         return SubjectOffering::with([
                 'subject',
                 'section',
                 'program.department',
                 'academicTerm',
                 'teachingAssignment.faculty',
+                'schedule',
+                'preferredByRooms',
             ])
             ->forTerm($academicTermId)
             ->when($departmentId, fn ($query) => $query->whereHas(
                 'program',
                 fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
             ))
-            ->get()
-            ->reject(fn (SubjectOffering $offering) => in_array($offering->overall_status, $excluded, true));
-    }
-
-    /**
-     * The mirror image of unscheduledOfferings() — every offering for
-     * this term whose overall_status IS Scheduled/Completed/Archived.
-     * Same eager-loads and same department scope, since presentOffering()
-     * needs the same fields either way.
-     */
-    private function scheduledOfferings(int $academicTermId, ?int $departmentId = null)
-    {
-        $included = [
-            SubjectOffering::STATUS_SCHEDULED,
-            SubjectOffering::STATUS_COMPLETED,
-            SubjectOffering::STATUS_ARCHIVED,
-        ];
-
-        return SubjectOffering::with([
-                'subject',
-                'section',
-                'program.department',
-                'academicTerm',
-                'teachingAssignment.faculty',
-            ])
-            ->forTerm($academicTermId)
-            ->when($departmentId, fn ($query) => $query->whereHas(
-                'program',
-                fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
-            ))
-            ->get()
-            ->filter(fn (SubjectOffering $offering) => in_array($offering->overall_status, $included, true));
+            ->get();
     }
 
     /**
@@ -295,8 +310,25 @@ class MasterGridDataService
             ?? $programDepartmentMap[$offering->program?->code] ?? null
             ?? 'General';
 
+        // Read once and reused below for both keys — overall_status is
+        // now cached per-instance on the model (see SubjectOffering's
+        // $overallStatusCache) so this was never technically a second
+        // query, but reading it into a local variable keeps that
+        // guarantee explicit here rather than relying on the model's
+        // internal caching to make two calls cheap.
+        $overallStatus = $offering->overall_status;
+
         return [
             'id' => $offering->id,
+            // Alias of 'id', under the same key name every schedule
+            // block elsewhere in the Master Grid (scheduledEvents,
+            // generatePreview blocks, EditScheduleModal's draft) uses.
+            // Needed so a card dragged from this sidebar can be handed
+            // straight to openEditModal() as a synthetic block without
+            // Index.vue having to remember this one endpoint names the
+            // id field differently from everywhere else.
+            'subject_offering_id' => $offering->id,
+            'academic_term_id' => $offering->academic_term_id,
             'edp_code' => $offering->edp_code,
             'subject_code' => $offering->subject?->subject_code,
             'descriptive_title' => $offering->subject?->descriptive_title,
@@ -307,14 +339,28 @@ class MasterGridDataService
             'section_id' => $offering->section_id,
             'section_code' => $offering->section?->section_code,
             'hours' => $offering->hours,
+            // Needed so a subject dragged straight onto the grid can
+            // compute its own hours-per-meeting client-side (see
+            // EditScheduleModal's durationMinutes) the exact same way
+            // Session Settings and the Greedy Scheduler already do —
+            // without this the drop flow would have no idea how many
+            // times a week the class is supposed to meet.
+            'meetings_per_week' => $offering->meetings_per_week ?: SubjectOffering::DEFAULT_MEETINGS_PER_WEEK,
             'units' => $offering->units,
             'classification' => $offering->classification,
             'room_type' => $offering->room_type,
             'faculty_assigned' => $offering->teachingAssignment?->faculty?->full_name,
+            // Numeric id alongside the display name above — the name
+            // alone is only good for reading, EditScheduleModal's
+            // faculty dropdown (draft.faculty_id) needs the actual id
+            // to pre-select the right option when a subject with an
+            // existing Faculty Loading assignment is dragged straight
+            // onto the grid.
+            'faculty_id' => $offering->teachingAssignment?->faculty_id,
             'preferred_room_code' => $preferredRoomByOffering[$offering->id] ?? null,
             'preferred_faculty_name' => $preferredFacultyByOffering[$offering->id] ?? null,
-            'overall_status' => $offering->overall_status,
-            'is_scheduled' => in_array($offering->overall_status, [
+            'overall_status' => $overallStatus,
+            'is_scheduled' => in_array($overallStatus, [
                 SubjectOffering::STATUS_SCHEDULED,
                 SubjectOffering::STATUS_COMPLETED,
                 SubjectOffering::STATUS_ARCHIVED,
@@ -342,13 +388,14 @@ class MasterGridDataService
      * latter. Falls back to 0 when the schedules table doesn't exist
      * yet (fresh install) rather than erroring.
      */
-    private function presentRoom(Room $room, AcademicTerm $academicTerm, array $programDepartmentMap): array
+    private function presentRoom(Room $room, AcademicTerm $academicTerm, array $programDepartmentMap, Collection $schedulesByRoom): array
     {
-        $scheduledRows = Schema::hasTable('schedules')
-            ? Schedule::where('room_id', $room->id)
-                ->where('academic_term_id', $academicTerm->id)
-                ->get(['start_minutes', 'end_minutes'])
-            : collect();
+        // Pulled from the map build() fetched ONCE for every room
+        // (grouped by room_id) — replaces a per-room
+        // Schedule::where('room_id', ...)->get() query that used to
+        // run inside this method, once for every room in the ->map()
+        // loop that calls presentRoom().
+        $scheduledRows = $schedulesByRoom->get($room->id, collect());
 
         $scheduledMinutes = $scheduledRows->sum(
             fn ($row) => max(0, (int) $row->end_minutes - (int) $row->start_minutes)

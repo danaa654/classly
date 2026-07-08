@@ -11,6 +11,7 @@ import GenerateScheduleModal from './Partials/GenerateScheduleModal.vue'
 import SessionSettingsModal from './Partials/SessionSettingsModal.vue'
 import GeneratePreviewModal from './Partials/GeneratePreviewModal.vue'
 import EditScheduleModal from './Partials/EditScheduleModal.vue'
+import { useFlashToast } from '@/Composables/useFlashToast'
 
 defineOptions({
     layout: DashboardLayout,
@@ -51,6 +52,38 @@ function selectRoom(room) {
 
 function clearSelectedRoom() {
     selectedRoom.value = null
+}
+
+/* ── Drag-and-drop conflict prevention ──────────────────────────────
+   Tracks whichever Subject Offering is currently being dragged from
+   SubjectSidebar (dragstart -> dragend/drop), purely so Timetable can
+   compare its required room_type against selectedRoom's room_type
+   WHILE the drag is still in progress — not only after the drop.
+   dataTransfer's own payload can't be read during dragover (browser
+   security restriction), so this sits in a plain ref instead and is
+   handed down as a prop.
+
+   This is a genuine prevention, not just a nicer error message: when
+   the types don't match, Timetable's onDragOver never calls
+   preventDefault(), which makes the browser itself refuse the drop
+   (cursor shows "not-allowed") — the drop handler never even fires,
+   so no request is made and no modal opens. The server-side rule in
+   ScheduleValidationService (TYPE_ROOM_TYPE) still exists underneath
+   this as the real safety net — this only stops the obviously-wrong
+   case before the round trip. */
+const draggedOffering = ref(null)
+
+const { show: showToast } = useFlashToast()
+
+/**
+ * A drop that Timetable rejected outright (room-type mismatch — see
+ * Timetable.vue's roomTypeMismatch/onDrop). This is the defense-in-depth
+ * path only; onDragOver already stops the drop from ever firing in any
+ * standards-compliant browser, so in practice this mostly exists so a
+ * rejection is never silent if it ever does slip through.
+ */
+function handleDropRejected({ reason }) {
+    showToast(reason, 'error')
 }
 
 /* ── Generate Schedule modal ──────────────────────────────────────── */
@@ -223,6 +256,26 @@ async function handleGenerate({ section_id, subjects }) {
 }
 
 /**
+ * "Back" from the Schedule Preview (Step 4) — throws the current
+ * preview away (nothing in it was ever saved, so there's nothing to
+ * lose) and reopens Session Settings for the SAME section, instead of
+ * closing the whole flow the way Discard does. sessionSettingsData
+ * and sessionSettingsFilters are both still exactly what they were
+ * when handleGenerate() last ran — neither is cleared anywhere on the
+ * way to the preview — so SessionSettingsModal reopens pre-filled and
+ * ready to adjust, rather than needing to re-fetch anything or walk
+ * back through Target Selection first.
+ */
+function backToSessionSettings() {
+    showPreviewModal.value = false
+    generatePreview.value = null
+    generatePreviewSectionId.value = null
+    applyError.value = null
+    applyConflicts.value = null
+    showSessionSettingsModal.value = true
+}
+
+/**
  * The user reviewed the preview and clicked "Save Changes" — this now
  * commits straight to the database. Reviewing the table IS the
  * checking step; there is no separate "applied but unsaved" state
@@ -352,6 +405,16 @@ const editingBlock = computed(() => editingGroup.value[0] ?? null)
 //             accepted edit gets written back to.
 const editContext = ref('grid')
 
+// True only while editing a "fresh placement" — a subject just
+// dragged onto the grid (handleDropSubject below), or a Failed row
+// being manually resolved from Schedule Preview. Drives both
+// EditScheduleModal's Hours/Meetings fields AND whether applyEdit()
+// below persists a change to those two fields via the same
+// session-settings endpoint Generate Schedule's own Step 2 already
+// uses — see allowSessionSettings' docblock on EditScheduleModal for
+// why an ordinary already-saved block never touches either.
+const allowSessionSettings = ref(false)
+
 const showConflictModal = ref(false)
 const conflictRecommendations = ref(null)
 
@@ -374,8 +437,9 @@ const conflictingIds = ref([])
  *     a 2x/3x subject is always edited as one connected group, never
  *     as an isolated single day.
  */
-function openEditModal(input, context = 'grid') {
+function openEditModal(input, context = 'grid', { allowSessionSettings: allowSettings = false } = {}) {
     editContext.value = context
+    allowSessionSettings.value = allowSettings
 
     let group
 
@@ -419,6 +483,77 @@ function openEditModal(input, context = 'grid') {
     }
 }
 
+/**
+ * A subject was dragged from SubjectSidebar and dropped on an empty
+ * Timetable cell (see Timetable.vue's onDrop). Builds a synthetic
+ * "fresh placement" block — Room/Day/Start already known from where
+ * it was dropped, Faculty pre-filled only if the offering already has
+ * a Faculty Loading assignment, Hours/Meetings seeded from the
+ * offering's current values — then opens it through the exact same
+ * Edit Schedule modal used everywhere else, in 'grid' context so
+ * Apply Changes writes straight to `schedules`.
+ *
+ * Unlike every other openEditModal() call, this one also runs
+ * validateDraft() immediately even though nothing is "already
+ * flagged" — Room/Day/Start are real values the instant it's
+ * dropped, not blank fields waiting on the person to touch something,
+ * so a genuine conflict (e.g. this section already has a class at
+ * this exact time, in a different room) needs to surface right away
+ * rather than waiting for the first field the person happens to
+ * change.
+ */
+function handleDropSubject({ subjectOfferingId, roomId, day, startMinutes }) {
+    if (!canManage.value) return
+
+    const offering = props.subjectOfferings.find((o) => o.id === subjectOfferingId)
+    if (!offering) return
+
+    const room = props.rooms.find((r) => r.id === roomId)
+    const meetings = offering.meetings_per_week || 1
+    const durationMinutes = offering.hours ? Math.round((offering.hours / meetings) * 60) : null
+
+    const block = {
+        subject_offering_id: offering.id,
+        academic_term_id: offering.academic_term_id,
+        subject_code: offering.subject_code,
+        descriptive_title: offering.descriptive_title,
+        program_code: offering.program_code,
+        department_id: offering.department_id,
+        year_level: offering.year_level,
+        section_id: offering.section_id,
+        section_code: offering.section_code,
+        units: offering.units,
+        hours: offering.hours,
+        meetings_per_week: meetings,
+        classification: offering.classification,
+        room_type: offering.room_type,
+        faculty_id: offering.faculty_id ?? null,
+        faculty_name: offering.faculty_assigned ?? null,
+        room_id: roomId,
+        room_code: room?.room_code ?? null,
+        day,
+        start_minutes: startMinutes,
+        end_minutes: durationMinutes !== null ? startMinutes + durationMinutes : null,
+    }
+
+    openEditModal([block], 'grid', { allowSessionSettings: true })
+
+    showToast(
+        `${offering.subject_code} placed on ${room?.room_code ?? 'the grid'} — review and Apply Changes to save.`,
+        'success'
+    )
+
+    if (canManage.value) {
+        validateDraft({
+            faculty_id: block.faculty_id,
+            room_id: block.room_id,
+            days: [block.day],
+            start_minutes: block.start_minutes,
+            end_minutes: block.end_minutes,
+        })
+    }
+}
+
 function closeEditModal() {
     showEditModal.value = false
     editingGroup.value = []
@@ -427,6 +562,7 @@ function closeEditModal() {
     currentConflictsByIndex.value = []
     currentWarnings.value = []
     showConflictModal.value = false
+    allowSessionSettings.value = false
 }
 
 let validateToken = 0
@@ -453,18 +589,24 @@ async function validateDraft(fields) {
 
     const days = fields.days ?? editingGroup.value.map((b) => b.day)
 
-    // Every meeting-day instance in the group, patched with the same
-    // faculty/room/time and its own (possibly changed) day — this is
-    // what makes a 2x/3x subject's edit apply consistently across all
-    // of its meeting days instead of just the one that was clicked.
-    draftGroup.value = editingGroup.value.map((b, i) => ({
-        ...b,
+    // Every meeting-day instance, patched with the same faculty/room/
+    // time and its own (possibly changed) day. Iterates over `days`
+    // itself rather than editingGroup — normally the same length, but
+    // allowSessionSettings lets meetings_per_week grow on a fresh
+    // placement (see EditScheduleModal's onMeetingsChange), which
+    // means `days` can now have MORE entries than the original group
+    // had. Any index past the original group's length falls back to
+    // its first member as a template for the shared (non-day) fields.
+    draftGroup.value = days.map((day, i) => ({
+        ...(editingGroup.value[i] ?? editingGroup.value[0] ?? {}),
         faculty_id: fields.faculty_id,
         faculty_name: facultyName,
         room_id: fields.room_id,
-        day: days[i] ?? b.day,
+        day: day ?? editingGroup.value[i]?.day,
         start_minutes: fields.start_minutes,
         end_minutes: fields.end_minutes,
+        hours: fields.hours ?? editingGroup.value[i]?.hours,
+        meetings_per_week: fields.meetings_per_week ?? editingGroup.value[i]?.meetings_per_week,
     }))
 
     const token = ++validateToken
@@ -517,7 +659,25 @@ async function validateDraft(fields) {
             showConflictModal.value = false
         }
     } catch (err) {
-        currentConflicts.value = [{ type: 'error', reason: 'Could not check for conflicts. Please try again.' }]
+        // Surface whatever the server actually said whenever it said
+        // anything — a 422 validation failure has err.response.data.
+        // message, and (outside production, where APP_DEBUG exposes
+        // it) so does an unhandled 500. Falling straight to the
+        // generic string every time made a real, fixable server error
+        // indistinguishable from an ordinary network hiccup — this is
+        // what let the section_id bug go unnoticed as anything more
+        // specific than "Could not check for conflicts." Always logs
+        // the raw error too, so it's at least visible in DevTools even
+        // when nothing user-facing can be shown for it.
+        console.error('validate-block failed:', err)
+
+        const serverMessage = err?.response?.data?.message
+        currentConflicts.value = [{
+            type: 'error',
+            reason: serverMessage
+                ? `Could not check for conflicts — ${serverMessage}`
+                : 'Could not check for conflicts. Please try again.',
+        }]
         currentConflictsByIndex.value = draftGroup.value.map(() => currentConflicts.value)
     } finally {
         if (token === validateToken) validating.value = false
@@ -596,7 +756,14 @@ async function applyEdit(fields) {
     const roomCode = props.rooms.find((r) => r.id === fields.room_id)?.room_code ?? null
     const days = fields.days ?? editingGroup.value.map((b) => b.day)
 
+    // Iterates over `days` (not editingGroup) for the same reason
+    // validateDraft's draftGroup construction does — allowSessionSettings
+    // lets `days` grow past the original group's length on a fresh
+    // placement (see onMeetingsChange). Any index beyond the original
+    // group falls back to its first member as a template for the
+    // shared (non-day) fields, since it's the same offering either way.
     const patchFor = (i) => ({
+        ...(editingGroup.value[i] ?? editingGroup.value[0] ?? {}),
         faculty_id: fields.faculty_id,
         faculty_name: facultyName,
         room_id: fields.room_id,
@@ -604,28 +771,64 @@ async function applyEdit(fields) {
         day: days[i],
         start_minutes: fields.start_minutes,
         end_minutes: fields.end_minutes,
+        hours: fields.hours ?? editingGroup.value[i]?.hours ?? editingGroup.value[0]?.hours,
+        meetings_per_week: fields.meetings_per_week ?? editingGroup.value[i]?.meetings_per_week ?? editingGroup.value[0]?.meetings_per_week,
     })
 
+    // Hours/Meetings-per-week live on subject_offerings, not schedules
+    // — only ever touched here for a fresh placement (allowSessionSettings),
+    // reusing the exact same endpoint Generate Schedule's own Step 2
+    // (Session Settings) persists through. Done BEFORE the schedule
+    // itself is written so a failure here (e.g. a stale/invalid value)
+    // never leaves the schedule and the offering's hours/meetings out
+    // of sync with each other.
+    if (allowSessionSettings.value && editingBlock.value?.subject_offering_id) {
+        try {
+            await axios.put(route('master-grid.session-settings.update'), {
+                subjects: [{
+                    subject_offering_id: editingBlock.value.subject_offering_id,
+                    hours: fields.hours,
+                    meetings_per_week: fields.meetings_per_week,
+                }],
+            })
+        } catch (err) {
+            saveError.value = err.response?.data?.message ?? 'Failed to update hours/meetings for this subject.'
+            return
+        }
+    }
+
     if (editContext.value === 'preview') {
-        // Patch every meeting-day row in place inside the still-unsaved
-        // preview result, carrying over whatever conflicts THIS edit
-        // left behind (per meeting day) so GeneratePreviewModal can flag
-        // exactly which row(s) still need fixing before Save Changes.
+        // Patch every matching meeting-day row in place, same as
+        // before — PLUS append any day beyond the original group's
+        // length as a brand-new preview row (a Failed row being
+        // resolved with meetings_per_week increased from 1x to 2x/3x
+        // has no existing sibling rows for those extra days at all).
+        const existingBlocks = generatePreview.value.blocks.map((block) => {
+            const idx = editingGroup.value.findIndex(
+                (b) => b.subject_offering_id === block.subject_offering_id && b.day === block.day
+            )
+            if (idx === -1) return block
+
+            return {
+                ...block,
+                ...patchFor(idx),
+                status: 'preview',
+                conflicts: currentConflictsByIndex.value[idx] ?? [],
+            }
+        })
+
+        const extraBlocks = days.slice(editingGroup.value.length).map((_, offset) => {
+            const i = editingGroup.value.length + offset
+            return {
+                ...patchFor(i),
+                status: 'preview',
+                conflicts: currentConflictsByIndex.value[i] ?? [],
+            }
+        })
+
         generatePreview.value = {
             ...generatePreview.value,
-            blocks: generatePreview.value.blocks.map((block) => {
-                const idx = editingGroup.value.findIndex(
-                    (b) => b.subject_offering_id === block.subject_offering_id && b.day === block.day
-                )
-                if (idx === -1) return block
-
-                return {
-                    ...block,
-                    ...patchFor(idx),
-                    status: 'preview',
-                    conflicts: currentConflictsByIndex.value[idx] ?? [],
-                }
-            }),
+            blocks: [...existingBlocks, ...extraBlocks],
         }
 
         closeEditModal()
@@ -636,11 +839,27 @@ async function applyEdit(fields) {
     // an unresolved conflict still blocks it outright.
     if (currentConflicts.value.length > 0) return
 
-    const mergedBlocks = scheduledEvents.value.map((event) => {
-        const idx = editingGroup.value.findIndex(
-            (b) => b.subject_offering_id === event.subject_offering_id && b.day === event.day
-        )
-        return idx !== -1 ? { ...event, ...patchFor(idx) } : event
+    const mergedBlocks = [...scheduledEvents.value]
+
+    days.forEach((_, i) => {
+        const template = editingGroup.value[i]
+        const patch = patchFor(i)
+
+        if (template) {
+            const idx = mergedBlocks.findIndex(
+                (event) => event.subject_offering_id === template.subject_offering_id && event.day === template.day
+            )
+            if (idx !== -1) {
+                mergedBlocks[idx] = { ...mergedBlocks[idx], ...patch }
+                return
+            }
+        }
+
+        // No existing sibling to patch — either a brand-new placement
+        // (drag-and-drop, or a Failed row resolved straight on the
+        // grid) or an extra meeting day added past the original
+        // group's length. Either way, this is a new committed row.
+        mergedBlocks.push(patch)
     })
 
     saving.value = true
@@ -794,9 +1013,13 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
                     :scheduled-events="scheduledEvents"
                     :college-colors="collegeColors"
                     :editable="hasPreview"
+                    :can-manage="canManage"
                     :conflicting-ids="conflictingIds"
+                    :dragged-offering="draggedOffering"
                     @edit-block="openEditModal"
                     @select-room="selectRoom"
+                    @drop-subject="handleDropSubject"
+                    @drop-rejected="handleDropRejected"
                 />
             </div>
 
@@ -807,6 +1030,9 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
                     :offerings="sidebarOfferings"
                     :scheduled-offerings="scheduledOfferings"
                     :college-colors="collegeColors"
+                    :can-manage="canManage"
+                    @drag-start="draggedOffering = $event"
+                    @drag-end="draggedOffering = null"
                 />
 
                 <RoomSidebar
@@ -853,7 +1079,8 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
     :just-saved="showPreviewSuccess"
     @save="applyGeneratedPreview"
     @discard="discardGeneratedPreview"
-    @edit-block="(block) => openEditModal(block, 'preview')"
+    @back="backToSessionSettings"
+    @edit-block="(block) => openEditModal(block, 'preview', { allowSessionSettings: block[0]?.status !== 'preview' })"
     @saved-celebration-done="onSavedCelebrationDone"
 />
 
@@ -862,8 +1089,10 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
     :block="editingBlock"
     :blocks="draftGroup"
     :context="editContext"
+    :allow-session-settings="allowSessionSettings"
     :academic-term="activeTerm"
     :faculties="faculties"
+    :departments="departments"
     :rooms="rooms"
     :conflicts="currentConflicts"
     :warnings="currentWarnings"

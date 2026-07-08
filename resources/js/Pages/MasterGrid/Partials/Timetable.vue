@@ -22,9 +22,126 @@ const props = defineProps({
     // without the caller having to touch each block's own data.
     conflictingIds: { type: Array, default: () => [] },
     editable: { type: Boolean, default: false },
+    // Admin/Registrar only — gates whether empty grid cells accept a
+    // drop at all. Mirrors SubjectSidebar's canManage: Dean/Assistant
+    // Dean/OIC can still open a block read-only by clicking it
+    // (editable, above), they just can't drag a new one in.
+    canManage: { type: Boolean, default: false },
+    // The Subject Offering currently being dragged from SubjectSidebar
+    // (see Index.vue's drag-start/drag-end wiring), or null when
+    // nothing is being dragged. Native DataTransfer payloads can't be
+    // read during dragover for security reasons — this is how the
+    // grid knows WHICH subject is hovering over it while the drag is
+    // still in progress, not only after the drop. Used by
+    // dropIncompatibilityReason below for both the Room Type and
+    // Allowed Programs checks.
+    draggedOffering: { type: Object, default: null },
 })
 
-const emit = defineEmits(['edit-block', 'select-room'])
+const emit = defineEmits(['edit-block', 'select-room', 'drop-subject', 'drop-rejected'])
+
+/**
+ * Whether the Room currently in view can't host the subject being
+ * dragged, and why — checked in the same order, and against the same
+ * two independent facts, as ScheduleValidationService's server-side
+ * rule:
+ *
+ *   1. Room Type (Lecture/Laboratory) — a subject with no room_type
+ *      set has no requirement and is compatible with any room.
+ *   2. Allowed Programs (room_group_codes) — a room can be General
+ *      (every program), Shared (a few programs), or Exclusive (one
+ *      program), completely independent of its Room Type. Two rooms
+ *      can both be "Laboratory" while only one of them actually
+ *      allows a given program — e.g. Ground Zero is Laboratory AND
+ *      Exclusive to BSCRIM, so a BSIT Laboratory subject fails this
+ *      check even though it would pass the Room Type check above.
+ *
+ * Returns null when compatible (or when there's nothing being dragged/
+ * no room selected yet), otherwise a ready-to-display reason string.
+ */
+const dropIncompatibilityReason = computed(() => {
+    if (!props.draggedOffering || !props.selectedRoom) return null
+
+    const requiredType = props.draggedOffering.room_type
+    if (requiredType && requiredType !== props.selectedRoom.room_type) {
+        return `${props.draggedOffering.subject_code} requires a ${requiredType} room — `
+            + `${props.selectedRoom.room_code} is a ${props.selectedRoom.room_type} room.`
+    }
+
+    const programCode = props.draggedOffering.program_code
+    const allowedCodes = props.selectedRoom.room_group_codes ?? []
+    const isAllowed = allowedCodes.includes('General') || (!!programCode && allowedCodes.includes(programCode))
+
+    if (programCode && !isAllowed) {
+        const reservedFor = allowedCodes.length ? allowedCodes.join(', ') : 'a different program'
+        return `${props.selectedRoom.room_code} is not allowed for ${programCode} — it's reserved for ${reservedFor}.`
+    }
+
+    return null
+})
+
+const dropIncompatible = computed(() => dropIncompatibilityReason.value !== null)
+
+/**
+ * Drag-and-drop placement — a subject dragged in from SubjectSidebar
+ * lands on one specific empty grid cell, which already knows exactly
+ * which `day` and `row.startMinutes` it represents (see the v-for
+ * below). onDrop reads back the subject_offering_id SubjectSidebar's
+ * dragstart handler stashed in the native DataTransfer, and hands
+ * Index.vue everything it needs to build a synthetic "fresh
+ * placement" block — the actual faculty/room/day/time FORM still
+ * happens in EditScheduleModal afterward, this is only the "which
+ * subject, which cell" handoff.
+ */
+function onDragOver(event) {
+    if (!props.canManage || !props.selectedRoom) return
+
+    // Deliberately do NOT call preventDefault() when incompatible —
+    // leaving dragover's default action in place is what makes the
+    // browser itself refuse the drop (cursor shows "not-allowed", and
+    // no 'drop' event ever fires on this cell). This is real
+    // prevention, not just an error shown afterward.
+    if (dropIncompatible.value) {
+        event.dataTransfer.dropEffect = 'none'
+        return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+}
+
+function onDrop(event, day, row) {
+    if (!props.canManage || !props.selectedRoom) return
+    event.preventDefault()
+
+    let payload
+    try {
+        payload = JSON.parse(event.dataTransfer.getData('application/json') || '{}')
+    } catch {
+        return
+    }
+
+    if (!payload?.subjectOfferingId) return
+
+    // Defense in depth — onDragOver already stops this in every
+    // standards-compliant browser, but re-check here in case
+    // dropEffect was ever ignored, so an incompatible room can never
+    // actually be dropped into, only reported as rejected.
+    if (dropIncompatible.value) {
+        emit('drop-rejected', {
+            subjectOfferingId: payload.subjectOfferingId,
+            reason: dropIncompatibilityReason.value,
+        })
+        return
+    }
+
+    emit('drop-subject', {
+        subjectOfferingId: payload.subjectOfferingId,
+        roomId: props.selectedRoom.id,
+        day: day.field,
+        startMinutes: row.startMinutes,
+    })
+}
 
 function isConflicting(event) {
     return props.conflictingIds.includes(event.subject_offering_id)
@@ -163,7 +280,16 @@ const gridTemplateColumns = computed(
 
         <div v-else class="min-w-[660px]">
             <div
+                v-if="draggedOffering && dropIncompatible"
+                class="mb-2 flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-300"
+            >
+                <span>🚫</span>
+                <span>{{ dropIncompatibilityReason }} Drop is disabled here.</span>
+            </div>
+
+            <div
                 class="timetable-grid grid border-separate select-none"
+                :class="draggedOffering && dropIncompatible ? 'opacity-60 grayscale' : ''"
                 :style="{ gridTemplateColumns }"
             >
                 <!-- Header row -->
@@ -216,7 +342,14 @@ const gridTemplateColumns = computed(
                         v-for="(day, dIndex) in workingDays"
                         :key="day.field + row.key"
                         class="timetable-cell border border-slate-300 dark:border-slate-600 h-[28px]"
+                        :class="canManage && selectedRoom
+                            ? (draggedOffering && dropIncompatible
+                                ? 'cursor-not-allowed'
+                                : 'hover:bg-blue-50 dark:hover:bg-blue-500/10')
+                            : ''"
                         :style="{ gridColumn: dIndex + 2, gridRow: rIndex + 2 }"
+                        @dragover="onDragOver"
+                        @drop="onDrop($event, day, row)"
                     ></div>
                 </template>
 

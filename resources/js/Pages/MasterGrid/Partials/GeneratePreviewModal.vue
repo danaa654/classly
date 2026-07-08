@@ -26,7 +26,14 @@ import ScheduleSuccessOverlay from '@/Components/ScheduleSuccessOverlay.vue'
  *
  * "Discard" throws the whole result away with zero side effects,
  * since nothing was ever written anywhere to produce this preview in
- * the first place.
+ * the first place, and closes back to the Master Grid.
+ *
+ * "Back" also throws this preview away (same zero-side-effects
+ * reasoning — nothing here was ever saved) but returns to Session
+ * Settings for the SAME section instead of closing entirely, so a
+ * setting can be adjusted (Hours/Week, Meetings/Week, a preferred
+ * Faculty/Room) and the batch regenerated without re-walking Target
+ * Selection from scratch — see Index.vue's backToSessionSettings().
  */
 const props = defineProps({
     show: { type: Boolean, default: false },
@@ -52,7 +59,7 @@ const props = defineProps({
     justSaved: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['save', 'discard', 'edit-block', 'saved-celebration-done'])
+const emit = defineEmits(['save', 'discard', 'back', 'edit-block', 'saved-celebration-done'])
 
 const blocks = computed(() => props.result?.blocks ?? [])
 
@@ -159,6 +166,22 @@ function timeLabel(minutes) {
 function close() {
     if (props.saving) return
     emit('discard')
+}
+
+/**
+ * "Back" — unlike Discard (which throws this preview away and closes
+ * back to the Master Grid, done), this throws the preview away but
+ * returns to Session Settings for the SAME section, so a setting can
+ * be adjusted (Hours/Week, Meetings/Week, a preferred Faculty/Room)
+ * and the batch regenerated, instead of starting the whole Target
+ * Selection → Session Settings walk over from scratch. The preview
+ * itself is still discarded either way — nothing here was ever saved
+ * to begin with (see the class docblock), so there's nothing to
+ * preserve, just where the person lands next.
+ */
+function goBack() {
+    if (props.saving) return
+    emit('back')
 }
 
 function save() {
@@ -320,6 +343,14 @@ function editBlock(row) {
                     </template>
                 </p>
                 <div class="flex gap-2">
+                    <button
+                        type="button"
+                        class="px-3 py-1.5 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
+                        :disabled="saving"
+                        @click="goBack"
+                    >
+                        ← Back to Session Settings
+                    </button>
                     <button
                         type="button"
                         class="px-3 py-1.5 rounded-lg text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"

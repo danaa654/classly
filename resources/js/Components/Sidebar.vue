@@ -71,6 +71,11 @@ const navConfig = [
             { label: 'Subject Offerings', route: 'subject-offerings.index', icon: '🧾' },
             { label: 'Faculty Loading', route: 'teaching-assignments.index', icon: '📋' },
             { label: 'Master Grid', route: 'master-grid.index', icon: '🗓️' },
+            // Read-only drill-down report of what Master Grid has already
+            // committed — same role group as everything else here, since
+            // anyone who can see the scheduling workspace has a reason to
+            // see a clean printed view of it (see BlockScheduleController).
+            { label: 'Block Schedule', route: 'block-schedule.landing', icon: '📋' },
         ],
     },
     {
