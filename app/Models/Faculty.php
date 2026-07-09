@@ -74,6 +74,19 @@ class Faculty extends Model
     }
 
     /**
+     * Every persisted timetable block for this faculty member (the
+     * Master Grid's actual output — see Schedule::faculty()). Used by
+     * FacultyController::destroy() to detect "this faculty member is
+     * already scheduled" before allowing a delete, and by index() to
+     * surface that same flag to the UI for the double-confirmation
+     * prompt.
+     */
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    /**
      * Every Faculty Load Overload request ever made for this faculty
      * member — pending, approved, and declined alike. Eager-load this
      * (`with('loadOverloads')`) wherever a page needs

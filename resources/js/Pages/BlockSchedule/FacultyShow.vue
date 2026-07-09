@@ -13,13 +13,17 @@ const props = defineProps({
 
 const viewMode = ref('list') // 'list' | 'overview'
 
-function formatTime(minutes) {
-    if (minutes === null || minutes === undefined) return null
+function formatMinutes(minutes) {
     const h = Math.floor(minutes / 60)
     const m = minutes % 60
-    const suffix = h >= 12 ? 'PM' : 'AM'
+    const period = h >= 12 ? 'PM' : 'AM'
     const h12 = h % 12 === 0 ? 12 : h % 12
-    return `${h12}:${String(m).padStart(2, '0')} ${suffix}`
+    return `${h12}:${String(m).padStart(2, '0')} ${period}`
+}
+
+function formatTime(minutes) {
+    if (minutes === null || minutes === undefined) return null
+    return formatMinutes(minutes)
 }
 
 function timeRange(row) {
@@ -29,69 +33,105 @@ function timeRange(row) {
 
 /*
 |--------------------------------------------------------------------------
-| Schedule Overview — weekly timetable grid
+| Schedule Overview — same grid engine as Master Grid's Timetable.vue
 |--------------------------------------------------------------------------
 |
-| Reuses the same useTimetableGrid() composable Master Grid's Timetable.vue
-| is built on, purely for `workingDays` (which days the Academic Term has
-| enabled, in Mon->Sun order) — everything below is positioned with plain
-| minutes-since-midnight math rather than useTimetableGrid's row-per-
-| interval model, since a read-only single-faculty overview only needs to
-| draw a handful of blocks, not a full editable slot grid.
+| Uses useTimetableGrid()'s full row model (workingDays + timeRows —
+| one row per time_interval slot, exactly as configured on the Academic
+| Term, plus a single collapsed Lunch Break row) instead of pixel math,
+| so this Overview is built from the SAME time grid Master Grid itself
+| generates a schedule against, not an approximation of it. A subject
+| spanning several slots renders as one CSS-grid-spanning block (via
+| grid-row: start / end), the same technique Timetable.vue uses to
+| merge consecutive slots into a single visual block rather than
+| repeating it once per slot.
 */
-const { workingDays } = useTimetableGrid(computed(() => props.academicTerm))
+const { workingDays, timeRows } = useTimetableGrid(computed(() => props.academicTerm))
 
-const PX_PER_MINUTE = 1.1
+// "8:00 AM - 8:30 AM" -> "8:00–8:30 AM" (shared AM/PM dropped from the
+// start side when both ends match), or "11:30 AM–12:00 PM" when they
+// don't — keeps the FULL range visible on one compact line, instead of
+// only showing the start time (which made the school day's last slot
+// look like it stopped early when it actually ran to school_end_time).
+function compactRange(label) {
+    const [start, end] = label.split(' - ')
+    const startPeriod = start.slice(-2)
+    const endPeriod = end.slice(-2)
 
-function toMinutes(hhmm) {
-    if (!hhmm) return null
-    const [h, m] = hhmm.split(':').map(Number)
-    return (h * 60) + m
+    if (startPeriod === endPeriod) {
+        return `${start.slice(0, -3)}–${end}`
+    }
+
+    return `${start}–${end}`
 }
 
-const schoolStart = computed(() => toMinutes(props.academicTerm?.school_start_time) ?? 480)
-const schoolEnd = computed(() => toMinutes(props.academicTerm?.school_end_time) ?? 1170)
-const lunchStart = computed(() => toMinutes(props.academicTerm?.lunch_start_time))
-const lunchEnd = computed(() => toMinutes(props.academicTerm?.lunch_end_time))
-
-const gridHeight = computed(() => Math.max((schoolEnd.value - schoolStart.value) * PX_PER_MINUTE, 0))
-
-const hourMarks = computed(() => {
-    const marks = []
-    let cursor = schoolStart.value
-
-    while (cursor <= schoolEnd.value) {
-        marks.push({ minutes: cursor, label: formatTime(cursor) })
-        cursor += 60
-    }
-
-    return marks
-})
-
-const lunchStyle = computed(() => {
-    if (lunchStart.value == null || lunchEnd.value == null) return null
-
-    return {
-        top: `${(lunchStart.value - schoolStart.value) * PX_PER_MINUTE}px`,
-        height: `${(lunchEnd.value - lunchStart.value) * PX_PER_MINUTE}px`,
-    }
-})
-
-// Scheduled rows only — the overview grid has no way to place a subject
-// with no day/time yet (see the note rendered below the grid for those).
+// Scheduled rows only — the grid has no way to place a subject with no
+// day/time yet (see the note rendered below the grid for those).
 const scheduledAssignments = computed(() => props.assignments.filter((a) => a.day))
 const unscheduledCount = computed(() => props.assignments.length - scheduledAssignments.value.length)
 
-function assignmentsForDay(dayField) {
-    return scheduledAssignments.value.filter((a) => a.day?.toLowerCase() === dayField)
+/*
+| Every row in timeRows (regular slots AND the lunch row) occupies
+| exactly one CSS grid row line, in order, starting right after the
+| header row. Row at array index i therefore starts at grid line
+| (i + 2) — +1 because grid lines are 1-indexed, +1 more because the
+| header itself sits on line 1. Identical mapping to Timetable.vue, so
+| an assignment lines up on this grid exactly the way it would on
+| Master Grid's.
+*/
+const rowLineByStartMinutes = computed(() => {
+    const map = new Map()
+    timeRows.value.forEach((row, index) => {
+        map.set(row.startMinutes, index + 2)
+    })
+    return map
+})
+
+const finalLine = computed(() => timeRows.value.length + 2)
+
+function lineForStart(minutes) {
+    return rowLineByStartMinutes.value.get(minutes) ?? finalLine.value
 }
 
-function blockStyle(assignment) {
-    const top = (assignment.start_minutes - schoolStart.value) * PX_PER_MINUTE
-    const height = Math.max((assignment.end_minutes - assignment.start_minutes) * PX_PER_MINUTE, 26)
-
-    return { top: `${top}px`, height: `${height}px` }
+function lineForEnd(minutes) {
+    return rowLineByStartMinutes.value.get(minutes) ?? finalLine.value
 }
+
+function dayColumnIndex(dayField) {
+    return workingDays.value.findIndex((d) => d.field === dayField)
+}
+
+const positionedAssignments = computed(() =>
+    scheduledAssignments.value
+        .map((a) => {
+            const dayIndex = dayColumnIndex(a.day?.toLowerCase())
+            if (dayIndex === -1) return null
+
+            return {
+                assignment: a,
+                gridColumn: `${dayIndex + 2} / span 1`,
+                gridRow: `${lineForStart(a.start_minutes)} / ${lineForEnd(a.end_minutes)}`,
+            }
+        })
+        .filter(Boolean)
+)
+
+const gridTemplateColumns = computed(
+    () => `80px repeat(${workingDays.value.length}, minmax(110px, 1fr))`
+)
+
+/**
+ * How many scheduled classes fall on each working day — powers the
+ * small summary cards above the grid ("MON · 2 classes", etc.), so at
+ * a glance you can see which days are busiest without counting blocks
+ * in the grid itself.
+ */
+const dayCounts = computed(() =>
+    workingDays.value.map((day) => ({
+        ...day,
+        count: scheduledAssignments.value.filter((a) => a.day?.toLowerCase() === day.field).length,
+    }))
+)
 </script>
 
 <template>
@@ -177,65 +217,104 @@ function blockStyle(assignment) {
                 </table>
             </div>
 
-            <!-- OVERVIEW: weekly timetable grid -->
-            <div v-else class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="flex" style="min-width: 820px">
-                    <!-- Time gutter -->
-                    <div class="w-16 flex-shrink-0 border-r border-slate-100">
-                        <div class="h-10 border-b border-slate-200"></div>
-                        <div class="relative" :style="{ height: gridHeight + 'px' }">
-                            <div
-                                v-for="mark in hourMarks"
-                                :key="mark.minutes"
-                                class="absolute right-2 -translate-y-1/2 text-[10px] font-medium text-slate-400"
-                                :style="{ top: (mark.minutes - schoolStart) * PX_PER_MINUTE + 'px' }"
-                            >
-                                {{ mark.label }}
-                            </div>
+            <!-- OVERVIEW: same CSS-grid engine as Master Grid's Timetable.vue -->
+            <div v-else>
+                <div v-if="timeRows.length === 0" class="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-400 shadow-sm">
+                    This Academic Term has no valid school hours configured yet.
+                </div>
+
+                <template v-else>
+                    <!-- Per-day summary cards -->
+                    <div class="mb-4 grid gap-3" :style="{ gridTemplateColumns: `repeat(${workingDays.length}, minmax(0, 1fr))` }">
+                        <div
+                            v-for="day in dayCounts"
+                            :key="day.field"
+                            class="rounded-xl border border-slate-200 bg-white px-3 py-3 text-center shadow-sm"
+                        >
+                            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">{{ day.label }}</p>
+                            <p class="mt-1 text-2xl font-extrabold" :class="day.count > 0 ? 'text-indigo-600' : 'text-slate-300'">
+                                {{ day.count }}
+                            </p>
+                            <p class="text-[11px] font-medium text-slate-400">{{ day.count === 1 ? 'class' : 'classes' }}</p>
                         </div>
                     </div>
 
-                    <!-- Day columns -->
-                    <div
-                        v-for="day in workingDays"
-                        :key="day.field"
-                        class="flex-1 border-r border-slate-100 last:border-r-0"
-                    >
-                        <div class="flex h-10 items-center justify-center border-b border-slate-200 text-xs font-bold uppercase tracking-wide text-slate-600">
-                            {{ day.label }}
-                        </div>
-
-                        <div class="relative" :style="{ height: gridHeight + 'px' }">
-                            <!-- Hour gridlines -->
+                    <div class="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                        <div class="max-h-[560px] w-full overflow-auto rounded-lg">
                             <div
-                                v-for="mark in hourMarks"
-                                :key="'line-' + mark.minutes"
-                                class="absolute left-0 right-0 border-t border-slate-100"
-                                :style="{ top: (mark.minutes - schoolStart) * PX_PER_MINUTE + 'px' }"
-                            ></div>
-
-                            <!-- Lunch band -->
-                            <div
-                                v-if="lunchStyle"
-                                class="absolute left-0 right-0 bg-slate-50"
-                                :style="lunchStyle"
-                            ></div>
-
-                            <!-- Scheduled blocks -->
-                            <div
-                                v-for="a in assignmentsForDay(day.field)"
-                                :key="a.id"
-                                class="absolute left-1 right-1 overflow-hidden rounded-lg border border-indigo-300 bg-indigo-100 px-2 py-1 shadow-sm"
-                                :style="blockStyle(a)"
+                                class="timetable-grid grid w-full border-separate select-none"
+                                :style="{ gridTemplateColumns }"
                             >
-                                <p class="truncate text-[11px] font-bold text-indigo-900">{{ a.subject_code }}</p>
-                                <p class="truncate text-[10px] text-indigo-700">
-                                    {{ a.section_code ?? '—' }} · {{ a.room_code ?? 'TBA' }}
+                                <!-- Header row -->
+
+                            <div
+                                class="timetable-time-col sticky left-0 top-0 z-30 border border-slate-300 bg-slate-100 px-1.5 py-1 text-[9px] font-black uppercase tracking-wider text-black"
+                                style="grid-column: 1; grid-row: 1;"
+                            >
+                                Time
+                            </div>
+                            <div
+                                v-for="(day, dIndex) in workingDays"
+                                :key="day.field"
+                                class="sticky top-0 z-20 border border-slate-300 bg-slate-100 px-1 py-1 text-center text-[9px] font-black uppercase tracking-wider text-black"
+                                :style="{ gridColumn: dIndex + 2, gridRow: 1 }"
+                            >
+                                {{ day.label }}
+                            </div>
+
+                            <!-- Row backgrounds/borders + time labels + lunch band -->
+                            <template v-for="(row, rIndex) in timeRows" :key="row.key">
+                                <div
+                                    class="timetable-time-col sticky left-0 z-10 whitespace-nowrap border border-slate-300 px-1.5 text-[8px] font-semibold leading-[18px] text-black"
+                                    :class="row.type === 'lunch' ? 'bg-slate-50' : 'bg-white'"
+                                    :style="{ gridColumn: 1, gridRow: rIndex + 2 }"
+                                >
+                                    {{ compactRange(row.label) }}
+                                </div>
+
+                                <!-- Lunch spans every day column in one band -->
+                                <div
+                                    v-if="row.type === 'lunch'"
+                                    class="flex items-center justify-center border border-slate-300 bg-slate-100/70"
+                                    :style="{ gridColumn: `2 / span ${workingDays.length}`, gridRow: rIndex + 2 }"
+                                >
+                                    <span class="text-[8px] font-black uppercase tracking-[0.1em] text-black">
+                                        Lunch
+                                    </span>
+                                </div>
+
+                                <!-- Otherwise one empty bordered cell per day, purely for the grid lines -->
+                                <div
+                                    v-else
+                                    v-for="(day, dIndex) in workingDays"
+                                    :key="day.field + row.key"
+                                    class="timetable-cell h-[18px] border border-slate-300"
+                                    :style="{ gridColumn: dIndex + 2, gridRow: rIndex + 2 }"
+                                ></div>
+                            </template>
+
+                            <!-- Scheduled blocks — each rendered exactly ONCE,
+                                 spanning every row it actually covers. -->
+                            <div
+                                v-for="{ assignment, gridColumn, gridRow } in positionedAssignments"
+                                :key="assignment.id"
+                                class="z-[5] m-px flex flex-col items-center justify-center gap-0 overflow-hidden rounded border border-indigo-300 bg-indigo-100 px-1 py-0.5 text-center"
+                                :style="{ gridColumn, gridRow }"
+                            >
+                                <p class="text-[8px] font-black leading-tight text-indigo-900">
+                                    {{ assignment.subject_code }} · {{ assignment.section_code ?? '—' }}
+                                </p>
+                                <p class="text-[7px] font-bold leading-tight text-indigo-800">
+                                    {{ formatMinutes(assignment.start_minutes) }} – {{ formatMinutes(assignment.end_minutes) }}
+                                </p>
+                                <p class="truncate text-[7px] font-semibold leading-tight text-indigo-700">
+                                    {{ assignment.room_code ?? 'TBA' }}
                                 </p>
                             </div>
                         </div>
                     </div>
-                </div>
+                    </div>
+                </template>
             </div>
 
             <p v-if="viewMode === 'overview' && unscheduledCount > 0" class="mt-3 text-xs italic text-slate-400">
@@ -248,6 +327,12 @@ function blockStyle(assignment) {
         </div>
     </AppLayout>
 </template>
+
+<style scoped>
+.timetable-time-col {
+    width: 80px;
+}
+</style>
 
 <style>
 /* Sidebar/Topbar come from AppLayout and are visible during

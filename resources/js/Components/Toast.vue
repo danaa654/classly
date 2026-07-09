@@ -16,6 +16,13 @@ const TYPE_CLASSES = {
     // "something went wrong" — deliberate, not a failure.
     deleted: 'bg-red-500',
 }
+
+const TYPE_ICONS = {
+    success: '✅',
+    warning: '⚠️',
+    error: '❌',
+    deleted: '🗑️',
+}
 </script>
 
 <template>
@@ -25,7 +32,7 @@ const TYPE_CLASSES = {
             class="fixed top-6 left-4 right-4 sm:left-auto sm:right-6 z-50 sm:max-w-md rounded-xl shadow-lg px-5 py-4 text-base font-medium leading-snug text-white"
             :class="TYPE_CLASSES[toast.type] ?? TYPE_CLASSES.success"
         >
-            {{ toast.message }}
+            {{ TYPE_ICONS[toast.type] ?? TYPE_ICONS.success }} {{ toast.message }}
         </div>
     </Transition>
 </template>

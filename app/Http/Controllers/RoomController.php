@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AcademicTerm;
 use App\Models\Room;
 use App\Models\SubjectOffering;
+use App\Models\SubjectRoomGroup;
 use App\Services\RoomCapacityService;
 use App\Services\SchedulingWorkspaceService;
 use Illuminate\Http\Request;
@@ -673,20 +674,18 @@ class RoomController extends Controller implements HasMiddleware
     }
 
     /**
-     * The fixed set of programs a room can be assigned to. "General" means
+     * The set of programs a room can be assigned to. "General" means
      * available to every department; the rest name a specific department a
      * room is Shared or Exclusive to.
+     *
+     * Sourced live from the Programs table (via SubjectRoomGroup::options()
+     * — the same pivot-value helper Subject already uses) instead of a
+     * hardcoded list, so a newly added College/Program is immediately
+     * selectable here too, with zero code changes.
      */
     private function roomGroupOptions(): array
     {
-        return [
-            'General',
-            'BSIT',
-            'BSED',
-            'BSHM',
-            'BSTM',
-            'BSCRIM',
-        ];
+        return SubjectRoomGroup::options();
     }
 
     /**
@@ -756,21 +755,19 @@ class RoomController extends Controller implements HasMiddleware
                     }
 
                     if ($hasGeneral && $request->input('room_type') === 'Laboratory') {
-                        $fail('General is a Lecture-only program. Laboratory rooms must select one or more specific programs (BSIT, BSED, BSHM, BSTM, or BSCRIM).');
+                        $fail('General is a Lecture-only program. Laboratory rooms must select one or more specific programs.');
                     }
 
                 },
             ],
 
+            // Sourced live from the Programs table (plus "General") via
+            // SubjectRoomGroup::options() — a newly added College/Program
+            // is a valid room_groups value immediately, no code change
+            // required. Mirrors the identical rule on
+            // SubjectController::rules().
             'room_groups.*' => [
-                Rule::in([
-                    'General',
-                    'BSIT',
-                    'BSED',
-                    'BSHM',
-                    'BSTM',
-                    'BSCRIM',
-                ]),
+                Rule::in(SubjectRoomGroup::options()),
             ],
 
             'building' => [

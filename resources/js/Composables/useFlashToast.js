@@ -61,5 +61,29 @@ export function useFlashToast() {
         { immediate: true, deep: true }
     )
 
+    // Inertia shares validation failures via the `errors` prop
+    // automatically (no controller flash() call involved) — a 422
+    // redirect-back with $errors otherwise produces no toast at all,
+    // even though the request genuinely failed. This surfaces that as
+    // a red ❌ toast the same way any other 'error'-type flash does.
+    // Only fires on a NEW set of errors (an object that wasn't empty
+    // before, or has different keys) so it doesn't re-toast on every
+    // unrelated prop update while the errors are still on-screen.
+    let lastErrorKeys = ''
+
+    watch(
+        () => page.props.errors,
+        (errors) => {
+            const keys = errors ? Object.keys(errors).sort().join(',') : ''
+
+            if (keys && keys !== lastErrorKeys) {
+                show('Please check the form for errors.', 'error')
+            }
+
+            lastErrorKeys = keys
+        },
+        { immediate: true, deep: true }
+    )
+
     return { toast, show }
 }

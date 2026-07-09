@@ -144,6 +144,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'warning' => fn () => $request->session()->get('warning'),
                 'error' => fn () => $request->session()->get('error'),
+                'deleted' => fn () => $request->session()->get('deleted'),
             ],
 
             // Unread Faculty Load Overload notifications for the

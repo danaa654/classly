@@ -14,6 +14,25 @@ class SubjectController extends Controller implements HasMiddleware
 {
     /**
      * Controller Middleware
+     *
+     * Subjects is a shared MASTER LIST spanning every college's
+     * curriculum (GenEd, NSTP, PATHFIT, etc. show up under multiple
+     * programs at once) — it isn't "owned" by any one department the
+     * way a Dean/OIC/Assistant Dean's other data is (their own
+     * faculty, their own section of the Master Grid). So access here
+     * is split into two tiers instead of one flat role check:
+     *
+     *   - Read (index)                    -> Admin, Registrar, Dean,
+     *     Assistant Dean, OIC — they still need to see the master list
+     *     (e.g. while doing Faculty-Subject assignment or reviewing
+     *     curriculum), just not change it.
+     *   - Write (create/store/edit/
+     *     update/destroy)                 -> Admin, Registrar only —
+     *     centralizes changes to the one list every college's
+     *     curriculum depends on, the same way Programs/Curriculum
+     *     management is centralized. Delete in particular cascades
+     *     into curriculum_items/faculty_subjects/schedules, so it's
+     *     deliberately not distributed across 4-5 college-level roles.
      */
     public static function middleware(): array
     {
@@ -35,7 +54,22 @@ class SubjectController extends Controller implements HasMiddleware
 
                 return $next($request);
 
-            }),
+            }, only: ['index']),
+
+            new Middleware(function ($request, $next) {
+
+                abort_unless(
+                    auth()->user()->hasAnyRole([
+                        'Admin',
+                        'Registrar',
+                    ]),
+                    403,
+                    'Unauthorized.'
+                );
+
+                return $next($request);
+
+            }, only: ['create', 'store', 'edit', 'update', 'destroy']),
 
         ];
     }
@@ -49,9 +83,11 @@ class SubjectController extends Controller implements HasMiddleware
      *                      (case-insensitive, partial match)
      *   - room_type:      Lecture | Laboratory | Practicum
      *   - classification: Major | Minor
-     *   - room_group:     General | BSIT | BSED | BSHM | BSTM | BSCRIM
-     *                      (matches subjects that have this program among
-     *                      their one-or-more assigned programs)
+     *   - room_group:     General | any active Program's code (BSIT,
+     *                      BSED, BSHM, BSTM, BSCRIM, BSIE, etc. — see
+     *                      SubjectRoomGroup::options(), matches subjects
+     *                      that have this program among their
+     *                      one-or-more assigned programs)
      *   - status:         Active | Inactive
      *   - page:           handled automatically by paginate()
      */
@@ -147,6 +183,12 @@ class SubjectController extends Controller implements HasMiddleware
 
             'subjects' => $subjects,
 
+            // Sourced live from the Programs table (via
+            // SubjectRoomGroup::options()) instead of a hardcoded list —
+            // a newly added College/Program shows up in this filter
+            // dropdown immediately, no code change required.
+            'roomGroupOptions' => SubjectRoomGroup::options(),
+
             'filters' => [
                 'search' => $filters['search'] ?? '',
                 'room_type' => $filters['room_type'] ?? '',
@@ -167,7 +209,9 @@ class SubjectController extends Controller implements HasMiddleware
 
             'subjects' => Subject::orderBy('subject_code')->get(),
 
-            'roomGroupOptions' => SubjectRoomGroup::GROUPS,
+            // Sourced live from the Programs table — see the note on
+            // SubjectRoomGroup::options().
+            'roomGroupOptions' => SubjectRoomGroup::options(),
 
         ]);
     }
@@ -235,7 +279,15 @@ class SubjectController extends Controller implements HasMiddleware
                 ->orderBy('subject_code')
                 ->get(),
 
-            'roomGroupOptions' => SubjectRoomGroup::GROUPS,
+            // Sourced live from the Programs table — see the note on
+            // SubjectRoomGroup::options(). If this subject was already
+            // assigned a program that has since been deactivated, that
+            // code is merged back in so it still renders (checked) on
+            // the form instead of silently vanishing.
+            'roomGroupOptions' => array_values(array_unique(array_merge(
+                SubjectRoomGroup::options(),
+                $subject->room_group_codes
+            ))),
 
         ]);
     }
@@ -286,7 +338,7 @@ class SubjectController extends Controller implements HasMiddleware
         // through here lands the redirect back on that same filtered view.
         return redirect()
             ->route('subjects.index', $request->query())
-            ->with('success', 'Subject updated successfully.');
+            ->with('warning', 'Subject updated successfully.');
     }
 
     /**
@@ -300,7 +352,7 @@ class SubjectController extends Controller implements HasMiddleware
         // DELETE request's URL for the same reason as update() above.
         return redirect()
             ->route('subjects.index', $request->query())
-            ->with('success', 'Subject deleted successfully.');
+            ->with('deleted', 'Subject deleted successfully.');
     }
 
     /**
@@ -357,9 +409,9 @@ class SubjectController extends Controller implements HasMiddleware
 
             // Classification no longer drives a *default* for room_groups,
             // but it does constrain what's allowed: Major and Minor
-            // subjects both support any combination of the academic
-            // programs (BSIT, BSED, BSHM, BSTM, BSCRIM), but "General" is
-            // Minor-only — see the room_groups rule below.
+            // subjects both support any combination of the active
+            // academic programs, but "General" is Minor-only — see the
+            // room_groups rule below.
             'is_major' => [
                 'required',
                 'boolean',
@@ -373,9 +425,10 @@ class SubjectController extends Controller implements HasMiddleware
             | required_room_type reflects PAP's actual room inventory
             | (Lecture / Laboratory / None).
             |
-            | room_groups replaces the old single required_room_group field.
-            | It's a plain array of one-or-more programs (General, BSIT,
-            | BSED, BSHM, BSTM, BSCRIM) this subject is applicable to —
+            | room_groups is a plain array of one-or-more programs this
+            | subject is applicable to. Allowed values are sourced live
+            | from the programs table (plus "General") via
+            | SubjectRoomGroup::options() — see that method's docblock.
             | Criminalistics specializations (FB / LD / QD / FI) still all
             | collapse to BSCRIM upstream of this list; the scheduler picks
             | whichever Criminalistics lab is free.
@@ -432,7 +485,7 @@ class SubjectController extends Controller implements HasMiddleware
                     }
 
                     if ($roomType === 'Laboratory' && in_array('General', $roomGroups, true)) {
-                        $fail('General is a Lecture-only program. Laboratory subjects must select one or more specific programs (BSIT, BSED, BSHM, BSTM, or BSCRIM).');
+                        $fail('General is a Lecture-only program. Laboratory subjects must select one or more specific programs.');
 
                         return;
                     }
@@ -450,8 +503,12 @@ class SubjectController extends Controller implements HasMiddleware
                 },
             ],
 
+            // Sourced live from the Programs table (plus "General") via
+            // SubjectRoomGroup::options() — a newly added College/Program
+            // is a valid room_groups value immediately, no code change
+            // required.
             'room_groups.*' => [
-                Rule::in(SubjectRoomGroup::GROUPS),
+                Rule::in(SubjectRoomGroup::options()),
             ],
 
             'is_practicum' => [

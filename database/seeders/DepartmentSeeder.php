@@ -20,7 +20,7 @@ class DepartmentSeeder extends Seeder
             ],
             [
                 'name' => 'College of Criminal Justice',
-                'abbreviation' => 'CRIM',
+                'abbreviation' => 'COC',
                 'description' => null,
                 'active' => true,
                 'created_at' => now(),

@@ -237,6 +237,23 @@ Route::middleware(['auth'])->group(function () {
         Route::put('faculty/{faculty}/manage-subjects', [FacultyController::class, 'syncPreferredSubjects'])
             ->name('faculty.manage-subjects.update');
 
+        /*
+        |--------------------------------------------------------------------------
+        | Faculty Delete — Schedule Preview
+        |--------------------------------------------------------------------------
+        |
+        | Data source for the Delete confirmation modal on Faculty/Index.vue —
+        | lets Admin/Registrar see exactly which scheduled classes a faculty
+        | member currently has BEFORE deleting them. Sits in this same route
+        | group (so Dean/Assistant Dean/OIC can still reach it without a 403
+        | from routing), but FacultyController::middleware() narrows the
+        | actual access down to Admin/Registrar only, same tier as destroy().
+        |
+        */
+
+        Route::get('faculty/{faculty}/delete-preview', [FacultyController::class, 'deletePreview'])
+            ->name('faculty.delete-preview');
+
         Route::resource('subjects', SubjectController::class);
 
         // Rooms — master list only (no schedules/availability here).

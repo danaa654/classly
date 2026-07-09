@@ -1,15 +1,48 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Link, router } from '@inertiajs/vue3'
+import { ref } from 'vue'
+import FacultyDeleteModal from './FacultyDeleteModal.vue'
 
 defineProps({
     faculties: Array,
+    canManageFaculty: Boolean,
 })
 
-function destroy(id) {
-    if (confirm('Are you sure you want to delete this faculty member?')) {
-        router.delete(route('faculty.destroy', id))
+/*
+|--------------------------------------------------------------------------
+| Delete — Preview Modal for Already-Scheduled Faculty
+|--------------------------------------------------------------------------
+|
+| A faculty member with no scheduled classes still just needs a plain
+| confirm() — no need to open a modal to show an empty list. Once
+| faculty.has_schedule is true (computed server-side in
+| FacultyController::index(), from the SAME check destroy() enforces),
+| Delete opens FacultyDeleteModal instead, which fetches the actual list
+| of scheduled classes so Admin/Registrar can see exactly what they're
+| about to orphan before confirming.
+|
+*/
+
+const deleteModalOpen = ref(false)
+const facultyPendingDelete = ref(null)
+
+function destroy(faculty) {
+    if (faculty.has_schedule) {
+        facultyPendingDelete.value = faculty
+        deleteModalOpen.value = true
+
+        return
     }
+
+    if (confirm(`Delete ${faculty.full_name}? This cannot be undone.`)) {
+        router.delete(route('faculty.destroy', faculty.id))
+    }
+}
+
+function closeDeleteModal() {
+    deleteModalOpen.value = false
+    facultyPendingDelete.value = null
 }
 </script>
 
@@ -26,6 +59,7 @@ function destroy(id) {
             </h1>
 
             <Link
+                v-if="canManageFaculty"
                 :href="route('faculty.create')"
                 class="btn-save"
             >
@@ -154,6 +188,7 @@ function destroy(id) {
                             <div class="flex justify-center gap-2">
 
                                 <Link
+                                    v-if="faculty.can_edit"
                                     :href="route('faculty.edit', faculty.id)"
                                     class="btn-edit"
                                 >
@@ -161,11 +196,20 @@ function destroy(id) {
                                 </Link>
 
                                 <button
-                                    @click="destroy(faculty.id)"
+                                    v-if="canManageFaculty"
+                                    @click="destroy(faculty)"
                                     class="btn-delete"
                                 >
                                     Delete
                                 </button>
+
+                                <span
+                                    v-if="!faculty.can_edit && !canManageFaculty"
+                                    class="text-sm"
+                                    style="color: var(--text-muted)"
+                                >
+                                    View only
+                                </span>
 
                             </div>
 
@@ -190,6 +234,12 @@ function destroy(id) {
             </table>
 
         </div>
+
+        <FacultyDeleteModal
+            :show="deleteModalOpen"
+            :faculty="facultyPendingDelete"
+            @close="closeDeleteModal"
+        />
 
     </DashboardLayout>
 </template>

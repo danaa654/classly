@@ -12,7 +12,7 @@ class ProgramSeeder extends Seeder
     {
         $ccs = Department::where('abbreviation', 'CCS')->firstOrFail();
         $cte = Department::where('abbreviation', 'CTE')->firstOrFail();
-        $crim = Department::where('abbreviation', 'CRIM')->firstOrFail();
+        $crim = Department::where('abbreviation', 'COC')->firstOrFail();
         $shtm = Department::where('abbreviation', 'SHTM')->firstOrFail();
 
         $programs = [

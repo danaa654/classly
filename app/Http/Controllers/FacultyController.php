@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Faculty;
 use App\Models\Department;
 use App\Models\AcademicTerm;
+use App\Models\Schedule;
 use App\Models\SubjectOffering;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,9 +17,35 @@ use Illuminate\Routing\Controllers\Middleware;
 class FacultyController extends Controller implements HasMiddleware
 {
 
+    /**
+     * Controller Middleware
+     *
+     * Three tiers, unlike Subjects' two — Faculty is department-owned
+     * data (each row belongs to one Department, or none for General
+     * Education), so Edit gets its own tier with a per-row department
+     * check inside edit()/update() rather than being lumped in with
+     * Create/Delete:
+     *
+     *   - Read (index)             -> Admin, Registrar, Dean,
+     *     Assistant Dean, OIC — everyone can see the full roster
+     *     (needed for Faculty Loading elsewhere), even departments
+     *     they can't edit.
+     *   - Add/Delete (create/
+     *     store/destroy)           -> Admin, Registrar only. Adding is
+     *     effectively an HR/employee-record action, and deleting
+     *     cascades into faculty_subjects/teaching assignments/Schedule
+     *     — both stay centralized, same reasoning as Subjects.
+     *   - Edit (edit/update)       -> Admin, Registrar, Dean, Assistant
+     *     Dean, OIC pass this ROLE check, but canEditFaculty() below
+     *     additionally restricts Dean/Assistant Dean/OIC to their own
+     *     Department (or a General Education faculty member with no
+     *     department at all) — a CCS Dean can edit COC's or CTE's
+     *     faculty, only their own.
+     */
     public static function middleware(): array
     {
         return [
+
             new Middleware(function ($request, $next) {
 
                 abort_unless(
@@ -27,15 +54,85 @@ class FacultyController extends Controller implements HasMiddleware
                         'Registrar',
                         'Dean',
                         'Assistant Dean',
-                        'OIC'
+                        'OIC',
                     ]),
                     403,
                     'Unauthorized.'
                 );
 
                 return $next($request);
-            }),
+
+            }, only: ['index']),
+
+            new Middleware(function ($request, $next) {
+
+                abort_unless(
+                    auth()->user()->hasAnyRole([
+                        'Admin',
+                        'Registrar',
+                    ]),
+                    403,
+                    'Unauthorized.'
+                );
+
+                return $next($request);
+
+            }, only: ['create', 'store', 'destroy', 'deletePreview']),
+
+            new Middleware(function ($request, $next) {
+
+                abort_unless(
+                    auth()->user()->hasAnyRole([
+                        'Admin',
+                        'Registrar',
+                        'Dean',
+                        'Assistant Dean',
+                        'OIC',
+                    ]),
+                    403,
+                    'Unauthorized.'
+                );
+
+                return $next($request);
+
+            }, only: ['edit', 'update']),
+
         ];
+    }
+
+    /**
+     * Whether $user is allowed to edit $faculty:
+     *
+     *   - Admin/Registrar can always edit anyone.
+     *   - Dean/Assistant Dean/OIC can edit a General Education faculty
+     *     member (department_id is null — not tied to any college),
+     *     OR a faculty member in their OWN department. They can never
+     *     edit another department's faculty (a CCS Dean editing a CTE
+     *     faculty member, for instance).
+     *
+     * NOTE: this assumes the authenticated User has a department_id
+     * (mirroring the same field on Faculty) identifying which
+     * Department they're the Dean/Assistant Dean/OIC of. If your User
+     * model exposes this differently (e.g. $user->department->id, or a
+     * separate departmentsManaged() relation for someone overseeing
+     * more than one department), swap the comparison below accordingly
+     * — the role/GenEd logic stays the same either way.
+     */
+    private function canEditFaculty($user, Faculty $faculty): bool
+    {
+        if ($user->hasAnyRole(['Admin', 'Registrar'])) {
+            return true;
+        }
+
+        if (! $user->hasAnyRole(['Dean', 'Assistant Dean', 'OIC'])) {
+            return false;
+        }
+
+        if (is_null($faculty->department_id)) {
+            return true;
+        }
+
+        return $faculty->department_id === $user->department_id;
     }
 
     /**
@@ -43,11 +140,38 @@ class FacultyController extends Controller implements HasMiddleware
      */
     public function index()
     {
+        $user = auth()->user();
+
+        $faculties = Faculty::with('department')
+
+            // Powers the destroy() double-confirmation prompt — see
+            // that method and Faculty::schedules().
+            ->withExists(['schedules as has_schedule'])
+
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get()
+
+            // can_edit is computed here (not left to the frontend) so
+            // the SAME rule in canEditFaculty() governs both what the
+            // Edit button shows for and what update() actually allows
+            // — the frontend check is only ever a convenience, never
+            // the enforcement.
+            ->map(function (Faculty $faculty) use ($user) {
+                $faculty->can_edit = $this->canEditFaculty($user, $faculty);
+
+                return $faculty;
+            });
+
         return Inertia::render('Faculty/Index', [
-            'faculties' => Faculty::with('department')
-                ->orderBy('last_name')
-                ->orderBy('first_name')
-                ->get(),
+
+            'faculties' => $faculties,
+
+            // Add/Delete are Admin/Registrar only — see middleware().
+            // Sent once for the page rather than per-row since it
+            // doesn't vary faculty-to-faculty the way can_edit does.
+            'canManageFaculty' => $user->hasAnyRole(['Admin', 'Registrar']),
+
         ]);
     }
 
@@ -180,6 +304,12 @@ class FacultyController extends Controller implements HasMiddleware
      */
     public function edit(Faculty $faculty)
     {
+        abort_unless(
+            $this->canEditFaculty(auth()->user(), $faculty),
+            403,
+            'You can only edit faculty in your own department (or General Education faculty).'
+        );
+
         return Inertia::render('Faculty/Edit', [
 
             'faculty' => $faculty,
@@ -196,6 +326,12 @@ class FacultyController extends Controller implements HasMiddleware
      */
     public function update(Request $request, Faculty $faculty)
     {
+        abort_unless(
+            $this->canEditFaculty(auth()->user(), $faculty),
+            403,
+            'You can only edit faculty in your own department (or General Education faculty).'
+        );
+
         // Same normalization as store() — General Education always
         // clears the department, no matter what the client sent.
         $request->merge([
@@ -257,11 +393,29 @@ class FacultyController extends Controller implements HasMiddleware
 
             // Department — required for Departmental and Cross
             // Department scope, must be null for General Education.
+            //
+            // A scoped Dean/Assistant Dean/OIC (see canEditFaculty())
+            // already can't edit faculty outside their own department,
+            // but without this extra rule they could still reassign a
+            // faculty member INTO a different department via this
+            // field. Only Admin/Registrar can move a faculty member
+            // to a department other than the editor's own.
             'department_id' => [
                 Rule::requiredIf(fn () => $request->input('faculty_scope') !== 'general'),
                 Rule::prohibitedIf(fn () => $request->input('faculty_scope') === 'general'),
                 'nullable',
                 'exists:departments,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    $user = $request->user();
+
+                    if ($user->hasAnyRole(['Admin', 'Registrar'])) {
+                        return;
+                    }
+
+                    if (! is_null($value) && (int) $value !== (int) $user->department_id) {
+                        $fail('You can only assign faculty to your own department.');
+                    }
+                },
             ],
 
             // Employment
@@ -290,19 +444,90 @@ class FacultyController extends Controller implements HasMiddleware
 
         return redirect()
             ->route('faculty.index')
-            ->with('success', 'Faculty member updated successfully.');
+            ->with('warning', 'Faculty member updated successfully.');
+    }
+
+    /**
+     * What this faculty member is currently assigned to — the data
+     * source for the Delete confirmation modal on Faculty/Index.vue.
+     * Admin/Registrar sees this BEFORE the delete actually happens, so
+     * "this faculty already has scheduled classes" isn't just a bare
+     * warning — they can see exactly which subjects/sections/times
+     * they're about to orphan and decide with real information.
+     *
+     * Returned as plain JSON (not an Inertia render), same pattern as
+     * manageSubjects() — the modal fetches this via axios when Delete
+     * is clicked, before any confirm() prompt or DELETE request fires.
+     */
+    public function deletePreview(Faculty $faculty)
+    {
+        $schedules = $faculty->schedules()
+            ->with([
+                'academicTerm:id,academic_year,semester',
+                'room:id,room_code',
+                'subjectOffering:id,edp_code,subject_id,section_id',
+                'subjectOffering.subject:id,subject_code,descriptive_title',
+                'subjectOffering.section:id,section_code',
+            ])
+            ->orderBy('day')
+            ->orderBy('start_minutes')
+            ->get()
+            ->map(fn (Schedule $schedule) => [
+                'id' => $schedule->id,
+                'academic_term' => $schedule->academicTerm
+                    ? "{$schedule->academicTerm->semester_label} · {$schedule->academicTerm->academic_year}"
+                    : null,
+                'subject_code' => $schedule->subjectOffering?->subject?->subject_code,
+                'subject_title' => $schedule->subjectOffering?->subject?->descriptive_title,
+                'section_code' => $schedule->subjectOffering?->section?->section_code,
+                'room_code' => $schedule->room?->room_code,
+                'day' => $schedule->day,
+                'start_minutes' => $schedule->start_minutes,
+                'end_minutes' => $schedule->end_minutes,
+            ]);
+
+        return response()->json([
+            'faculty' => [
+                'id' => $faculty->id,
+                'full_name' => $faculty->full_name,
+            ],
+            'schedules' => $schedules,
+        ]);
     }
 
     /**
      * Remove the specified resource.
+     *
+     * If this faculty member already has one or more persisted
+     * Schedule rows (an actual Master Grid timetable block, not just a
+     * Teaching Assignment/preference), deleting is still allowed —
+     * Admin/Registrar may have a real reason to (faculty left
+     * mid-semester, data cleanup, etc.) — but it requires an explicit
+     * `confirmed=1` on the request. Index.vue enforces this with a
+     * second, more strongly-worded confirm() dialog naming the
+     * schedule conflict before it ever sends that flag; this check is
+     * the actual enforcement, not the frontend prompt. What happens to
+     * the affected Schedule rows themselves (cascade delete vs. FK
+     * restrict) depends on the schedules.faculty_id foreign key rule
+     * in your migration — worth confirming that's the behavior you
+     * want before relying on this.
      */
-    public function destroy(Faculty $faculty)
+    public function destroy(Request $request, Faculty $faculty)
     {
+        $hasSchedule = $faculty->schedules()->exists();
+
+        if ($hasSchedule && ! $request->boolean('confirmed')) {
+            return back()->with(
+                'warning',
+                "{$faculty->full_name} already has scheduled classes. Confirm again to delete anyway."
+            );
+        }
+
         $faculty->delete();
 
         return redirect()
             ->route('faculty.index')
-            ->with('success', 'Faculty member deleted successfully.');
+            ->with('deleted', 'Faculty member deleted successfully.');
     }
 
     /**

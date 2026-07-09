@@ -45,16 +45,21 @@ watch(() => form.program_id, () => {
 
 watch(() => form.specialization_id, generateFields)
 
-watch(() => form.effective_year, () => {
+watch(() => form.effective_year, generateFields)
+
+function generateFields() {
+    // Academic Year is derived purely from Effective Year, so it belongs
+    // here rather than in its own watcher — a separate watcher on
+    // effective_year only fires when that field actually *changes*, and
+    // since it defaults to the current year, a user who accepts the
+    // default and only picks a Program never triggers it. That left
+    // academic_year as '' all the way to submit, which the backend's
+    // 'academic_year' => 'required' rule then rejected.
     if (form.effective_year) {
         form.academic_year =
             form.effective_year + '-' + (Number(form.effective_year) + 1)
-
-        generateFields()
     }
-})
 
-function generateFields() {
     const program = selectedProgram.value
 
     if (!program) return
@@ -77,6 +82,11 @@ function generateFields() {
     form.code = code.toUpperCase()
     form.name = name
 }
+
+// Run once on mount so academic_year (and code/name, once a program is
+// picked) are correct from the start instead of waiting on a field the
+// user may never change from its default.
+generateFields()
 
 function openConfirm() {
     showConfirm.value = true

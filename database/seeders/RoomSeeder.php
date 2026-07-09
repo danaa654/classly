@@ -30,16 +30,16 @@ class RoomSeeder extends Seeder
             ['room_code' => 'Room 109', 'room_type' => 'Lecture', 'room_groups' => ['BSED'], 'floor' => '1st Floor'],
             ['room_code' => 'Room 110', 'room_type' => 'Lecture', 'room_groups' => ['General'], 'floor' => '1st Floor'],
             ['room_code' => 'Room 111', 'room_type' => 'Lecture', 'room_groups' => ['General'], 'floor' => '1st Floor'],
-            ['room_code' => 'Ground Zero', 'room_type' => 'Laboratory', 'room_groups' => ['BSCRIM'], 'floor' => '1st Floor'],
+            ['room_code' => 'Ground Zero', 'room_type' => 'Laboratory', 'room_groups' => ['COC'], 'floor' => '1st Floor'],
 
             // 2nd Floor
             ['room_code' => 'MEZ 110', 'room_type' => 'Lecture', 'room_groups' => ['General'], 'floor' => '2nd Floor'],
             ['room_code' => 'MEZ 111', 'room_type' => 'Lecture', 'room_groups' => ['General'], 'floor' => '2nd Floor'],
-            ['room_code' => 'Room 201 (Forensic BSCRIM Lab)', 'room_type' => 'Laboratory', 'room_groups' => ['BSCRIM'], 'floor' => '2nd Floor'],
-            ['room_code' => 'Room 202 (Forensic Chemistry Lab)', 'room_type' => 'Laboratory', 'room_groups' => ['BSCRIM'], 'floor' => '2nd Floor'],
-            ['room_code' => 'Room 203', 'room_type' => 'Lecture', 'room_groups' => ['BSCRIM'], 'floor' => '2nd Floor'],
-            ['room_code' => 'Room 204', 'room_type' => 'Lecture', 'room_groups' => ['BSCRIM'], 'floor' => '2nd Floor'],
-            ['room_code' => 'Room 205', 'room_type' => 'Lecture', 'room_groups' => ['BSCRIM'], 'floor' => '2nd Floor'],
+            ['room_code' => 'Room 201 (Forensic BSCRIM Lab)', 'room_type' => 'Laboratory', 'room_groups' => ['COC'], 'floor' => '2nd Floor'],
+            ['room_code' => 'Room 202 (Forensic Chemistry Lab)', 'room_type' => 'Laboratory', 'room_groups' => ['COC'], 'floor' => '2nd Floor'],
+            ['room_code' => 'Room 203', 'room_type' => 'Lecture', 'room_groups' => ['COC'], 'floor' => '2nd Floor'],
+            ['room_code' => 'Room 204', 'room_type' => 'Lecture', 'room_groups' => ['COC'], 'floor' => '2nd Floor'],
+            ['room_code' => 'Room 205', 'room_type' => 'Lecture', 'room_groups' => ['COC'], 'floor' => '2nd Floor'],
 
             // 3rd Floor
             ['room_code' => 'Room 301 (BSHM Lab)', 'room_type' => 'Laboratory', 'room_groups' => ['BSHM'], 'floor' => '3rd Floor'],
@@ -53,12 +53,12 @@ class RoomSeeder extends Seeder
             // 4th Floor
             ['room_code' => 'FBS/BSHM Function Hall', 'room_type' => 'Laboratory', 'room_groups' => ['BSHM'], 'floor' => '4th Floor'],
             ['room_code' => 'Foods/Cookery Lab', 'room_type' => 'Laboratory', 'room_groups' => ['BSHM'], 'floor' => '4th Floor'],
-            ['room_code' => 'Room 401 Functional Hall', 'room_type' => 'Lecture', 'room_groups' => ['BSCRIM'], 'floor' => '4th Floor'],
+            ['room_code' => 'Room 401 Functional Hall', 'room_type' => 'Lecture', 'room_groups' => ['COC'], 'floor' => '4th Floor'],
             ['room_code' => 'Room 403', 'room_type' => 'Lecture', 'room_groups' => ['General'], 'floor' => '4th Floor'],
-            ['room_code' => 'Room 404 (BSCRIM1)', 'room_type' => 'Lecture', 'room_groups' => ['BSCRIM'], 'floor' => '4th Floor'],
-            ['room_code' => 'Room 405 (BSCRIM2)', 'room_type' => 'Lecture', 'room_groups' => ['BSCRIM'], 'floor' => '4th Floor'],
-            ['room_code' => 'Room 406 (BSCRIM3)', 'room_type' => 'Lecture', 'room_groups' => ['BSCRIM'], 'floor' => '4th Floor'],
-            ['room_code' => 'Room 407 (BSCRIM4)', 'room_type' => 'Lecture', 'room_groups' => ['BSCRIM'], 'floor' => '4th Floor'],
+            ['room_code' => 'Room 404 (BSCRIM1)', 'room_type' => 'Lecture', 'room_groups' => ['COC'], 'floor' => '4th Floor'],
+            ['room_code' => 'Room 405 (BSCRIM2)', 'room_type' => 'Lecture', 'room_groups' => ['COC'], 'floor' => '4th Floor'],
+            ['room_code' => 'Room 406 (BSCRIM3)', 'room_type' => 'Lecture', 'room_groups' => ['COC'], 'floor' => '4th Floor'],
+            ['room_code' => 'Room 407 (BSCRIM4)', 'room_type' => 'Lecture', 'room_groups' => ['COC'], 'floor' => '4th Floor'],
             ['room_code' => 'Room 408 (BSTM)', 'room_type' => 'Lecture', 'room_groups' => ['BSTM'], 'floor' => '4th Floor'],
             ['room_code' => 'Room 409 (BSTM)', 'room_type' => 'Lecture', 'room_groups' => ['BSTM'], 'floor' => '4th Floor'],
 

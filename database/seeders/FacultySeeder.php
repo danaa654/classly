@@ -108,9 +108,9 @@ class FacultySeeder extends Seeder
             ],
 
             // ----------------------------------------------------------------
-            // CRIM — College of Criminal Justice
+            // COC — College of Criminology
             // ----------------------------------------------------------------
-            'CRIM' => [
+            'COC' => [
                 ['full_name' => 'ALFANTE, ADRIAN LI P.', 'email' => 'adrian.alfante@pap.edu.ph', 'employment_type' => 'Full-Time', 'faculty_scope' => 'departmental'],
                 ['full_name' => 'ANSAY, MARY GRACE D.', 'email' => 'mary.ansay@pap.edu.ph', 'employment_type' => 'Full-Time', 'faculty_scope' => 'departmental'],
                 ['full_name' => 'ARSOLA, CHERRIE MIE V.', 'email' => 'cherrie.arsola@pap.edu.ph', 'employment_type' => 'Full-Time', 'faculty_scope' => 'departmental'],

@@ -3,6 +3,10 @@ import Sidebar from '@/Components/Sidebar.vue'
 import Topbar from '@/Components/Topbar.vue'
 import AppFooter from '@/Components/AppFooter.vue'
 import SemesterTransitionBanner from '@/Components/SemesterTransitionBanner.vue'
+import Toast from '@/Components/Toast.vue'
+import { useFlashToast } from '@/Composables/useFlashToast'
+
+const { toast } = useFlashToast()
 </script>
 
 <template>
@@ -27,6 +31,8 @@ import SemesterTransitionBanner from '@/Components/SemesterTransitionBanner.vue'
         <AppFooter />
 
     </div>
+
+    <Toast :toast="toast" />
 
 </div>
 

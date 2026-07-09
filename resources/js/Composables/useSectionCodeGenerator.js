@@ -11,24 +11,45 @@
  * the generation rules ever change.
  */
 
-// The only Program code (today) that requires a Specialization before a
-// Section Code/Name can be generated. See SPECIALIZED_PROGRAM_CODE in
-// SectionCodeService.php.
-const SPECIALIZED_PROGRAM_CODE = 'BSCRIM'
-
 // Five sections max per Program + Year Level (+ Specialization). See
 // SectionController::ALLOWED_LETTERS.
 export const SECTION_LETTERS = ['A', 'B', 'C', 'D', 'E']
 
+/**
+ * Whether a Program requires a Specialization to be selected before a
+ * Section Code/Name can be generated.
+ *
+ * Data-driven, not hardcoded to any particular Program code — mirrors
+ * SectionCodeService::requiresSpecialization() on the backend exactly:
+ * a Program "requires" a Specialization simply by having one or more
+ * active Specializations of its own (BSCRIM, BSED, or any future
+ * Program set up the same way, e.g. a BSIT specialization added later).
+ * A Program with no active Specializations is treated as
+ * specialization-less for Section purposes.
+ *
+ * `program.specializations` is expected to already be scoped to active
+ * ones only — see SectionController::programOptions(), which eager
+ * loads `specializations` filtered to `active = true`. If a caller ever
+ * passes a Program whose `specializations` includes inactive rows too,
+ * this still filters defensively via `spec.active` when that field is
+ * present.
+ */
 export function requiresSpecialization(program) {
-    return !!program && program.code?.toUpperCase() === SPECIALIZED_PROGRAM_CODE
+    if (!program) {
+        return false
+    }
+
+    const specializations = program.specializations ?? []
+
+    return specializations.some(spec => spec.active ?? true)
 }
 
 /**
  * Build the Section Code preview string.
  *
  * Returns null when there isn't enough information yet (missing
- * Program, Year Level, Letter, or — for BSCRIM — Specialization).
+ * Program, Year Level, Letter, or — for a Program with active
+ * Specializations — Specialization).
  */
 export function generateSectionCode({ program, specialization, yearLevel, letter }) {
     if (!program || !yearLevel || !letter) {
@@ -66,15 +87,16 @@ function abbreviateProgramName(program) {
 }
 
 /**
- * Clean, short display names for the four BSCRIM specializations, used
- * only for the Section Name preview (e.g. "BS Criminology (Lie
- * Detection) - 4A"). Deliberately not the same string as
- * specialization.name, which may carry a longer qualifier (e.g. "Lie
- * Detection (Polygraph)") — the Section Name examples call for the
- * short form specifically. Falls back to specialization.name for any
- * BSCRIM specialization added later that isn't in this list yet.
+ * Clean, short display names for known specializations, used only for
+ * the Section Name preview (e.g. "BS Criminology (Lie Detection) -
+ * 4A"). Deliberately not the same string as specialization.name, which
+ * may carry a longer qualifier (e.g. "Lie Detection (Polygraph)") — the
+ * Section Name examples call for the short form specifically. Falls
+ * back to specialization.name for any specialization (on any Program)
+ * that isn't in this list yet — this list is a display nicety, not a
+ * gate on which Programs support specializations.
  */
-const CRIM_SPECIALIZATION_SHORT_NAMES = {
+const SPECIALIZATION_SHORT_NAMES = {
     FI: 'Fingerprint Identification',
     FB: 'Firearms Identification',
     LD: 'Lie Detection',
@@ -82,7 +104,7 @@ const CRIM_SPECIALIZATION_SHORT_NAMES = {
 }
 
 function specializationDisplayName(specialization) {
-    const short = CRIM_SPECIALIZATION_SHORT_NAMES[specialization?.code?.toUpperCase()]
+    const short = SPECIALIZATION_SHORT_NAMES[specialization?.code?.toUpperCase()]
     return short ?? specialization?.name ?? ''
 }
 
@@ -90,6 +112,7 @@ function specializationDisplayName(specialization) {
  * Build the Section Name preview string, e.g.:
  *   "BS Information Technology - 1A"
  *   "BS Criminology (Lie Detection) - 4A"
+ *   "BS Secondary Education (English) - 1A"
  *
  * Returns '' when there isn't enough information yet — callers should
  * treat that the same as generateSectionCode()'s null.

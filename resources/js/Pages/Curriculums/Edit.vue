@@ -46,16 +46,18 @@ watch(() => form.program_id, () => {
 
 watch(() => form.specialization_id, generateFields)
 
-watch(() => form.effective_year, () => {
+watch(() => form.effective_year, generateFields)
+
+function generateFields() {
+    // See Create.vue's generateFields() for why academic_year lives here
+    // instead of its own watcher: a watcher scoped to effective_year only
+    // fires when that field itself changes, so editing only the Program
+    // (leaving effective_year as-is) would silently skip recomputing it.
     if (form.effective_year) {
         form.academic_year =
             form.effective_year + '-' + (Number(form.effective_year) + 1)
-
-        generateFields()
     }
-})
 
-function generateFields() {
     const program = selectedProgram.value
 
     if (!program) return

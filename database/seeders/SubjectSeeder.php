@@ -38,7 +38,7 @@ use Illuminate\Database\Seeder;
  *    excluded from the auto-scheduler via Subject::scopeSchedulable()),
  *    regardless of whatever legacy `room` value the row still carries.
  *
- * 3. `required_room_group` (General/BSIT/BSED/BSHM/BSTM/BSCRIM) is
+ * 3. `required_room_group` (General/BSIT/BSED/BSHM/BSTM/COC) is
  *    derived per-source-method via `tag()` in run() — each private
  *    catalog method (bsitOnly, bshmOnly, etc.) is tagged with its
  *    program's room group when merged. Only true General Education/
@@ -51,7 +51,7 @@ use Illuminate\Database\Seeder;
  *    method is BSTM/BSHM-specific major/bridging content, not general
  *    subject matter — Pass 1 in run() inserts one pivot row per program
  *    in the array. All four BSCRIM majors (QD/FI/FAI/LD) collapse to
- *    the single 'BSCRIM' room group per the migration's own design (the
+ *    the single 'COC' room group (college code, matching CCS/CTE/SHTM) per the migration's own design (the
  *    scheduler just needs "a Criminalistics lab", not which
  *    specialization).
  *
@@ -122,11 +122,11 @@ class SubjectSeeder extends Seeder
             $this->tag($this->bshmOnly(), 'BSHM'),
             $this->tag($this->bsitOnly(), 'BSIT'),
             $this->tag($this->bsedOnly(), 'BSED'),
-            $this->tag($this->bscrimShared(), 'BSCRIM'),
-            $this->tag($this->bscrimQuestionedDocuments(), 'BSCRIM'),
-            $this->tag($this->bscrimFingerprint(), 'BSCRIM'),
-            $this->tag($this->bscrimFirearms(), 'BSCRIM'),
-            $this->tag($this->bscrimLieDetection(), 'BSCRIM'),
+            $this->tag($this->bscrimShared(), 'COC'),
+            $this->tag($this->bscrimQuestionedDocuments(), 'COC'),
+            $this->tag($this->bscrimFingerprint(), 'COC'),
+            $this->tag($this->bscrimFirearms(), 'COC'),
+            $this->tag($this->bscrimLieDetection(), 'COC'),
         );
 
         // ---------------------------------------------------------------

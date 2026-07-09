@@ -1,6 +1,6 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { computed, reactive, watch } from 'vue'
 
 defineOptions({
@@ -10,6 +10,27 @@ defineOptions({
 const props = defineProps({
     subjects: Object,
     filters: Object,
+    roomGroupOptions: Array,
+})
+
+/*
+|--------------------------------------------------------------------------
+| Write Access
+|--------------------------------------------------------------------------
+|
+| Subjects is a shared master list (GenEd/NSTP subjects span multiple
+| programs at once), so Create/Edit/Delete is centralized to
+| Admin/Registrar server-side — see SubjectController::middleware().
+| This mirrors that same check purely so Dean/Assistant Dean/OIC (who
+| can still view this list) don't see action buttons that would just
+| 403 if clicked; the controller guard above is the real source of
+| truth, this is only a UI convenience.
+*/
+
+const canManageSubjects = computed(() => {
+    const roles = usePage().props.auth?.user?.roles ?? []
+
+    return roles.includes('Admin') || roles.includes('Registrar')
 })
 
 /*
@@ -169,6 +190,7 @@ function destroySubject(subject) {
         </div>
 
         <Link
+            v-if="canManageSubjects"
             :href="route('subjects.create')"
             class="btn-save"
         >
@@ -225,12 +247,13 @@ function destroySubject(subject) {
                 class="w-full lg:w-40 border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg text-sm focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
             >
                 <option value="">All Programs</option>
-                <option value="General">General</option>
-                <option value="BSIT">BSIT</option>
-                <option value="BSED">BSED</option>
-                <option value="BSHM">BSHM</option>
-                <option value="BSTM">BSTM</option>
-                <option value="BSCRIM">BSCRIM</option>
+                <option
+                    v-for="option in props.roomGroupOptions"
+                    :key="option"
+                    :value="option"
+                >
+                    {{ option }}
+                </option>
             </select>
 
             <!-- Status -->
@@ -410,19 +433,27 @@ function destroySubject(subject) {
 
                     <td class="px-4 py-3 text-center">
 
-                        <Link
-                            :href="route('subjects.edit', subject.id) + filterQueryString"
-                            class="btn-edit"
-                        >
-                            Edit
-                        </Link>
+                        <template v-if="canManageSubjects">
 
-                        <button
-                            @click="destroySubject(subject)"
-                            class="btn-delete"
-                        >
-                            Delete
-                        </button>
+                            <Link
+                                :href="route('subjects.edit', subject.id) + filterQueryString"
+                                class="btn-edit"
+                            >
+                                Edit
+                            </Link>
+
+                            <button
+                                @click="destroySubject(subject)"
+                                class="btn-delete"
+                            >
+                                Delete
+                            </button>
+
+                        </template>
+
+                        <span v-else class="text-[var(--text-muted)] text-xs">
+                            View only
+                        </span>
 
                     </td>
 
