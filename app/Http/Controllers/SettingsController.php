@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\UpdatePlanningAcademicTermRequest;
 use App\Models\AcademicTerm;
 use App\Services\SchedulingWorkspaceService;
+use App\Services\ActivityHistoryService;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
@@ -109,6 +110,8 @@ class SettingsController extends Controller implements HasMiddleware
         $term = AcademicTerm::findOrFail($request->validated('academic_term_id'));
 
         $this->workspace->setPlanningTerm($term);
+
+        ActivityHistoryService::recordWorkingTermChanged($term);
 
         // The Topbar switcher does a preserveScroll/preserveState PUT
         // from wherever the user currently is (any page in the app),

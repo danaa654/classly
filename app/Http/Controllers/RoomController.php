@@ -8,6 +8,7 @@ use App\Models\SubjectOffering;
 use App\Models\SubjectRoomGroup;
 use App\Services\RoomCapacityService;
 use App\Services\SchedulingWorkspaceService;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -248,6 +249,19 @@ class RoomController extends Controller implements HasMiddleware
 
         $this->syncRoomGroups($room, $roomGroups);
 
+        AuditLogService::log(
+            action: 'created',
+            module: 'Rooms',
+            model: $room,
+            description: "Created room {$room->room_code}",
+            newValues: [
+                'room_code' => $room->room_code,
+                'room_type' => $validated['room_type'],
+                'capacity' => $validated['capacity'],
+                'room_groups' => $roomGroups,
+            ],
+        );
+
         return redirect()
             ->route('rooms.index')
             ->with('success', 'Room created successfully.');
@@ -289,9 +303,28 @@ class RoomController extends Controller implements HasMiddleware
         $roomGroups = $validated['room_groups'];
         unset($validated['room_groups']);
 
+        $oldValues = [
+            'room_code' => $room->room_code,
+            'room_type' => $room->room_type,
+            'capacity' => $room->capacity,
+        ];
+
         $room->update($validated);
 
         $this->syncRoomGroups($room, $roomGroups);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Rooms',
+            model: $room,
+            description: "Updated room {$oldValues['room_code']}",
+            oldValues: $oldValues,
+            newValues: [
+                'room_code' => $room->room_code,
+                'room_type' => $validated['room_type'],
+                'capacity' => $validated['capacity'],
+            ],
+        );
 
         return redirect()
             ->route('rooms.index')
@@ -319,7 +352,17 @@ class RoomController extends Controller implements HasMiddleware
                 ->with('error', "{$room->room_code} has classes already scheduled via Master Grid and cannot be deleted. Reassign or delete those schedules first.");
         }
 
+        $roomCode = $room->room_code;
+
         $room->delete();
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Rooms',
+            description: "Deleted room {$roomCode}",
+            oldValues: ['room_code' => $roomCode],
+            recordName: $roomCode,
+        );
 
         return redirect()
             ->route('rooms.index')

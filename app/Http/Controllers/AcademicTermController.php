@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\AcademicTermRequest;
 use App\Models\AcademicTerm;
 use App\Services\SemesterTransitionService;
+use App\Services\ActivityHistoryService;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -89,6 +90,23 @@ class AcademicTermController extends Controller implements HasMiddleware
 
         }
 
+        // Fetched fresh (rather than reusing the in-transaction
+        // instance) purely so ActivityHistoryService::record* below
+        // has a real, persisted model with its id/display_name ready
+        // — cheap, since this only runs once per Academic Term created.
+        $created = AcademicTerm::where('academic_year', $validated['academic_year'])
+            ->where('semester', $validated['semester'])
+            ->latest('id')
+            ->first();
+
+        if ($created) {
+            ActivityHistoryService::recordAcademicTermCreated($created);
+
+            if (! empty($validated['active'])) {
+                ActivityHistoryService::recordAcademicTermActivated($created);
+            }
+        }
+
         return redirect()
             ->route('academic-terms.index')
             ->with('success', 'Academic Term created successfully.');
@@ -122,6 +140,8 @@ class AcademicTermController extends Controller implements HasMiddleware
         $validated = $request->validatedForSave();
         $wasArchived = $academicTerm->status === 'Archived';
         $isBeingArchived = ! $wasArchived && $validated['status'] === 'Archived';
+        $wasActive = $academicTerm->active;
+        $isBeingActivated = ! $wasActive && ! empty($validated['active']);
 
         try {
 
@@ -145,6 +165,12 @@ class AcademicTermController extends Controller implements HasMiddleware
                 ->withInput()
                 ->with('error', 'Failed to save Academic Term.');
 
+        }
+
+        if ($isBeingArchived) {
+            ActivityHistoryService::recordAcademicTermArchived($academicTerm);
+        } elseif ($isBeingActivated) {
+            ActivityHistoryService::recordAcademicTermActivated($academicTerm);
         }
 
         return redirect()
@@ -223,6 +249,12 @@ class AcademicTermController extends Controller implements HasMiddleware
         }
 
         $result = $transitions->closeAndActivate();
+
+        ActivityHistoryService::recordAcademicTermArchived($result['archived']);
+
+        if ($result['activated']) {
+            ActivityHistoryService::recordAcademicTermActivated($result['activated']);
+        }
 
         $message = "{$result['archived']->display_name} has been archived.";
 

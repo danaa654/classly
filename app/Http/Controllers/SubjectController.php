@@ -9,6 +9,7 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use App\Services\AuditLogService;
 
 class SubjectController extends Controller implements HasMiddleware
 {
@@ -259,6 +260,19 @@ class SubjectController extends Controller implements HasMiddleware
 
         $this->syncRoomGroups($subject, $roomGroups);
 
+        AuditLogService::log(
+            action: 'created',
+            module: 'Subjects',
+            model: $subject,
+            description: "Created subject {$subject->subject_code}",
+            newValues: [
+                'subject_code' => $subject->subject_code,
+                'descriptive_title' => $validated['descriptive_title'],
+                'units' => $validated['units'],
+                'is_major' => $validated['is_major'],
+            ],
+        );
+
         return redirect()
             ->route('subjects.index', $request->query())
             ->with('success', 'Subject created successfully.');
@@ -328,9 +342,30 @@ class SubjectController extends Controller implements HasMiddleware
             $validated['subject_code']
         );
 
+        $oldValues = [
+            'subject_code' => $subject->subject_code,
+            'descriptive_title' => $subject->descriptive_title,
+            'units' => $subject->units,
+            'is_major' => $subject->is_major,
+        ];
+
         $subject->update($validated);
 
         $this->syncRoomGroups($subject, $roomGroups);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Subjects',
+            model: $subject,
+            description: "Updated subject {$subject->subject_code}",
+            oldValues: $oldValues,
+            newValues: [
+                'subject_code' => $subject->subject_code,
+                'descriptive_title' => $validated['descriptive_title'],
+                'units' => $validated['units'],
+                'is_major' => $validated['is_major'],
+            ],
+        );
 
         // Edit.vue appends the filter query string it arrived with onto
         // this PUT request's URL, so $request->query() reflects whatever
@@ -346,7 +381,17 @@ class SubjectController extends Controller implements HasMiddleware
      */
     public function destroy(Request $request, Subject $subject)
     {
+        $subjectCode = $subject->subject_code;
+
         $subject->delete();
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Subjects',
+            description: "Deleted subject {$subjectCode}",
+            oldValues: ['subject_code' => $subjectCode],
+            recordName: $subjectCode,
+        );
 
         // Index.vue appends the current filter query string onto this
         // DELETE request's URL for the same reason as update() above.

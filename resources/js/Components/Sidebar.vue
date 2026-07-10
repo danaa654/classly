@@ -94,6 +94,33 @@ const navConfig = [
             { label: 'Settings', route: 'settings.scheduling-workspace', icon: '🛠️' },
         ],
     },
+    // Groups everything that watches/reports on the system rather than
+    // configures it. Same Admin/Registrar-only tier as before — Audit
+    // Logs and Activity History keep their existing `roles` restriction
+    // (Dean/Assistant Dean/OIC still can't see either link, exactly as
+    // before), just moved out of System into their own section.
+    {
+        type: 'group',
+        id: 'monitoring',
+        label: 'Monitoring',
+        icon: '🛰️',
+        roles: ['Admin', 'Registrar'],
+        children: [
+            // Admin + Registrar only, per the Audit Log spec — Dean,
+            // Assistant Dean, and OIC must never see this link at all,
+            // not even grayed out, since AuditLogController itself
+            // 403s them outright.
+            { label: 'Audit Logs', route: 'audit-logs.index', icon: '🛡️', roles: ['Admin', 'Registrar'] },
+            { label: 'Activity History', route: 'activity-history.index', icon: '🕘', roles: ['Admin', 'Registrar'] },
+            // First real System Monitor feature — was a `soon: true`
+            // placeholder with no route. Admin-only (stricter than
+            // Audit Logs/Activity History above it, which are also
+            // open to Registrar), enforced both here (link never
+            // renders for anyone else) and again server-side by
+            // ActiveUserController's own middleware.
+            { label: 'Active Users', route: 'active-users.index', icon: '📈', roles: ['Admin'] },
+        ],
+    },
 ]
 
 const visibleNav = computed(() =>

@@ -11,6 +11,7 @@ import {
     TrashIcon,
     MagnifyingGlassIcon,
     ClipboardDocumentListIcon,
+    PrinterIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -354,6 +355,16 @@ function curriculumLabel(curriculum) {
                                         <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
                                         Manage Subjects
                                     </Link>
+
+                                    <a
+                                        :href="route('curriculums.print', curriculum.id)"
+                                        target="_blank"
+                                        rel="noopener"
+                                        class="btn-info inline-flex items-center gap-1.5"
+                                    >
+                                        <PrinterIcon class="h-3.5 w-3.5" />
+                                        Print
+                                    </a>
 
                                     <Link
                                         :href="route('curriculums.edit', curriculum.id)"

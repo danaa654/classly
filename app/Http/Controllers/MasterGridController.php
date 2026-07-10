@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AcademicTerm;
 use App\Models\Schedule;
+use App\Models\SubjectOffering;
 use App\Models\TeachingAssignment;
 use App\Models\User;
 use App\Services\GreedyScheduleService;
@@ -12,6 +13,8 @@ use App\Services\ScheduleRecommendationService;
 use App\Services\ScheduleValidationService;
 use App\Services\SchedulingWorkspaceService;
 use App\Services\SessionSettingsService;
+use App\Services\AuditLogService;
+use App\Services\ActivityHistoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -345,6 +348,14 @@ class MasterGridController extends Controller implements HasMiddleware
             ], 422);
         }
 
+        // Checked BEFORE the transaction below deletes/overwrites
+        // anything — if any offering in this batch already had a
+        // committed Schedule row, this save is a re-generation of
+        // already-placed classes rather than a first pass, and the
+        // Activity History card should say so.
+        $isRegeneration = Schedule::whereIn('subject_offering_id', $blocks->pluck('subject_offering_id')->unique())
+            ->exists();
+
         try {
             DB::transaction(function () use ($blocks, $planningTerm) {
                 // A subject can now have multiple rows (one per meeting
@@ -394,6 +405,37 @@ class MasterGridController extends Controller implements HasMiddleware
             ], 500);
         }
 
+        AuditLogService::log(
+            action: 'generated',
+            module: 'Master Grid',
+            model: $planningTerm,
+            description: "Saved {$blocks->count()} schedule block(s) to Master Grid for {$planningTerm->display_name}",
+            newValues: [
+                'academic_term' => $planningTerm->display_name,
+                'blocks_saved' => $blocks->count(),
+                'offerings_affected' => $blocks->pluck('subject_offering_id')->unique()->count(),
+            ],
+            recordName: $planningTerm->display_name,
+        );
+
+        // Activity History milestone — term-wide "how far along is
+        // this schedule" snapshot, not just what this one section's
+        // save touched. `remaining` reads whereDoesntHave('schedule')
+        // rather than the inverse of `scheduled`, so it stays correct
+        // even if an offering somehow has more than one Schedule row
+        // (multi-meeting subjects — see the note above about
+        // multiple rows per offering).
+        $scheduled = Schedule::forTerm($planningTerm->id)->distinct('subject_offering_id')->count('subject_offering_id');
+        $remaining = SubjectOffering::where('academic_term_id', $planningTerm->id)
+            ->whereDoesntHave('schedule')
+            ->count();
+
+        ActivityHistoryService::recordMasterGridGenerated(
+            $planningTerm,
+            ['scheduled' => $scheduled, 'remaining' => $remaining],
+            regenerated: $isRegeneration,
+        );
+
         return response()->json([
             'message' => 'Schedule generated successfully.',
         ]);
@@ -435,6 +477,23 @@ class MasterGridController extends Controller implements HasMiddleware
             ->delete();
 
         abort_if($deleted === 0, 404, 'No committed schedule was found for this subject on the current Working Term.');
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Master Grid',
+            description: "Removed committed schedule for subject offering #{$validated['subject_offering_id']} from {$planningTerm->display_name}",
+            oldValues: [
+                'subject_offering_id' => $validated['subject_offering_id'],
+                'academic_term' => $planningTerm->display_name,
+            ],
+            recordName: "Offering #{$validated['subject_offering_id']}",
+        );
+
+        ActivityHistoryService::recordScheduleManuallyAdjusted(
+            $planningTerm,
+            1,
+            "Subject offering #{$validated['subject_offering_id']} removed from Master Grid"
+        );
 
         return response()->json([
             'message' => 'Schedule removed — this subject is unscheduled again.',

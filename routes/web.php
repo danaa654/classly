@@ -22,6 +22,9 @@ use App\Http\Controllers\MasterGridController;
 use App\Http\Controllers\BlockScheduleController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\ActivityHistoryController;
+use App\Http\Controllers\ActiveUserController;
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -99,6 +102,24 @@ Route::middleware(['auth'])->group(function () {
 
         Route::resource('users', UserController::class);
 
+        /*
+        |--------------------------------------------------------------------------
+        | System Monitor > Active Users
+        |--------------------------------------------------------------------------
+        |
+        | System Administrators ONLY — stricter than Audit Logs/Activity
+        | History (Admin + Registrar). Read-only: no store/update/destroy,
+        | same shape as AuditLogController/ActivityHistoryController.
+        | ActiveUserController's own HasMiddleware enforces this same
+        | restriction again on the controller side, so a direct hit
+        | still 403s even if this route grouping is ever rearranged
+        | later.
+        |
+        */
+
+        Route::get('active-users', [ActiveUserController::class, 'index'])
+            ->name('active-users.index');
+
     });
 
     /*
@@ -139,6 +160,14 @@ Route::middleware(['auth'])->group(function () {
         // level and semester for a single curriculum.
         Route::get('/curriculums/{curriculum}/items', [CurriculumItemController::class, 'manage'])
             ->name('curriculums.items.manage');
+
+        // Printable Prospectus — every item in this curriculum, grouped
+        // by Year Level + Semester, rendered as a plain Blade view for
+        // the browser's print dialog. Must stay above resource routes
+        // that could otherwise shadow it (not an issue here since this
+        // is a nested {curriculum}/print path, not a bare wildcard).
+        Route::get('/curriculums/{curriculum}/print', [CurriculumController::class, 'print'])
+            ->name('curriculums.print');
 
         /*
         |--------------------------------------------------------------------------
@@ -204,6 +233,45 @@ Route::middleware(['auth'])->group(function () {
 
         Route::delete('subject-offerings/{subjectOffering}', [SubjectOfferingController::class, 'destroy'])
             ->name('subject-offerings.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Audit Logs
+        |--------------------------------------------------------------------------
+        |
+        | System-wide security/accountability log — Admin/Registrar
+        | only, same tier as everything else in this group. Read-only:
+        | just index() (the filtered/paginated list) and show() (the
+        | row detail panel's JSON) — there is no store/update/destroy,
+        | since Audit Logs can never be edited or deleted through the
+        | UI. Rows are written exclusively by AuditLogService::log(),
+        | called from wherever an action actually happens elsewhere in
+        | the app; nothing here ever creates a log entry directly.
+        |
+        */
+
+        Route::get('audit-logs', [AuditLogController::class, 'index'])
+            ->name('audit-logs.index');
+
+        Route::get('audit-logs/{auditLog}', [AuditLogController::class, 'show'])
+            ->name('audit-logs.show');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Activity History
+        |--------------------------------------------------------------------------
+        |
+        | The scheduling Timeline — NOT Audit Logs. Same Admin/Registrar-
+        | only tier as Audit Logs above; Dean/Assistant Dean/OIC cannot
+        | reach this page at all. Read-only: just index(). Rows are
+        | written exclusively by ActivityHistoryService::record(),
+        | called from wherever a scheduling milestone actually happens
+        | elsewhere in the app — never through this controller.
+        |
+        */
+
+        Route::get('activity-history', [ActivityHistoryController::class, 'index'])
+            ->name('activity-history.index');
 
     });
 

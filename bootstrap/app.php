@@ -20,6 +20,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+
+            // Keeps ActiveSession rows fresh on every web request for
+            // an authenticated user — see the class docblock. Added
+            // here rather than only on 'auth'-protected routes so it
+            // also runs on auth-adjacent routes (e.g. logout).
+            \App\Http\Middleware\TrackActiveSession::class,
         ]);
 
         /*

@@ -11,6 +11,8 @@ use App\Models\Specialization;
 use App\Models\SubjectOffering;
 use App\Services\SchedulingWorkspaceService;
 use App\Services\SubjectOfferingGeneratorService;
+use App\Services\AuditLogService;
+use App\Services\ActivityHistoryService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -318,6 +320,29 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             $message .= " {$summary['skipped_unresolved']} could not be generated (missing Specialization code).";
         }
 
+        AuditLogService::log(
+            action: 'generated',
+            module: 'Subject Offering',
+            model: $academicTerm,
+            description: "Generated {$summary['created']} Subject Offering(s) for {$label}",
+            newValues: [
+                'curriculum' => $curriculum->display_name,
+                'academic_term' => $academicTerm->display_name,
+                'sections' => count($validated['section_ids']),
+                'created' => $summary['created'],
+            ],
+            recordName: $label,
+        );
+
+        // Activity History milestone — the Timeline cares about "how
+        // many classes got imported for this term," not the row-level
+        // detail Audit Logs already captures above.
+        ActivityHistoryService::recordSubjectOfferingsGenerated(
+            $academicTerm,
+            $summary['created'],
+            ['curriculum' => $curriculum->display_name]
+        );
+
         return redirect()
             ->route('subject-offerings.index', ['academic_term_id' => $academicTerm->id])
             ->with('success', $message);
@@ -339,6 +364,14 @@ class SubjectOfferingController extends Controller implements HasMiddleware
 
         $edpCode = $subjectOffering->edp_code;
         $subjectOffering->delete();
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Subject Offering',
+            description: "Deleted subject offering {$edpCode}",
+            oldValues: ['edp_code' => $edpCode],
+            recordName: $edpCode,
+        );
 
         return back()->with('success', "{$edpCode} deleted.");
     }

@@ -12,6 +12,8 @@ use App\Models\SubjectOffering;
 use App\Models\TeachingAssignment;
 use App\Models\User;
 use App\Services\SchedulingWorkspaceService;
+use App\Services\AuditLogService;
+use App\Services\ActivityHistoryService;
 use App\Services\TeachingAssignmentService;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -102,12 +104,31 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
 
             'planningTerm' => $planningTerm,
 
+            // Every prop below is wrapped in a closure (fn () => ...)
+            // rather than eagerly evaluated. This isn't just style —
+            // it's what makes Inertia's partial reloads
+            // (router.post/delete(..., { only: [...] })) actually skip
+            // the query, not just trim it from the JSON payload. If a
+            // prop is a plain array/value instead of a closure,
+            // Laravel still has to evaluate it up front to build the
+            // props array at all, so an `only` reload that excludes it
+            // saves bandwidth but NOT the query time or memory — the
+            // whole point of the optimization. See
+            // Partials/Index.vue's handleAssign()/removeAssignment()/
+            // handleUnassign(), which now request
+            // only: ['teachingAssignments', 'subjectOfferings',
+            // 'faculties', 'flash'] after an assign/unassign action —
+            // 'departments', 'pendingOverloadRequests', and
+            // 'recentActivity' never change from that action and are
+            // now skipped entirely on those requests instead of being
+            // silently re-queried and then thrown away.
+
             // 'loadOverloads' is eager-loaded here (not just fetched on
             // demand) so every faculty card/row can show
             // effective_max_units, approved_overload_units, etc.
             // without an N+1 query — see Faculty's accessors, which
             // prefer the already-loaded collection when present.
-            'faculties' => Faculty::with(['department', 'loadOverloads'])
+            'faculties' => fn () => Faculty::with(['department', 'loadOverloads'])
                 ->when($departmentId, fn ($query) => $query->where(
                     fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
                 ))
@@ -115,7 +136,7 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
                 ->orderBy('first_name')
                 ->get(),
 
-            'departments' => Department::where('active', true)
+            'departments' => fn () => Department::where('active', true)
                 ->when($departmentId, fn ($query) => $query->where('id', $departmentId))
                 ->orderBy('name')
                 ->get(),
@@ -127,7 +148,7 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
             // the same faculty set as the roster above, so a Dean
             // never sees assignment data for faculty they can't even
             // select.
-            'teachingAssignments' => $planningTerm
+            'teachingAssignments' => fn () => $planningTerm
                 ? TeachingAssignment::with([
                         'subjectOffering.subject',
                         'subjectOffering.section.curriculum.program.department',
@@ -161,7 +182,7 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
             // client-side. Scoped to the manager's own department's
             // programs — a Dean of CTE has no reason to see CCS's
             // offerings in the Assign Subject list.
-            'subjectOfferings' => $planningTerm
+            'subjectOfferings' => fn () => $planningTerm
                 ? SubjectOffering::with([
                         'subject',
                         'section.curriculum.program.department',
@@ -182,7 +203,7 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
             // empty array for everyone else keeps the review panel
             // from rendering at all for Dean/Assistant Dean/OIC, who
             // can submit requests but never approve/decline them).
-            'pendingOverloadRequests' => auth()->user()->hasAnyRole(['Admin', 'Registrar'])
+            'pendingOverloadRequests' => fn () => auth()->user()->hasAnyRole(['Admin', 'Registrar'])
                 ? FacultyLoadOverload::with(['faculty', 'requestedBy'])
                     ->pending()
                     ->orderBy('created_at')
@@ -201,7 +222,7 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
             // that a flat "most recent 15" needs no further filtering.
             // See FacultyLoadActivity, and the logActivity() calls in
             // store()/destroy() below for what writes into it.
-            'recentActivity' => FacultyLoadActivity::with(['faculty', 'subjectOffering.subject', 'overload', 'performedBy'])
+            'recentActivity' => fn () => FacultyLoadActivity::with(['faculty', 'subjectOffering.subject', 'overload', 'performedBy'])
                 ->when($departmentId, fn ($query) => $query->whereHas(
                     'faculty',
                     fn ($inner) => $inner->whereNull('department_id')->orWhere('department_id', $departmentId)
@@ -244,6 +265,51 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
 
         $this->logActivity(FacultyLoadActivity::ACTION_ASSIGNED, $faculty, $offering);
 
+        // Audit Log — matches the format in the Audit Log spec's own
+        // example: "Assigned Regil Kent M. Seville to BSIT 1-A CC103".
+        // $offering->section/subject were already eager-loaded above
+        // when $offering was fetched with 'subject', but section isn't,
+        // so it's loaded here on demand — this only runs once per
+        // assignment, not per page load, so the extra query is cheap.
+        $offering->loadMissing('section');
+
+        AuditLogService::log(
+            action: 'assigned',
+            module: 'Faculty Loading',
+            model: $faculty,
+            description: "Assigned {$faculty->full_name} to {$offering->section?->section_code} {$offering->edp_code}",
+            newValues: [
+                'faculty' => $faculty->full_name,
+                'subject_offering' => $offering->edp_code,
+                'section' => $offering->section?->section_code,
+            ],
+            recordName: "{$offering->section?->section_code} {$offering->edp_code}",
+        );
+
+        // Activity History milestone — "Faculty Loading Completed"
+        // fires exactly once per term, the first time every Subject
+        // Offering in it has a Teaching Assignment. hasRecorded() is
+        // checked first so this never re-fires on subsequent
+        // assignments once the term is already fully loaded (e.g. a
+        // faculty override afterward doesn't re-announce completion).
+        $academicTerm = $offering->academicTerm;
+
+        if ($academicTerm && ! ActivityHistoryService::hasRecorded('faculty_loading.completed', $academicTerm->id)) {
+            $totalOfferings = SubjectOffering::where('academic_term_id', $academicTerm->id)->count();
+            $assignedOfferings = SubjectOffering::where('academic_term_id', $academicTerm->id)
+                ->whereHas('teachingAssignment')
+                ->count();
+
+            if ($totalOfferings > 0 && $assignedOfferings === $totalOfferings) {
+                $facultyCount = TeachingAssignment::whereHas(
+                    'subjectOffering',
+                    fn ($q) => $q->where('academic_term_id', $academicTerm->id)
+                )->distinct('faculty_id')->count('faculty_id');
+
+                ActivityHistoryService::recordFacultyLoadingCompleted($academicTerm, $totalOfferings, $facultyCount);
+            }
+        }
+
         return redirect()
             ->route('teaching-assignments.index')
             ->with('success', 'Faculty load assigned successfully.');
@@ -269,6 +335,26 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
         $teachingAssignment->delete();
 
         $this->logActivity(FacultyLoadActivity::ACTION_UNASSIGNED, $faculty, $offering);
+
+        // Audit Log — old_values captures what existed before removal,
+        // since there's nothing left in the database to read back
+        // afterward (the row is already gone by this point).
+        $offering?->loadMissing('section');
+
+        AuditLogService::log(
+            action: 'unassigned',
+            module: 'Faculty Loading',
+            model: $faculty,
+            description: $faculty && $offering
+                ? "Removed {$faculty->full_name} from {$offering->section?->section_code} {$offering->edp_code}"
+                : 'Removed a faculty load assignment',
+            oldValues: [
+                'faculty' => $faculty?->full_name,
+                'subject_offering' => $offering?->edp_code,
+                'section' => $offering?->section?->section_code,
+            ],
+            recordName: $offering ? "{$offering->section?->section_code} {$offering->edp_code}" : null,
+        );
 
         return back()->with('success', 'Assignment removed successfully.');
     }

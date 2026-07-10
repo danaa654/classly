@@ -246,6 +246,51 @@ class CurriculumController extends Controller implements HasMiddleware
     }
 
     /**
+     * Printable Prospectus.
+     *
+     * Renders this curriculum's full item list (Subject + OJT), grouped
+     * by Year Level + Semester, as a plain Blade view meant to be sent
+     * to the browser's print dialog / saved as PDF — same pattern as
+     * SubjectOfferingController::print() and
+     * BlockScheduleController::printSections().
+     *
+     * Deliberately a Blade view, not Inertia — this is a print target,
+     * not an interactive page.
+     *
+     * NOTE: assumes Subject has a `units` column (float/int) for the
+     * running total at the bottom of the prospectus. Adjust the
+     * accessor below if your column is named differently.
+     */
+    public function print(Curriculum $curriculum)
+    {
+        $curriculum->load(['program.department', 'specialization']);
+
+        $items = $curriculum->curriculumItems()
+            ->with('subject.prerequisite')
+            ->where('active', true)
+            ->orderBy('year_level')
+            ->orderBy('semester')
+            ->orderBy('sort_order')
+            ->get();
+
+        // Grouped as "{year_level}-{semester}" => Collection<CurriculumItem>
+        // so the view can pull "1-1" (Year 1, 1st Sem) and "1-2" (Year 1,
+        // 2nd Sem) side by side for the two-column layout.
+        $grouped = $items->groupBy(fn ($item) => "{$item->year_level}-{$item->semester}");
+
+        // Distinct year levels present, sorted — drives how many
+        // "First Year", "Second Year"... row-pairs the view renders.
+        $yearLevels = $items->pluck('year_level')->unique()->sort()->values();
+
+        return view('curriculum.print', [
+            'curriculum' => $curriculum,
+            'grouped' => $grouped,
+            'yearLevels' => $yearLevels,
+            'totalUnits' => $items->sum(fn ($item) => (float) ($item->subject->units ?? 0)),
+        ]);
+    }
+
+    /**
      * Remove the specified resource.
      * 
      * Prevents deletion if curriculum has sections or curriculum items.

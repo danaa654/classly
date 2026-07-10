@@ -13,6 +13,7 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use App\Services\AuditLogService;
 
 class FacultyController extends Controller implements HasMiddleware
 {
@@ -284,7 +285,21 @@ class FacultyController extends Controller implements HasMiddleware
 
         ]);
 
-        Faculty::create($validated);
+        $faculty = Faculty::create($validated);
+
+        AuditLogService::log(
+            action: 'created',
+            module: 'Faculty',
+            model: $faculty,
+            description: "Created faculty member {$faculty->full_name}",
+            newValues: [
+                'name' => $faculty->full_name,
+                'faculty_scope' => $validated['faculty_scope'],
+                'department_id' => $validated['department_id'],
+                'employment_type' => $validated['employment_type'],
+                'max_units' => $validated['max_units'],
+            ],
+        );
 
         return redirect()
             ->route('faculty.index')
@@ -440,7 +455,32 @@ class FacultyController extends Controller implements HasMiddleware
 
         ]);
 
+        $oldValues = [
+            'name' => $faculty->full_name,
+            'faculty_scope' => $faculty->faculty_scope,
+            'department_id' => $faculty->department_id,
+            'employment_type' => $faculty->employment_type,
+            'max_units' => $faculty->max_units,
+            'status' => $faculty->status,
+        ];
+
         $faculty->update($validated);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Faculty',
+            model: $faculty,
+            description: "Updated faculty member {$faculty->full_name}",
+            oldValues: $oldValues,
+            newValues: [
+                'name' => $faculty->full_name,
+                'faculty_scope' => $validated['faculty_scope'],
+                'department_id' => $validated['department_id'],
+                'employment_type' => $validated['employment_type'],
+                'max_units' => $validated['max_units'],
+                'status' => $validated['status'],
+            ],
+        );
 
         return redirect()
             ->route('faculty.index')
@@ -523,7 +563,17 @@ class FacultyController extends Controller implements HasMiddleware
             );
         }
 
+        $facultyName = $faculty->full_name;
+
         $faculty->delete();
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Faculty',
+            description: "Deleted faculty member {$facultyName}",
+            oldValues: ['name' => $facultyName],
+            recordName: $facultyName,
+        );
 
         return redirect()
             ->route('faculty.index')

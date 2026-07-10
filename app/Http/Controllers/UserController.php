@@ -10,6 +10,7 @@ use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use App\Services\AuditLogService;
 
 class UserController extends Controller implements HasMiddleware
 {
@@ -121,6 +122,19 @@ class UserController extends Controller implements HasMiddleware
 
         $user->assignRole($validated['role']);
 
+        AuditLogService::log(
+            action: 'created',
+            module: 'User Management',
+            model: $user,
+            description: "Created user {$user->name} ({$validated['role']})",
+            newValues: [
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $validated['role'],
+                'department_id' => $validated['department_id'],
+            ],
+        );
+
         return redirect()
             ->route('users.index')
             ->with('success', 'User created successfully.');
@@ -167,6 +181,22 @@ class UserController extends Controller implements HasMiddleware
             $validated['department_id'] = null;
         }
 
+        // Captured BEFORE any changes are applied — this is what makes
+        // old_values possible. sanitizeValues() in AuditLogService
+        // strips 'password' regardless, but it's never included here
+        // in the first place since we only snapshot name/email/role/
+        // department, matching the spec's "do not store passwords or
+        // sensitive authentication data" rule at the source, not just
+        // as a defensive filter.
+        $previousRole = $user->getRoleNames()->first();
+
+        $oldValues = [
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $previousRole,
+            'department_id' => $user->department_id,
+        ];
+
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->department_id = $validated['department_id'];
@@ -178,6 +208,38 @@ class UserController extends Controller implements HasMiddleware
         $user->save();
 
         $user->syncRoles([$validated['role']]);
+
+        $newValues = [
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $validated['role'],
+            'department_id' => $user->department_id,
+        ];
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'User Management',
+            model: $user,
+            description: "Updated user {$user->name}",
+            oldValues: $oldValues,
+            newValues: $newValues,
+        );
+
+        // A role change is significant enough to also get its own
+        // distinct, easy-to-filter-for log entry (action = 'role_changed')
+        // on top of the general 'updated' one above — an Admin scanning
+        // the Audit Log for "who changed permissions" shouldn't have to
+        // open every 'updated' row on Users to find out.
+        if ($previousRole !== $validated['role']) {
+            AuditLogService::log(
+                action: 'role_changed',
+                module: 'User Management',
+                model: $user,
+                description: "Changed {$user->name}'s role from {$previousRole} to {$validated['role']}",
+                oldValues: ['role' => $previousRole],
+                newValues: ['role' => $validated['role']],
+            );
+        }
 
         return redirect()
             ->route('users.index')
@@ -203,7 +265,18 @@ class UserController extends Controller implements HasMiddleware
             );
         }
 
+        $userName = $user->name;
+        $userRole = $user->getRoleNames()->first();
+
         $user->delete();
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'User Management',
+            description: "Deleted user {$userName} ({$userRole})",
+            oldValues: ['name' => $userName, 'role' => $userRole],
+            recordName: $userName,
+        );
 
         return redirect()
             ->route('users.index')
