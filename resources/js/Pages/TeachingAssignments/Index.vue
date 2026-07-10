@@ -6,6 +6,7 @@ import AssignSubjectModal from './Partials/AssignSubjectModal.vue';
 import CircularLoadIndicator from './Partials/CircularLoadIndicator.vue';
 import OverloadRequestModal from './Partials/OverloadRequestModal.vue';
 import PendingOverloadsPanel from './Partials/PendingOverloadsPanel.vue';
+import { UserGroupIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
     planningTerm: { type: Object, default: null },
@@ -716,11 +717,18 @@ function handleUnassign(offering) {
             <!-- ==================== LEFT PANEL: FACULTY ROSTER ==================== -->
             <aside class="flex w-[17.5rem] flex-shrink-0 flex-col border-r border-[var(--card-border)] bg-[var(--card-bg)]">
                 <div class="border-b border-[var(--card-border)] px-4 py-4">
-                    <h1 class="text-lg font-bold text-[var(--text-primary)]">Faculty Loading</h1>
-                    <p class="mt-0.5 text-xs text-[var(--text-muted)]">
-                        <template v-if="planningTerm">{{ planningTerm.display_name }}</template>
-                        <template v-else>No active academic term set</template>
-                    </p>
+                    <div class="flex items-center gap-2.5">
+                        <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                            <UserGroupIcon class="h-4.5 w-4.5" />
+                        </div>
+                        <div class="min-w-0">
+                            <h1 class="truncate text-lg font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">Faculty Loading</h1>
+                            <p class="truncate text-xs text-[var(--text-muted)]">
+                                <template v-if="planningTerm">{{ planningTerm.display_name }}</template>
+                                <template v-else>No active academic term set</template>
+                            </p>
+                        </div>
+                    </div>
 
                     <input
                         v-model="search"
@@ -812,7 +820,7 @@ function handleUnassign(offering) {
                         <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">
                             Faculty Loading &amp; Scheduling
                         </p>
-                        <h2 class="mt-1 text-3xl font-black tracking-tight text-[var(--text-primary)]">
+                        <h2 class="mt-1 text-3xl font-bold [font-family:'Fraunces',serif] tracking-tight text-[var(--text-primary)]">
                             Department Overview
                         </h2>
                         <p class="mt-1 text-sm text-[var(--text-muted)]">
@@ -1109,10 +1117,11 @@ function handleUnassign(offering) {
                     </button>
 
                     <!-- Faculty Info Header -->
-                    <div class="mb-6 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-sm">
+                    <div class="relative overflow-hidden mb-6 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-lg transition-colors duration-300">
+                        <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
                         <div class="flex flex-wrap items-start justify-between gap-4">
                             <div>
-                                <h2 class="text-2xl font-bold text-[var(--text-primary)]">{{ selectedFaculty.full_name }}</h2>
+                                <h2 class="text-2xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">{{ selectedFaculty.full_name }}</h2>
                                 <p class="text-sm text-[var(--text-muted)]">{{ employeeId(selectedFaculty) }}</p>
                                 <p class="mt-1 text-sm text-[var(--text-secondary)]">
                                     {{ selectedFaculty.department?.name ?? 'General Education (no department)' }}

@@ -176,7 +176,7 @@ const bubbles = [
         </div>
 
         <!-- ===================== MAIN ===================== -->
-        <main class="relative z-10 flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden px-6">
+        <main class="relative z-10 flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden px-6" style="perspective: 1400px">
             <!-- Status message -->
             <div
                 v-if="status"
@@ -206,14 +206,14 @@ const bubbles = [
             </p>
 
             <!-- Split panel -->
-            <div class="relative w-full max-w-4xl animate-[fadein_0.6s_ease-out]">
+            <div class="card-open relative w-full max-w-4xl">
                 <!-- Ambient glow so the card doesn't float in flat space -->
                 <div
                     class="pointer-events-none absolute -inset-6 -z-10 rounded-[2.5rem] bg-[#D4A62A]/10 blur-3xl"
                 ></div>
 
                 <div
-                    class="relative grid grid-cols-1 overflow-hidden rounded-3xl border border-[#16213E]/10 shadow-2xl shadow-black/10 ring-1 ring-black/5 dark:border-[#F3EFE6]/10 dark:shadow-black/50 dark:ring-white/5 lg:grid-cols-[1.1fr_1fr]"
+                    class="card-open-inner relative grid grid-cols-1 overflow-hidden rounded-3xl border border-[#16213E]/10 shadow-2xl shadow-black/10 ring-1 ring-black/5 dark:border-[#F3EFE6]/10 dark:shadow-black/50 dark:ring-white/5 lg:grid-cols-[1.1fr_1fr]"
                 >
                     <!-- Top accent line -->
                     <div
@@ -367,6 +367,45 @@ const bubbles = [
 
 <style scoped>
 @keyframes fadein {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===================== CARD OPEN (login panel entrance) ===================== */
+.card-open {
+    transform-origin: center top;
+    transform-style: preserve-3d;
+    animation: card-open 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+@keyframes card-open {
+    0% {
+        opacity: 0;
+        transform: scale(0.82) rotateX(18deg) translateY(24px);
+        filter: blur(4px);
+    }
+    55% {
+        opacity: 1;
+        filter: blur(0);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotateX(0deg) translateY(0);
+        filter: blur(0);
+    }
+}
+
+.card-open-inner {
+    animation: card-open-inner 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+}
+
+@keyframes card-open-inner {
     from {
         opacity: 0;
         transform: translateY(10px);

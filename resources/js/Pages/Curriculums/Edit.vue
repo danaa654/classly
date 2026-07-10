@@ -4,6 +4,7 @@ import Toast from '@/Components/Toast.vue'
 import { Link, useForm } from '@inertiajs/vue3'
 import { computed, watch, ref } from 'vue'
 import { useFlashToast } from '@/Composables/useFlashToast'
+import { BookOpenIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
     curriculum: Object,
@@ -96,219 +97,244 @@ function confirmSave() {
 
         <Toast :toast="toast" />
 
-        <div class="mx-auto max-w-3xl">
+        <div class="relative">
 
-            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
-                Edit Curriculum
-            </h1>
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+            </div>
 
-            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 transition-colors duration-300">
+            <div class="mx-auto max-w-3xl">
 
-                <form @submit.prevent="openConfirm">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                        <BookOpenIcon class="h-5.5 w-5.5" />
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                            Edit Curriculum
+                        </h1>
+                        <p class="text-sm text-[var(--text-muted)]">
+                            Update the details for this curriculum
+                        </p>
+                    </div>
+                </div>
 
-                <!-- Program & Specialization -->
-                <div class="mb-6">
+                <div class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg p-6 transition-colors duration-300">
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
-                        Program & Specialization
-                    </h2>
+                    <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <form @submit.prevent="openConfirm">
 
-                        <div>
-                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                                Program
-                            </label>
+                    <!-- Program & Specialization -->
+                    <div class="mb-6">
 
-                            <select
-                                v-model="form.program_id"
-                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                            >
-                                <option value="">
-                                    Select Program
-                                </option>
+                        <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                            Program & Specialization
+                        </h2>
 
-                                <option
-                                    v-for="program in programs"
-                                    :key="program.id"
-                                    :value="program.id"
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                            <div>
+                                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                                    Program
+                                </label>
+
+                                <select
+                                    v-model="form.program_id"
+                                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                                 >
-                                    {{ program.department.abbreviation }} - {{ program.code }}
-                                </option>
+                                    <option value="">
+                                        Select Program
+                                    </option>
 
-                            </select>
+                                    <option
+                                        v-for="program in programs"
+                                        :key="program.id"
+                                        :value="program.id"
+                                    >
+                                        {{ program.department.abbreviation }} - {{ program.code }}
+                                    </option>
 
-                            <p v-if="form.errors.program_id" class="text-red-500 text-sm mt-1">
-                                {{ form.errors.program_id }}
-                            </p>
-                        </div>
+                                </select>
 
-                        <div>
-                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                                Specialization (Optional)
-                            </label>
+                                <p v-if="form.errors.program_id" class="text-red-500 text-sm mt-1">
+                                    {{ form.errors.program_id }}
+                                </p>
+                            </div>
 
-                            <select
-                                v-model="form.specialization_id"
-                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                            >
-                                <option value="">
-                                    None
-                                </option>
+                            <div>
+                                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                                    Specialization (Optional)
+                                </label>
 
-                                <option
-                                    v-for="specialization in filteredSpecializations"
-                                    :key="specialization.id"
-                                    :value="specialization.id"
+                                <select
+                                    v-model="form.specialization_id"
+                                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                                 >
-                                    {{ specialization.name }}
-                                </option>
+                                    <option value="">
+                                        None
+                                    </option>
 
-                            </select>
+                                    <option
+                                        v-for="specialization in filteredSpecializations"
+                                        :key="specialization.id"
+                                        :value="specialization.id"
+                                    >
+                                        {{ specialization.name }}
+                                    </option>
 
-                            <p v-if="form.errors.specialization_id" class="text-red-500 text-sm mt-1">
-                                {{ form.errors.specialization_id }}
-                            </p>
+                                </select>
+
+                                <p v-if="form.errors.specialization_id" class="text-red-500 text-sm mt-1">
+                                    {{ form.errors.specialization_id }}
+                                </p>
+                            </div>
+
                         </div>
 
                     </div>
 
-                </div>
+                    <!-- Academic Period -->
+                    <div class="mb-6">
 
-                <!-- Academic Period -->
-                <div class="mb-6">
+                        <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                            Academic Period
+                        </h2>
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
-                        Academic Period
-                    </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                                    Effective Year
+                                </label>
 
-                        <div>
-                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                                Effective Year
-                            </label>
+                                <input
+                                    v-model.number="form.effective_year"
+                                    type="number"
+                                    min="2020"
+                                    max="2099"
+                                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                                >
 
-                            <input
-                                v-model.number="form.effective_year"
-                                type="number"
-                                min="2020"
-                                max="2099"
-                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                            >
-
-                            <p v-if="form.errors.effective_year" class="text-red-500 text-sm mt-1">
-                                {{ form.errors.effective_year }}
-                            </p>
-                        </div>
-
-                        <div>
-                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                                Academic Year
-                            </label>
-
-                            <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
-                                {{ form.academic_year || '—' }}
+                                <p v-if="form.errors.effective_year" class="text-red-500 text-sm mt-1">
+                                    {{ form.errors.effective_year }}
+                                </p>
                             </div>
 
-                            <p class="text-[var(--text-muted)] text-xs mt-1">
-                                Auto-generated from Effective Year
-                            </p>
+                            <div>
+                                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                                    Academic Year
+                                </label>
+
+                                <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
+                                    {{ form.academic_year || '—' }}
+                                </div>
+
+                                <p class="text-[var(--text-muted)] text-xs mt-1">
+                                    Auto-generated from Effective Year
+                                </p>
+                            </div>
+
                         </div>
 
                     </div>
 
-                </div>
+                    <!-- Generated Fields -->
+                    <div class="mb-6">
 
-                <!-- Generated Fields -->
-                <div class="mb-6">
+                        <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                            Generated Information
+                        </h2>
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
-                        Generated Information
-                    </h2>
+                        <div class="space-y-4">
 
-                    <div class="space-y-4">
+                            <div>
+                                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                                    Curriculum Code
+                                </label>
 
-                        <div>
-                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                                Curriculum Code
-                            </label>
+                                <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm font-mono text-[var(--text-secondary)]">
+                                    {{ form.code || 'Complete fields above to generate' }}
+                                </div>
 
-                            <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm font-mono text-[var(--text-secondary)]">
-                                {{ form.code || 'Complete fields above to generate' }}
+                                <p class="text-[var(--text-muted)] text-xs mt-1">
+                                    Auto-generated from Program, Specialization, and Effective Year
+                                </p>
                             </div>
 
-                            <p class="text-[var(--text-muted)] text-xs mt-1">
-                                Auto-generated from Program, Specialization, and Effective Year
-                            </p>
-                        </div>
+                            <div>
+                                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                                    Curriculum Name
+                                </label>
 
-                        <div>
-                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                                Curriculum Name
-                            </label>
+                                <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
+                                    {{ form.name || 'Complete fields above to generate' }}
+                                </div>
 
-                            <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
-                                {{ form.name || 'Complete fields above to generate' }}
+                                <p class="text-[var(--text-muted)] text-xs mt-1">
+                                    Auto-generated from Program, Specialization, and Effective Year
+                                </p>
                             </div>
 
-                            <p class="text-[var(--text-muted)] text-xs mt-1">
-                                Auto-generated from Program, Specialization, and Effective Year
-                            </p>
                         </div>
 
                     </div>
 
-                </div>
+                    <!-- Status -->
+                    <div class="mb-6">
 
-                <!-- Status -->
-                <div class="mb-6">
+                        <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                            Status
+                        </h2>
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
-                        Status
-                    </h2>
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2 text-sm text-[var(--text-primary)] cursor-pointer transition-colors duration-150 hover:border-[#D4A62A]/40">
+                                <input
+                                    v-model="form.active"
+                                    type="checkbox"
+                                >
+                                <span class="font-medium">Active</span>
+                            </label>
 
-                    <div class="flex items-center gap-3">
-                        <label class="flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2 text-sm text-[var(--text-primary)] cursor-pointer transition-colors duration-150 hover:border-[#D4A62A]/40">
-                            <input
-                                v-model="form.active"
-                                type="checkbox"
-                            >
-                            <span class="font-medium">Active</span>
-                        </label>
+                            <p class="text-[var(--text-muted)] text-sm">
+                                Inactive curriculums will not be available for new sections.
+                            </p>
+                        </div>
 
-                        <p class="text-[var(--text-muted)] text-sm">
-                            Inactive curriculums will not be available for new sections.
+                        <p v-if="form.errors.active" class="text-red-500 text-sm mt-1">
+                            {{ form.errors.active }}
                         </p>
                     </div>
 
-                    <p v-if="form.errors.active" class="text-red-500 text-sm mt-1">
-                        {{ form.errors.active }}
-                    </p>
-                </div>
+                    <div class="flex justify-end gap-2">
 
-                <div class="flex justify-end gap-2">
+                        <Link
+                            :href="route('curriculums.index')"
+                            class="btn-neutral"
+                        >
+                            Cancel
+                        </Link>
 
-                    <Link
-                        :href="route('curriculums.index')"
-                        class="btn-neutral"
-                    >
-                        Cancel
-                    </Link>
+                        <button
+                            type="submit"
+                            :disabled="form.processing"
+                            class="btn-save"
+                        >
+                            Update Curriculum
+                        </button>
 
-                    <button
-                        type="submit"
-                        :disabled="form.processing"
-                        class="btn-save"
-                    >
-                        Update Curriculum
-                    </button>
+                    </div>
 
-                </div>
+                </form>
 
-            </form>
+            </div>
 
-        </div>
+            </div>
 
         </div>
 
@@ -317,7 +343,9 @@ function confirmSave() {
             v-if="showConfirm"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-md p-6">
+
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
                 <h3 class="text-lg font-semibold mb-1 text-[var(--text-primary)]">
                     Review Curriculum

@@ -64,27 +64,27 @@ watch(
     <div class="space-y-6">
         <!-- Academic Term -->
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">Academic Term</label>
+            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">Academic Term</label>
             <select
                 v-model="form.academic_term_id"
-                class="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-2.5 text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option :value="null" disabled>Select an academic term</option>
                 <option v-for="term in academicTerms" :key="term.id" :value="term.id">
                     {{ term.display_name }}
                 </option>
             </select>
-            <p v-if="form.errors.academic_term_id" class="mt-1 text-sm text-red-600">
+            <p v-if="form.errors.academic_term_id" class="mt-1 text-sm text-red-500">
                 {{ form.errors.academic_term_id }}
             </p>
         </div>
 
         <!-- Section -->
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">Section</label>
+            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">Section</label>
             <select
                 v-model="form.section_id"
-                class="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-2.5 text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option :value="null" disabled>Select a section</option>
                 <option v-for="section in sections" :key="section.id" :value="section.id">
@@ -94,18 +94,18 @@ watch(
                     </template>
                 </option>
             </select>
-            <p v-if="form.errors.section_id" class="mt-1 text-sm text-red-600">
+            <p v-if="form.errors.section_id" class="mt-1 text-sm text-red-500">
                 {{ form.errors.section_id }}
             </p>
         </div>
 
         <!-- Curriculum Item -->
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">Curriculum Item</label>
+            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">Curriculum Item</label>
             <select
                 v-model="form.curriculum_item_id"
                 :disabled="!selectedSection"
-                class="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-2.5 text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30 disabled:cursor-not-allowed disabled:bg-[var(--page-bg)] disabled:text-[var(--text-muted)]"
+                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:cursor-not-allowed disabled:bg-[var(--card-border)]/30 disabled:text-[var(--text-muted)]"
             >
                 <option :value="null" disabled>
                     {{ selectedSection ? 'Select a curriculum item' : 'Select a section first' }}
@@ -117,18 +117,18 @@ watch(
             <p v-if="selectedSection && availableCurriculumItems.length === 0" class="mt-1 text-sm text-[var(--text-muted)]">
                 This section's curriculum has no active subjects yet.
             </p>
-            <p v-if="form.errors.curriculum_item_id" class="mt-1 text-sm text-red-600">
+            <p v-if="form.errors.curriculum_item_id" class="mt-1 text-sm text-red-500">
                 {{ form.errors.curriculum_item_id }}
             </p>
         </div>
 
         <!-- Faculty -->
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">Assigned Faculty</label>
+            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">Assigned Faculty</label>
             <select
                 v-model="form.faculty_id"
                 :disabled="!selectedCurriculumItem"
-                class="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-2.5 text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30 disabled:cursor-not-allowed disabled:bg-[var(--page-bg)] disabled:text-[var(--text-muted)]"
+                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:cursor-not-allowed disabled:bg-[var(--card-border)]/30 disabled:text-[var(--text-muted)]"
             >
                 <option :value="null" disabled>
                     {{ selectedCurriculumItem ? 'Select a faculty member' : 'Select a curriculum item first' }}
@@ -140,23 +140,23 @@ watch(
             <p v-if="selectedCurriculumItem && availableFaculties.length === 0" class="mt-1 text-sm text-amber-600 dark:text-amber-400">
                 No faculty is currently qualified to teach this subject. Add a qualification via Faculty Subjects first.
             </p>
-            <p v-if="form.errors.faculty_id" class="mt-1 text-sm text-red-600">
+            <p v-if="form.errors.faculty_id" class="mt-1 text-sm text-red-500">
                 {{ form.errors.faculty_id }}
             </p>
         </div>
 
         <!-- Remarks -->
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
+            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                 Remarks <span class="text-[var(--text-muted)]">(optional)</span>
             </label>
             <textarea
                 v-model="form.remarks"
                 rows="3"
                 placeholder="e.g. Overload, temporary substitute, pending dean approval..."
-                class="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-2.5 text-[var(--text-primary)] focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             ></textarea>
-            <p v-if="form.errors.remarks" class="mt-1 text-sm text-red-600">
+            <p v-if="form.errors.remarks" class="mt-1 text-sm text-red-500">
                 {{ form.errors.remarks }}
             </p>
         </div>

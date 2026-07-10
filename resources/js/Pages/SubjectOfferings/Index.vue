@@ -2,6 +2,12 @@
 import { computed, reactive, watch } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import {
+    ClipboardDocumentListIcon,
+    PrinterIcon,
+    Cog6ToothIcon,
+    TrashIcon,
+} from '@heroicons/vue/24/outline'
 
 const props = defineProps({
     offerings: Object,
@@ -147,54 +153,68 @@ function destroy(offering) {
     <Head title="Subject Offerings" />
 
     <AppLayout>
-        <div class="flex flex-col gap-6">
+        <div class="relative">
+
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+            </div>
+
+            <div class="flex flex-col gap-6">
 
             <!-- Header -->
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 class="text-2xl font-semibold" style="color: var(--text-primary)">
-                        Subject Offerings
-                    </h1>
-                    <p class="text-sm" style="color: var(--text-secondary)">
-                        Classes imported from a Curriculum into an Academic Term. No
-                        Faculty, Room, or schedule is assigned here.
-                        <span v-if="activeTermLabel"> Showing: <strong>{{ activeTermLabel }}</strong></span>
-                    </p>
+                <div class="flex items-center gap-3">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                        <ClipboardDocumentListIcon class="h-5.5 w-5.5" />
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                            Subject Offerings
+                        </h1>
+                        <p class="text-sm text-[var(--text-muted)]">
+                            Classes imported from a Curriculum into an Academic Term. No
+                            Faculty, Room, or schedule is assigned here.
+                            <span v-if="activeTermLabel"> Showing: <strong>{{ activeTermLabel }}</strong></span>
+                        </p>
+                    </div>
                 </div>
 
                 <div class="flex items-center gap-2">
                     <button
                         @click="openPrintView"
                         type="button"
-                        class="btn-neutral inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
+                        class="btn-neutral inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold"
                     >
-                        🖨️ Print Class List
+                        <PrinterIcon class="h-4 w-4" />
+                        Print Class List
                     </button>
 
                     <Link
                         v-if="can.generate"
                         :href="route('subject-offerings.create')"
-                        class="btn-info inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white"
+                        class="btn-info inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white"
                     >
-                        ⚙️ Generate Subject Offerings
+                        <Cog6ToothIcon class="h-4 w-4" />
+                        Generate Subject Offerings
                     </Link>
                 </div>
             </div>
 
             <!-- Filters -->
-            <div
-                class="rounded-xl border p-4"
-                style="background: var(--card-bg); border-color: var(--card-border)"
-            >
+            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-4">
                 <div class="flex flex-wrap gap-3">
                     <div class="min-w-[160px] flex-1 basis-40">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                             Academic Term
                         </label>
                         <select
                             v-model="form.academic_term_id"
-                            class="w-full rounded-lg border px-3 py-2 text-sm"
-                            style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="">All Terms</option>
                             <option v-for="term in academicTerms" :key="term.id" :value="term.id">
@@ -204,13 +224,12 @@ function destroy(offering) {
                     </div>
 
                     <div class="min-w-[160px] flex-1 basis-40">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                             Program
                         </label>
                         <select
                             v-model="form.program_id"
-                            class="w-full rounded-lg border px-3 py-2 text-sm"
-                            style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="">All Programs</option>
                             <option v-for="program in programs" :key="program.id" :value="program.id">
@@ -226,13 +245,12 @@ function destroy(offering) {
                          filter (especially Search) stretch to fill the gap
                          instead of leaving empty grid space. -->
                     <div v-if="specializationsForProgram.length > 0" class="min-w-[160px] flex-1 basis-40">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                             Specialization
                         </label>
                         <select
                             v-model="form.specialization_id"
-                            class="w-full rounded-lg border px-3 py-2 text-sm"
-                            style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="">All Specializations</option>
                             <option v-for="spec in specializationsForProgram" :key="spec.id" :value="spec.id">
@@ -242,13 +260,12 @@ function destroy(offering) {
                     </div>
 
                     <div class="min-w-[160px] flex-1 basis-40">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                             Year Level
                         </label>
                         <select
                             v-model="form.year_level"
-                            class="w-full rounded-lg border px-3 py-2 text-sm"
-                            style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="">All Years</option>
                             <option v-for="y in [1, 2, 3, 4]" :key="y" :value="y">Year {{ y }}</option>
@@ -256,13 +273,12 @@ function destroy(offering) {
                     </div>
 
                     <div class="min-w-[160px] flex-1 basis-40">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                             Section
                         </label>
                         <select
                             v-model="form.section_id"
-                            class="w-full rounded-lg border px-3 py-2 text-sm"
-                            style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="">All Sections</option>
                             <option v-for="section in filteredSections" :key="section.id" :value="section.id">
@@ -272,13 +288,12 @@ function destroy(offering) {
                     </div>
 
                     <div class="min-w-[160px] flex-1 basis-40">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                             Status
                         </label>
                         <select
                             v-model="form.status"
-                            class="w-full rounded-lg border px-3 py-2 text-sm"
-                            style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="">All Statuses</option>
                             <option v-for="status in statuses" :key="status" :value="status">
@@ -288,72 +303,70 @@ function destroy(offering) {
                     </div>
 
                     <div class="min-w-[200px] flex-1 basis-40">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                             Search
                         </label>
                         <input
                             v-model="form.search"
                             type="text"
                             placeholder="EDP Code, Section, Subject..."
-                            class="w-full rounded-lg border px-3 py-2 text-sm"
-                            style="border-color: var(--card-border); background: var(--page-bg); color: var(--text-primary)"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         />
                     </div>
                 </div>
             </div>
 
             <!-- Table -->
-            <div
-                class="overflow-hidden rounded-xl border"
-                style="background: var(--card-bg); border-color: var(--card-border)"
-            >
+            <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-lg transition-colors duration-300">
+
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
+
                 <table class="w-full text-left text-sm">
-                    <thead>
-                        <tr class="border-b" style="border-color: var(--card-border)">
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">EDP Code</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Program</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Year</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Section</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Subject</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Units</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Hours</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Classification</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Faculty</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Room</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)">Overall Status</th>
-                            <th class="px-4 py-3 font-semibold" style="color: var(--text-secondary)"></th>
+                    <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
+                        <tr>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">EDP Code</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Program</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Year</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Section</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Subject</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Units</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Hours</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Classification</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Faculty</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Room</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Overall Status</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]"></th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr
                             v-for="offering in offerings.data"
                             :key="offering.id"
-                            class="border-b last:border-0"
-                            style="border-color: var(--card-border)"
+                            class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                         >
-                            <td class="px-4 py-3 font-mono font-medium" style="color: var(--text-primary)">
+                            <td class="px-4 py-3 font-mono font-medium text-[var(--text-primary)]">
                                 {{ offering.edp_code }}
                             </td>
-                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                            <td class="px-4 py-3 text-[var(--text-primary)]">
                                 {{ offering.program?.code }}
                             </td>
-                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                            <td class="px-4 py-3 text-[var(--text-primary)]">
                                 {{ offering.year_level }}
                             </td>
-                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                            <td class="px-4 py-3 text-[var(--text-primary)]">
                                 {{ offering.section?.section_code }}
                             </td>
-                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                            <td class="px-4 py-3 text-[var(--text-primary)]">
                                 <div class="font-medium">{{ offering.subject?.subject_code }}</div>
-                                <div class="text-xs" style="color: var(--text-muted)">{{ offering.subject?.descriptive_title }}</div>
+                                <div class="text-xs text-[var(--text-muted)]">{{ offering.subject?.descriptive_title }}</div>
                             </td>
-                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                            <td class="px-4 py-3 text-[var(--text-primary)]">
                                 {{ offering.units ?? '—' }}
                             </td>
-                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                            <td class="px-4 py-3 text-[var(--text-primary)]">
                                 {{ offering.hours ?? '—' }}
                             </td>
-                            <td class="px-4 py-3" style="color: var(--text-primary)">
+                            <td class="px-4 py-3 text-[var(--text-primary)]">
                                 {{ offering.classification ?? '—' }}
                             </td>
                             <td class="px-4 py-3">
@@ -381,20 +394,20 @@ function destroy(offering) {
                                     {{ offering.overall_status }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-right">
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
                                 <button
                                     v-if="can.delete"
                                     @click="destroy(offering)"
-                                    class="text-xs font-semibold underline"
-                                    style="color: var(--text-muted)"
+                                    class="btn-delete inline-flex items-center gap-1.5"
                                 >
+                                    <TrashIcon class="h-3.5 w-3.5" />
                                     Delete
                                 </button>
                             </td>
                         </tr>
 
                         <tr v-if="offerings.data.length === 0">
-                            <td colspan="12" class="px-4 py-10 text-center" style="color: var(--text-muted)">
+                            <td colspan="12" class="text-center py-8 text-[var(--text-muted)]">
                                 No Subject Offerings found. Try adjusting your filters<template v-if="can.generate">, or
                                 <Link :href="route('subject-offerings.create')" class="underline">generate offerings</Link>
                                 for a Curriculum</template>.
@@ -420,6 +433,7 @@ function destroy(offering) {
                     preserve-scroll
                     preserve-state
                 />
+            </div>
             </div>
         </div>
     </AppLayout>

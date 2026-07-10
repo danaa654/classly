@@ -55,7 +55,7 @@ class DashboardService
             'working_term' => $term?->display_name,
             'departments' => Department::where('active', true)->count(),
             'programs' => Program::where('active', true)->count(),
-            'faculty_members' => Faculty::where('status', 'Active')->count(),
+            'faculty_members' => Faculty::count(),
             'active_rooms' => Room::where('active', true)->count(),
             'subject_offerings' => $term ? SubjectOffering::forTerm($term->id)->count() : 0,
             'published_schedules' => $term ? Schedule::forTerm($term->id)->count() : 0,
@@ -78,6 +78,12 @@ class DashboardService
             'unscheduled_subjects' => $this->unscheduledSubjects($term, 10),
             'conflicts' => $this->conflictSummary($term),
             'recent_activity' => $this->recentActivity(10),
+            // Raw {id, department_id} roster + department list so the
+            // Faculty Members card can cycle Total -> per-department ->
+            // General Education client-side, same pattern as the Total
+            // Faculty card on Teaching Assignments' Index.vue.
+            'faculty_roster' => Faculty::get(['id', 'department_id']),
+            'departments' => Department::where('active', true)->orderBy('name')->get(['id', 'name']),
         ];
     }
 
@@ -218,6 +224,15 @@ class DashboardService
                 + max($offeringIds->count() - $assignments->count(), 0),
             'conflicts' => $this->conflictSummary($term, $departmentId),
             'recent_activity' => $this->recentActivity(8, $departmentId),
+            // Active faculty in this department with no teaching load at all
+            // for the working term yet — same helper Dean's dashboard uses,
+            // just surfaced here too since Assistant Dean shares that concern.
+            // Guarded against a null department_id (e.g. an Assistant Dean
+            // account not yet assigned to a department) since
+            // facultyNeedingAssignment() requires a real int.
+            'faculty_needing_assignment' => $departmentId
+                ? $this->facultyNeedingAssignment($departmentId, $term)
+                : collect(),
         ];
     }
 

@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { ChevronDownIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
     requests: { type: Array, required: true },
@@ -68,9 +69,7 @@ function confirmDecline(request) {
             <span class="text-xs font-semibold text-amber-600 dark:text-amber-400">
                 {{ requests.length }} Overload Request{{ requests.length === 1 ? '' : 's' }} Pending
             </span>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-amber-600 transition-transform dark:text-amber-400" :class="{ 'rotate-180': open }">
-                <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
+            <ChevronDownIcon class="h-3.5 w-3.5 text-amber-600 transition-transform dark:text-amber-400" :class="{ 'rotate-180': open }" />
         </button>
 
         <div v-if="open" class="mt-2 max-h-72 space-y-2 overflow-y-auto custom-scrollbar-theme">

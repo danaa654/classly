@@ -2,6 +2,13 @@
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { computed, reactive, watch } from 'vue'
+import {
+    BookOpenIcon,
+    PlusIcon,
+    PencilSquareIcon,
+    TrashIcon,
+    MagnifyingGlassIcon,
+} from '@heroicons/vue/24/outline'
 
 defineOptions({
     layout: DashboardLayout,
@@ -143,6 +150,10 @@ watch(() => form.search, () => {
     }, 350)
 })
 
+const hasActiveFilters = computed(() =>
+    !!form.search || !!form.room_type || !!form.classification || !!form.room_group || !!form.status
+)
+
 function resetFilters() {
     form.search = ''
     form.room_type = ''
@@ -171,55 +182,72 @@ function destroySubject(subject) {
 
 <Head title="Subjects" />
 
-<div>
+<div class="relative">
+
+    <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+    <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+        <div
+            class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+            style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+        ></div>
+        <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+    </div>
 
     <!-- Header -->
 
     <div class="flex justify-between items-center mb-6">
 
-        <div>
-
-            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
-                Subjects
-            </h1>
-
-            <p class="text-[var(--text-muted)] mt-1">
-                Manage the master list of subjects.
-            </p>
-
+        <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                <BookOpenIcon class="h-5.5 w-5.5" />
+            </div>
+            <div>
+                <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                    Subjects
+                </h1>
+                <p class="text-sm text-[var(--text-muted)]">
+                    {{ subjects.total }} {{ subjects.total === 1 ? 'subject' : 'subjects' }} on record
+                </p>
+            </div>
         </div>
 
         <Link
             v-if="canManageSubjects"
             :href="route('subjects.create')"
-            class="btn-save"
+            class="btn-save inline-flex items-center gap-1.5"
         >
-            + New Subject
+            <PlusIcon class="h-4 w-4" />
+            Add Subject
         </Link>
 
     </div>
 
     <!-- Search & Filters -->
 
-    <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-4 mb-6">
+    <div class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg p-4 mb-4 transition-colors duration-300">
+
+        <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
         <div class="flex flex-col lg:flex-row lg:items-center gap-3">
 
             <!-- Search -->
 
-            <input
-                v-model="form.search"
-                type="text"
-                placeholder="Search by subject code or title..."
-                class="w-full lg:flex-1 border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg text-sm focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
-            />
+            <div class="relative w-full lg:flex-1">
+                <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input
+                    v-model="form.search"
+                    type="text"
+                    placeholder="Search by subject code or title..."
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] pl-9 pr-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                />
+            </div>
 
             <!-- Room Type -->
 
             <select
                 v-model="form.room_type"
                 @change="applyFilters()"
-                class="w-full lg:w-44 border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg text-sm focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                class="w-full lg:w-44 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">All Room Types</option>
                 <option value="Lecture">Lecture</option>
@@ -232,7 +260,7 @@ function destroySubject(subject) {
             <select
                 v-model="form.classification"
                 @change="applyFilters()"
-                class="w-full lg:w-40 border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg text-sm focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                class="w-full lg:w-40 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">All Classifications</option>
                 <option value="Major">Major</option>
@@ -244,7 +272,7 @@ function destroySubject(subject) {
             <select
                 v-model="form.room_group"
                 @change="applyFilters()"
-                class="w-full lg:w-40 border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg text-sm focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                class="w-full lg:w-40 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">All Programs</option>
                 <option
@@ -261,7 +289,7 @@ function destroySubject(subject) {
             <select
                 v-model="form.status"
                 @change="applyFilters()"
-                class="w-full lg:w-36 border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg text-sm focus:border-[#D4A62A] focus:ring-[#D4A62A]/30"
+                class="w-full lg:w-36 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="">All Statuses</option>
                 <option value="Active">Active</option>
@@ -273,7 +301,7 @@ function destroySubject(subject) {
             <button
                 @click="resetFilters"
                 type="button"
-                class="w-full lg:w-auto px-4 py-2 text-sm rounded-lg border border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] whitespace-nowrap"
+                class="w-full lg:w-auto px-4 py-2.5 text-sm rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-secondary)] transition-colors duration-150 hover:text-[var(--text-primary)] whitespace-nowrap"
             >
                 Reset Filters
             </button>
@@ -284,51 +312,55 @@ function destroySubject(subject) {
 
     <!-- Table -->
 
-    <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden">
+    <div class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg transition-colors duration-300">
+
+        <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
+
+        <div class="overflow-x-auto">
 
         <table class="min-w-full">
 
-            <thead class="bg-[var(--page-bg)]">
+            <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
 
                 <tr>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Subject Code
                     </th>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Title
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Units
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Hours
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Classification
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Room Type
                     </th>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Programs
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Practicum
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Status
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Actions
                     </th>
 
@@ -341,10 +373,10 @@ function destroySubject(subject) {
                 <tr
                     v-for="subject in subjects.data"
                     :key="subject.id"
-                    class="border-t hover:bg-[var(--page-bg)]"
+                    class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                 >
 
-                    <td class="px-4 py-3 font-semibold text-[var(--text-primary)]">
+                    <td class="px-4 py-3 font-medium text-[var(--text-primary)]">
                         {{ subject.subject_code }}
                     </td>
 
@@ -383,7 +415,7 @@ function destroySubject(subject) {
                             <span
                                 v-for="group in subject.room_group_codes"
                                 :key="group"
-                                class="inline-flex px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium whitespace-nowrap"
+                                class="inline-flex px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium whitespace-nowrap"
                             >
                                 {{ group }}
                             </span>
@@ -399,14 +431,14 @@ function destroySubject(subject) {
 
                         <span
                             v-if="subject.is_practicum"
-                            class="inline-flex px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium"
+                            class="inline-flex px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-sm font-medium"
                         >
                             Yes
                         </span>
 
                         <span
                             v-else
-                            class="inline-flex px-2 py-1 rounded-full bg-[var(--card-border)]/40 text-[var(--text-muted)] text-xs font-medium"
+                            class="inline-flex px-3 py-1 rounded-full bg-[var(--card-border)]/40 text-[var(--text-muted)] text-sm font-medium"
                         >
                             No
                         </span>
@@ -417,37 +449,45 @@ function destroySubject(subject) {
 
                         <span
                             v-if="subject.active"
-                            class="inline-flex px-2 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium"
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm font-medium"
                         >
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                             Active
                         </span>
 
                         <span
                             v-else
-                            class="inline-flex px-2 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium"
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-medium"
                         >
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                             Inactive
                         </span>
 
                     </td>
 
-                    <td class="px-4 py-3 text-center">
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
 
                         <template v-if="canManageSubjects">
 
-                            <Link
-                                :href="route('subjects.edit', subject.id) + filterQueryString"
-                                class="btn-edit"
-                            >
-                                Edit
-                            </Link>
+                            <div class="flex justify-center gap-2">
 
-                            <button
-                                @click="destroySubject(subject)"
-                                class="btn-delete"
-                            >
-                                Delete
-                            </button>
+                                <Link
+                                    :href="route('subjects.edit', subject.id) + filterQueryString"
+                                    class="btn-edit inline-flex items-center gap-1.5"
+                                >
+                                    <PencilSquareIcon class="h-3.5 w-3.5" />
+                                    Edit
+                                </Link>
+
+                                <button
+                                    @click="destroySubject(subject)"
+                                    class="btn-delete inline-flex items-center gap-1.5"
+                                >
+                                    <TrashIcon class="h-3.5 w-3.5" />
+                                    Delete
+                                </button>
+
+                            </div>
 
                         </template>
 
@@ -465,7 +505,7 @@ function destroySubject(subject) {
                         colspan="10"
                         class="text-center py-8 text-[var(--text-muted)]"
                     >
-                        No subjects found.
+                        {{ hasActiveFilters ? 'No subjects match your filters.' : 'No subjects found.' }}
                     </td>
 
                 </tr>
@@ -473,6 +513,8 @@ function destroySubject(subject) {
             </tbody>
 
         </table>
+
+        </div>
 
         <!-- Pagination -->
 

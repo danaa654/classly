@@ -1,6 +1,7 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useForm } from '@inertiajs/vue3'
+import { SparklesIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
     programs: Array,
@@ -21,144 +22,169 @@ function submit() {
 <template>
     <DashboardLayout>
 
-        <div class="mx-auto max-w-2xl">
+        <div class="relative">
 
-            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
-                Add Specialization
-            </h1>
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+            </div>
 
-            <form
-                @submit.prevent="submit"
-                class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-5 transition-colors duration-300"
-            >
+            <div class="mx-auto max-w-2xl">
 
-                <!-- Program -->
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                        <SparklesIcon class="h-5.5 w-5.5" />
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                            Add Specialization
+                        </h1>
+                        <p class="text-sm text-[var(--text-muted)]">
+                            Create a new specialization track under a program
+                        </p>
+                    </div>
+                </div>
 
-                <div>
+                <form
+                    @submit.prevent="submit"
+                    class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg p-6 space-y-5 transition-colors duration-300"
+                >
 
-                    <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
-                        Program
-                    </label>
+                    <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
-                    <select
-                        v-model="form.program_id"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    >
+                    <!-- Program -->
 
-                        <option value="">
-                            Select Program
-                        </option>
+                    <div>
 
-                        <option
-                            v-for="program in programs"
-                            :key="program.id"
-                            :value="program.id"
+                        <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
+                            Program
+                        </label>
+
+                        <select
+                            v-model="form.program_id"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
-                            {{ program.department.abbreviation }} - {{ program.code }} - {{ program.name }}
-                        </option>
 
-                    </select>
+                            <option value="">
+                                Select Program
+                            </option>
 
-                    <p
-                        v-if="form.errors.program_id"
-                        class="text-red-500 text-sm mt-1"
-                    >
-                        {{ form.errors.program_id }}
-                    </p>
+                            <option
+                                v-for="program in programs"
+                                :key="program.id"
+                                :value="program.id"
+                            >
+                                {{ program.department.abbreviation }} - {{ program.code }} - {{ program.name }}
+                            </option>
 
-                </div>
+                        </select>
 
-                <!-- Code -->
+                        <p
+                            v-if="form.errors.program_id"
+                            class="text-red-500 text-sm mt-1"
+                        >
+                            {{ form.errors.program_id }}
+                        </p>
 
-                <div>
+                    </div>
 
-                    <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
-                        Specialization Code
-                    </label>
+                    <!-- Code -->
 
-                    <input
-                        v-model="form.code"
-                        type="text"
-                        placeholder="Example: ENG, LEA, PDE"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    />
+                    <div>
 
-                    <p
-                        v-if="form.errors.code"
-                        class="text-red-500 text-sm mt-1"
-                    >
-                        {{ form.errors.code }}
-                    </p>
+                        <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
+                            Specialization Code
+                        </label>
 
-                </div>
+                        <input
+                            v-model="form.code"
+                            type="text"
+                            placeholder="Example: ENG, LEA, PDE"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        />
 
-                <!-- Name -->
+                        <p
+                            v-if="form.errors.code"
+                            class="text-red-500 text-sm mt-1"
+                        >
+                            {{ form.errors.code }}
+                        </p>
 
-                <div>
+                    </div>
 
-                    <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
-                        Specialization Name
-                    </label>
+                    <!-- Name -->
 
-                    <input
-                        v-model="form.name"
-                        type="text"
-                        placeholder="Example: English"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    />
+                    <div>
 
-                    <p
-                        v-if="form.errors.name"
-                        class="text-red-500 text-sm mt-1"
-                    >
-                        {{ form.errors.name }}
-                    </p>
+                        <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
+                            Specialization Name
+                        </label>
 
-                </div>
+                        <input
+                            v-model="form.name"
+                            type="text"
+                            placeholder="Example: English"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        />
 
-                <!-- Status -->
+                        <p
+                            v-if="form.errors.name"
+                            class="text-red-500 text-sm mt-1"
+                        >
+                            {{ form.errors.name }}
+                        </p>
 
-                <div>
+                    </div>
 
-                    <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
-                        Status
-                    </label>
+                    <!-- Status -->
 
-                    <select
-                        v-model="form.active"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    >
-                        <option :value="true">
-                            Active
-                        </option>
+                    <div>
 
-                        <option :value="false">
-                            Inactive
-                        </option>
-                    </select>
+                        <label class="block mb-2 font-medium text-sm text-[var(--text-secondary)]">
+                            Status
+                        </label>
 
-                </div>
+                        <select
+                            v-model="form.active"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        >
+                            <option :value="true">
+                                Active
+                            </option>
 
-                <div class="flex gap-3">
+                            <option :value="false">
+                                Inactive
+                            </option>
+                        </select>
 
-                    <button
-                        type="submit"
-                        :disabled="form.processing"
-                        class="btn-save"
-                    >
-                        {{ form.processing ? 'Saving...' : 'Save Specialization' }}
-                    </button>
+                    </div>
 
-                    <a
-                        :href="route('specializations.index')"
-                        class="btn-neutral"
-                    >
-                        Cancel
-                    </a>
+                    <div class="flex gap-3">
 
-                </div>
+                        <button
+                            type="submit"
+                            :disabled="form.processing"
+                            class="btn-save"
+                        >
+                            {{ form.processing ? 'Saving...' : 'Save Specialization' }}
+                        </button>
 
-            </form>
+                        <a
+                            :href="route('specializations.index')"
+                            class="btn-neutral"
+                        >
+                            Cancel
+                        </a>
+
+                    </div>
+
+                </form>
+
+            </div>
 
         </div>
 

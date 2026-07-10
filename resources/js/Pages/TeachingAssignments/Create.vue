@@ -2,6 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import Form from './Partials/Form.vue';
+import { UserGroupIcon, ArrowLeftIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
     academicTerms: { type: Array, required: true },
@@ -33,24 +34,46 @@ const submit = () => {
     <AppLayout>
         <Head title="New Faculty Load Assignment" />
 
-        <div class="mx-auto max-w-2xl px-8 py-8">
+        <div class="relative mx-auto max-w-2xl px-8 py-8">
+
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+            </div>
+
             <div class="mb-6 flex items-center justify-between">
-                <div>
-                    <h1 class="text-3xl font-bold text-[var(--text-primary)]">New Faculty Load Assignment</h1>
-                    <p class="mt-1 text-sm text-[var(--text-muted)]">
-                        Assign a faculty member to teach a subject for a section this term. For the usual workflow,
-                        use the Assign Subject button on the Faculty Loading workspace instead.
-                    </p>
+                <div class="flex items-center gap-3">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                        <UserGroupIcon class="h-5.5 w-5.5" />
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">New Faculty Load Assignment</h1>
+                        <p class="text-sm text-[var(--text-muted)]">
+                            Assign a faculty member to teach a subject for a section this term. For the usual workflow,
+                            use the Assign Subject button on the Faculty Loading workspace instead.
+                        </p>
+                    </div>
                 </div>
-                <Link :href="route('teaching-assignments.index')" class="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                    ← Back
+                <Link
+                    :href="route('teaching-assignments.index')"
+                    class="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)] transition-colors duration-150 hover:text-[var(--text-primary)]"
+                >
+                    <ArrowLeftIcon class="h-4 w-4" />
+                    Back
                 </Link>
             </div>
 
             <form
                 @submit.prevent="submit"
-                class="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-sm"
+                class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-lg transition-colors duration-300"
             >
+
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
+
                 <Form
                     :form="form"
                     :academic-terms="academicTerms"

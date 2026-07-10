@@ -1,6 +1,12 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
+import {
+    ClipboardDocumentListIcon,
+    PlusIcon,
+    PencilSquareIcon,
+    TrashIcon,
+} from '@heroicons/vue/24/outline'
 
 defineOptions({
     layout: DashboardLayout,
@@ -70,72 +76,88 @@ function destroyCurriculumItem(item) {
 
 <Head title="Curriculum Items" />
 
-<div>
+<div class="relative">
+
+    <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+    <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+        <div
+            class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+            style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+        ></div>
+        <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+    </div>
 
     <!-- Header -->
 
     <div class="flex justify-between items-center mb-6">
 
-        <div>
-
-            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
-                Curriculum Items
-            </h1>
-
-            <p class="text-[var(--text-muted)] mt-1">
-                Every Subject and Practicum/OJT item across all curriculums.
-            </p>
-
+        <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                <ClipboardDocumentListIcon class="h-5.5 w-5.5" />
+            </div>
+            <div>
+                <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                    Curriculum Items
+                </h1>
+                <p class="text-sm text-[var(--text-muted)]">
+                    Every Subject and Practicum/OJT item across all curriculums.
+                </p>
+            </div>
         </div>
 
         <Link
             :href="route('curriculum-items.create')"
-            class="btn-save"
+            class="btn-save inline-flex items-center gap-1.5"
         >
-            + Add Item
+            <PlusIcon class="h-4 w-4" />
+            Add Item
         </Link>
 
     </div>
 
     <!-- Table -->
 
-    <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden">
+    <div class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg transition-colors duration-300">
+
+        <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
+
+        <div class="overflow-x-auto">
 
         <table class="min-w-full">
 
-            <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
+            <thead class="border-b border-[var(--card-border)] bg-[var(--page-bg)]">
 
                 <tr>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Curriculum
                     </th>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Type
                     </th>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Subject Code
                     </th>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Title
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Year
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Semester
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Status
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Actions
                     </th>
 
@@ -148,10 +170,10 @@ function destroyCurriculumItem(item) {
                 <tr
                     v-for="item in curriculumItems"
                     :key="item.id"
-                    class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
+                    class="group border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                 >
 
-                    <td class="px-4 py-3">
+                    <td class="px-4 py-3 transition-shadow duration-150 group-hover:shadow-[inset_3px_0_0_#D4A62A]">
                         <Link
                             :href="route('curriculums.items.manage', item.curriculum.id)"
                             class="text-blue-500 hover:underline"
@@ -178,8 +200,14 @@ function destroyCurriculumItem(item) {
 
                     </td>
 
-                    <td class="px-4 py-3 font-semibold text-[var(--text-primary)]">
-                        {{ displayCode(item) ?? '—' }}
+                    <td class="px-4 py-3">
+                        <span
+                            v-if="displayCode(item)"
+                            class="inline-flex items-center rounded-md border border-[#D4A62A]/30 bg-[#D4A62A]/10 px-2 py-1 text-xs font-semibold text-[#A8790E] dark:text-[#E8C766]"
+                        >
+                            {{ displayCode(item) }}
+                        </span>
+                        <span v-else class="text-[var(--text-muted)]">—</span>
                     </td>
 
                     <td class="px-4 py-3 text-[var(--text-primary)]">
@@ -198,15 +226,17 @@ function destroyCurriculumItem(item) {
 
                         <span
                             v-if="item.active"
-                            class="inline-flex px-2 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium"
                         >
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                             Active
                         </span>
 
                         <span
                             v-else
-                            class="inline-flex px-2 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-medium"
                         >
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                             Inactive
                         </span>
 
@@ -218,15 +248,17 @@ function destroyCurriculumItem(item) {
 
                             <Link
                                 :href="route('curriculum-items.edit', item.id)"
-                                class="btn-edit"
+                                class="btn-edit inline-flex items-center gap-1.5"
                             >
+                                <PencilSquareIcon class="h-3.5 w-3.5" />
                                 Edit
                             </Link>
 
                             <button
                                 @click="destroyCurriculumItem(item)"
-                                class="btn-delete"
+                                class="btn-delete inline-flex items-center gap-1.5"
                             >
+                                <TrashIcon class="h-3.5 w-3.5" />
                                 Delete
                             </button>
 
@@ -238,11 +270,12 @@ function destroyCurriculumItem(item) {
 
                 <tr v-if="curriculumItems.length === 0">
 
-                    <td
-                        colspan="8"
-                        class="text-center py-8 text-[var(--text-muted)]"
-                    >
-                        No curriculum items found.
+                    <td colspan="8" class="p-12 text-center">
+                        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#D4A62A]/10 text-[#D4A62A]">
+                            <ClipboardDocumentListIcon class="h-6 w-6" />
+                        </div>
+                        <p class="font-medium text-[var(--text-secondary)]">No curriculum items yet</p>
+                        <p class="mt-1 text-sm text-[var(--text-muted)]">Add a subject or Practicum/OJT item to get started.</p>
                     </td>
 
                 </tr>
@@ -250,6 +283,8 @@ function destroyCurriculumItem(item) {
             </tbody>
 
         </table>
+
+        </div>
 
     </div>
 

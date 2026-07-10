@@ -107,11 +107,14 @@ function close() {
 </script>
 
 <template>
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-        <div class="bg-[var(--card-bg)] rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+
+            <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
+
             <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--card-border)]">
                 <div>
-                    <h3 class="font-bold text-[var(--text-primary)]">Manage Subjects</h3>
+                    <h3 class="font-semibold text-lg text-[var(--text-primary)]">Manage Subjects</h3>
                     <p class="text-xs text-[var(--text-muted)]">
                         {{ faculty?.full_name }}
                         <template v-if="activeTerm"> · {{ activeTerm.display_name }}</template>
@@ -125,7 +128,7 @@ function close() {
                     v-model="search"
                     type="text"
                     placeholder="Search subject, section, or EDP code..."
-                    class="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
             </div>
 
@@ -144,12 +147,12 @@ function close() {
                     <li
                         v-for="offering in sortedOfferings"
                         :key="offering.id"
-                        class="flex items-start gap-3 rounded-lg border px-3 py-2"
-                        :class="selectedIds.has(offering.id) ? 'border-blue-400/50 bg-blue-500/10' : 'border-transparent hover:bg-[var(--page-bg)]'"
+                        class="flex items-start gap-3 rounded-xl border px-3 py-2 transition-colors duration-150"
+                        :class="selectedIds.has(offering.id) ? 'border-[#D4A62A]/50 bg-[#D4A62A]/10' : 'border-transparent hover:bg-[var(--page-bg)]'"
                     >
                         <input
                             type="checkbox"
-                            class="mt-1"
+                            class="mt-1 accent-[#D4A62A]"
                             :checked="selectedIds.has(offering.id)"
                             @change="toggle(offering)"
                         />
@@ -160,18 +163,18 @@ function close() {
                                 </p>
                                 <span
                                     class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
-                                    :class="offering.classification === 'Major' ? 'bg-purple-500/10 text-purple-600' : 'bg-sky-500/10 text-sky-600'"
+                                    :class="offering.classification === 'Major' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'"
                                 >
                                     {{ offering.classification }}
                                 </span>
-                                <span v-if="offering.is_recommended" class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-600">
+                                <span v-if="offering.is_recommended" class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">
                                     Recommended
                                 </span>
                             </div>
                             <p class="text-xs text-[var(--text-muted)]">
                                 {{ offering.edp_code }} · {{ offering.program_code }} · Yr {{ offering.year_level }} · {{ offering.section_code }} · {{ offering.units }} units
                             </p>
-                            <p v-if="offering.claimed_by_faculty_name" class="text-xs font-medium text-amber-600">
+                            <p v-if="offering.claimed_by_faculty_name" class="text-xs font-medium text-amber-600 dark:text-amber-300">
                                 Currently preferred by {{ offering.claimed_by_faculty_name }} — selecting this will transfer it.
                             </p>
                         </div>
@@ -184,7 +187,7 @@ function close() {
                 <div v-else></div>
 
                 <div class="flex gap-2">
-                    <button type="button" class="btn-cancel" :disabled="saving" @click="close">Cancel</button>
+                    <button type="button" class="btn-neutral" :disabled="saving" @click="close">Cancel</button>
                     <button type="button" class="btn-save" :disabled="saving || loading || !activeTerm" @click="save">
                         {{ saving ? 'Saving…' : 'Save Preferences' }}
                     </button>

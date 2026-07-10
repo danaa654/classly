@@ -2,6 +2,7 @@
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
 import { computed, watch } from 'vue'
+import { BuildingOffice2Icon, ArrowLeftIcon } from '@heroicons/vue/24/outline'
 
 defineOptions({
     layout: DashboardLayout,
@@ -77,29 +78,41 @@ function submit() {
 
 <Head title="Add Room" />
 
-<div>
+<div class="relative">
+
+    <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+    <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+        <div
+            class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+            style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+        ></div>
+        <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+    </div>
 
     <!-- Header -->
 
     <div class="flex justify-between items-center mb-6">
 
-        <div>
-
-            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
-                Add Room
-            </h1>
-
-            <p class="text-[var(--text-muted)] mt-1">
-                Create a new room in the master list.
-            </p>
-
+        <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                <BuildingOffice2Icon class="h-5.5 w-5.5" />
+            </div>
+            <div>
+                <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                    Add Room
+                </h1>
+                <p class="text-sm text-[var(--text-muted)]">
+                    Create a new room in the master list
+                </p>
+            </div>
         </div>
 
         <Link
             :href="route('rooms.index')"
-            class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline transition-colors duration-150"
+            class="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)] transition-colors duration-150 hover:text-[var(--text-primary)]"
         >
-            &larr; Back to Rooms
+            <ArrowLeftIcon class="h-4 w-4" />
+            Back to Rooms
         </Link>
 
     </div>
@@ -108,8 +121,10 @@ function submit() {
 
     <form
         @submit.prevent="submit"
-        class="mx-auto max-w-2xl bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-6"
+        class="relative overflow-hidden mx-auto max-w-3xl bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-lg p-6 space-y-6 transition-colors duration-300"
     >
+
+        <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
         <!-- Room Code / Room Type -->
 
@@ -117,7 +132,7 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                     Room Code
                 </label>
 
@@ -125,10 +140,10 @@ function submit() {
                     v-model="form.room_code"
                     type="text"
                     placeholder="e.g. Room 304 (ICT Workshop)"
-                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
-                <p v-if="form.errors.room_code" class="text-red-600 text-sm mt-1">
+                <p v-if="form.errors.room_code" class="text-red-500 text-sm mt-1">
                     {{ form.errors.room_code }}
                 </p>
 
@@ -136,19 +151,19 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                     Room Type
                 </label>
 
                 <select
                     v-model="form.room_type"
-                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option value="Lecture">Lecture</option>
                     <option value="Laboratory">Laboratory</option>
                 </select>
 
-                <p v-if="form.errors.room_type" class="text-red-600 text-sm mt-1">
+                <p v-if="form.errors.room_type" class="text-red-500 text-sm mt-1">
                     {{ form.errors.room_type }}
                 </p>
 
@@ -165,7 +180,7 @@ function submit() {
 
         <div>
 
-            <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
+            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                 Available Programs
             </label>
 
@@ -181,7 +196,7 @@ function submit() {
                     :key="option"
                     class="flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none transition-colors duration-150"
                     :class="form.room_groups.includes(option)
-                        ? 'bg-blue-500/10 border-blue-400 text-blue-600 dark:text-blue-400'
+                        ? 'bg-blue-100 border-blue-300 text-blue-700'
                         : 'bg-[var(--card-bg)] border-[var(--card-border)] text-[var(--text-secondary)] hover:border-[#D4A62A]/40'"
                 >
                     <input
@@ -199,7 +214,7 @@ function submit() {
 
             </div>
 
-            <p v-if="form.errors.room_groups" class="text-red-600 text-sm mt-1">
+            <p v-if="form.errors.room_groups" class="text-red-500 text-sm mt-1">
                 {{ form.errors.room_groups }}
             </p>
 
@@ -211,17 +226,17 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                     Building
                 </label>
 
                 <input
                     v-model="form.building"
                     type="text"
-                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
-                <p v-if="form.errors.building" class="text-red-600 text-sm mt-1">
+                <p v-if="form.errors.building" class="text-red-500 text-sm mt-1">
                     {{ form.errors.building }}
                 </p>
 
@@ -229,7 +244,7 @@ function submit() {
 
             <div>
 
-                <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                     Floor
                 </label>
 
@@ -237,10 +252,10 @@ function submit() {
                     v-model="form.floor"
                     type="text"
                     placeholder="e.g. 2nd Floor"
-                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
-                <p v-if="form.errors.floor" class="text-red-600 text-sm mt-1">
+                <p v-if="form.errors.floor" class="text-red-500 text-sm mt-1">
                     {{ form.errors.floor }}
                 </p>
 
@@ -252,7 +267,7 @@ function submit() {
 
         <div>
 
-            <label class="block text-sm font-medium text-[var(--text-primary)] mb-1">
+            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
                 Capacity
             </label>
 
@@ -261,14 +276,14 @@ function submit() {
                 type="number"
                 min="20"
                 max="45"
-                class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             />
 
             <p class="text-xs text-[var(--text-muted)] mt-1">
                 Must be between 20 and 45.
             </p>
 
-            <p v-if="form.errors.capacity" class="text-red-600 text-sm mt-1">
+            <p v-if="form.errors.capacity" class="text-red-500 text-sm mt-1">
                 {{ form.errors.capacity }}
             </p>
 

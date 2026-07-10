@@ -6,6 +6,13 @@ import { Head, Link, router } from '@inertiajs/vue3'
 import { reactive, ref, watch } from 'vue'
 import axios from 'axios'
 import { useFlashToast } from '@/Composables/useFlashToast'
+import {
+    BuildingOffice2Icon,
+    PlusIcon,
+    PencilSquareIcon,
+    TrashIcon,
+    Squares2X2Icon,
+} from '@heroicons/vue/24/outline'
 
 defineOptions({
     layout: DashboardLayout,
@@ -234,30 +241,42 @@ function onSubjectsSaved(payload) {
 
 <Toast :toast="toast" />
 
-<div>
+<div class="relative">
+
+    <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+    <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+        <div
+            class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+            style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+        ></div>
+        <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+    </div>
 
     <!-- Header -->
 
     <div class="flex justify-between items-center mb-6">
 
-        <div>
-
-            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
-                Rooms
-            </h1>
-
-            <p class="text-[var(--text-muted)] mt-1">
-                Manage the master list of rooms.
-            </p>
-
+        <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                <BuildingOffice2Icon class="h-5.5 w-5.5" />
+            </div>
+            <div>
+                <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                    Rooms
+                </h1>
+                <p class="text-sm text-[var(--text-muted)]">
+                    {{ rooms.length }} {{ rooms.length === 1 ? 'room' : 'rooms' }} on record
+                </p>
+            </div>
         </div>
 
         <Link
             v-if="canManageRooms"
             :href="route('rooms.create')"
-            class="btn-save"
+            class="btn-save inline-flex items-center gap-1.5"
         >
-            + New Room
+            <PlusIcon class="h-4 w-4" />
+            Add Room
         </Link>
 
     </div>
@@ -331,7 +350,9 @@ function onSubjectsSaved(payload) {
 
     <!-- Table -->
 
-    <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden">
+    <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-lg transition-colors duration-300">
+
+        <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
         <table class="min-w-full">
 
@@ -339,39 +360,39 @@ function onSubjectsSaved(payload) {
 
                 <tr>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Room Code
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Room Type
                     </th>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Available Programs
                     </th>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Building
                     </th>
 
-                    <th class="px-4 py-3 text-left text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Floor
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Capacity
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Status
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Room Load
                     </th>
 
-                    <th class="px-4 py-3 text-center text-[var(--text-secondary)]">
+                    <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Actions
                     </th>
 
@@ -387,7 +408,7 @@ function onSubjectsSaved(payload) {
                     class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                 >
 
-                    <td class="px-4 py-3 font-semibold text-[var(--text-primary)]">
+                    <td class="px-4 py-3 font-medium text-[var(--text-primary)]">
                         {{ room.room_code }}
                     </td>
 
@@ -410,7 +431,7 @@ function onSubjectsSaved(payload) {
                             <span
                                 v-for="group in room.room_group_codes"
                                 :key="group"
-                                class="inline-flex px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium whitespace-nowrap"
+                                class="inline-flex px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium whitespace-nowrap"
                             >
                                 {{ group }}
                             </span>
@@ -438,15 +459,17 @@ function onSubjectsSaved(payload) {
 
                         <span
                             v-if="room.active"
-                            class="inline-flex px-2 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium"
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm font-medium"
                         >
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                             Active
                         </span>
 
                         <span
                             v-else
-                            class="inline-flex px-2 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium"
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-medium"
                         >
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                             Inactive
                         </span>
 
@@ -508,16 +531,18 @@ function onSubjectsSaved(payload) {
                                 @click="openManageSubjects(room)"
                                 type="button"
                                 :disabled="modalLoading"
-                                class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D4A62A] text-white shadow-sm hover:bg-[#b8901f] transition-colors duration-150 whitespace-nowrap disabled:opacity-50"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#D4A62A] text-white shadow-sm hover:bg-[#b8901f] transition-colors duration-150 whitespace-nowrap disabled:opacity-50"
                             >
+                                <Squares2X2Icon class="h-3.5 w-3.5" />
                                 Manage Subjects
                             </button>
 
                             <template v-if="canManageRooms">
                                 <Link
                                     :href="route('rooms.edit', room.id)"
-                                    class="btn-edit"
+                                    class="btn-edit inline-flex items-center gap-1.5"
                                 >
+                                    <PencilSquareIcon class="h-3.5 w-3.5" />
                                     Edit
                                 </Link>
 
@@ -527,8 +552,9 @@ function onSubjectsSaved(payload) {
                                     :title="room.scheduled_count > 0
                                         ? `${room.room_code} has ${room.scheduled_count} class(es) already scheduled via Master Grid — reassign or delete those schedules first.`
                                         : null"
-                                    class="btn-delete disabled:opacity-40 disabled:cursor-not-allowed"
+                                    class="btn-delete inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
+                                    <TrashIcon class="h-3.5 w-3.5" />
                                     Delete
                                 </button>
                             </template>

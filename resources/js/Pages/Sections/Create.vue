@@ -1,7 +1,8 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
-import { Link, useForm } from '@inertiajs/vue3'
+import { Head, Link, useForm } from '@inertiajs/vue3'
 import { computed, watch } from 'vue'
+import { UserGroupIcon } from '@heroicons/vue/24/outline'
 import {
     requiresSpecialization,
     generateSectionCode,
@@ -153,236 +154,264 @@ function submit() {
 <template>
     <DashboardLayout>
 
-        <div class="mx-auto max-w-2xl">
+        <Head title="Add Section" />
 
-            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
-                Add Section
-            </h1>
+        <div class="relative">
 
-            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 transition-colors duration-300">
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+            </div>
 
-            <form @submit.prevent="submit">
+            <div class="mx-auto max-w-2xl">
 
-                <div class="mb-4">
-                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                        Program
-                    </label>
-
-                    <select
-                        v-model="form.program_id"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    >
-                        <option value="" disabled>
-                            Select a program
-                        </option>
-                        <option
-                            v-for="program in programs"
-                            :key="program.id"
-                            :value="program.id"
-                        >
-                            {{ program.code }} - {{ program.name }}
-                        </option>
-                    </select>
-
-                    <p v-if="form.errors.program_id" class="text-red-500 text-sm mt-1">
-                        {{ form.errors.program_id }}
-                    </p>
-                </div>
-
-                <div v-if="isBscrim" class="mb-4">
-                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                        Specialization
-                    </label>
-
-                    <select
-                        v-model="form.specialization_id"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    >
-                        <option value="" disabled>
-                            Select a specialization
-                        </option>
-                        <option
-                            v-for="specialization in specializationOptions"
-                            :key="specialization.id"
-                            :value="specialization.id"
-                        >
-                            {{ specialization.code }} - {{ specialization.name }}
-                        </option>
-                    </select>
-
-                    <p v-if="form.errors.specialization_id" class="text-red-500 text-sm mt-1">
-                        {{ form.errors.specialization_id }}
-                    </p>
-                </div>
-
-                <div class="mb-4 grid grid-cols-2 gap-4">
-
+                <!-- Header -->
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                        <UserGroupIcon class="h-5.5 w-5.5" />
+                    </div>
                     <div>
+                        <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                            Add Section
+                        </h1>
+                        <p class="text-sm text-[var(--text-muted)]">
+                            Create a new section for a program
+                        </p>
+                    </div>
+                </div>
+
+                <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-lg p-6 transition-colors duration-300">
+
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
+
+                <form @submit.prevent="submit">
+
+                    <div class="mb-4">
                         <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                            Year Level
+                            Program
                         </label>
 
                         <select
-                            v-model="form.year_level"
-                            :disabled="!selectedProgram"
-                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:bg-[var(--card-border)]/30 disabled:text-[var(--text-muted)]"
+                            v-model="form.program_id"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="" disabled>
-                                Select year level
+                                Select a program
                             </option>
                             <option
-                                v-for="year in yearLevelOptions"
-                                :key="year"
-                                :value="year"
+                                v-for="program in programs"
+                                :key="program.id"
+                                :value="program.id"
                             >
-                                Year {{ year }}
+                                {{ program.code }} - {{ program.name }}
                             </option>
                         </select>
 
-                        <p v-if="form.errors.year_level" class="text-red-500 text-sm mt-1">
-                            {{ form.errors.year_level }}
+                        <p v-if="form.errors.program_id" class="text-red-500 text-sm mt-1">
+                            {{ form.errors.program_id }}
                         </p>
                     </div>
 
-                    <div>
+                    <div v-if="isBscrim" class="mb-4">
                         <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                            Section Letter
+                            Specialization
                         </label>
 
                         <select
-                            v-model="form.section_letter"
-                            :disabled="!scopeReady"
-                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:bg-[var(--card-border)]/30 disabled:text-[var(--text-muted)]"
+                            v-model="form.specialization_id"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                         >
                             <option value="" disabled>
-                                Select letter
+                                Select a specialization
                             </option>
                             <option
-                                v-for="letter in SECTION_LETTERS"
-                                :key="letter"
-                                :value="letter"
-                                :disabled="usedLettersForScope.includes(letter)"
+                                v-for="specialization in specializationOptions"
+                                :key="specialization.id"
+                                :value="specialization.id"
                             >
-                                {{ letter }}{{ usedLettersForScope.includes(letter) ? ' (Taken)' : '' }}
+                                {{ specialization.code }} - {{ specialization.name }}
                             </option>
                         </select>
 
-                        <p v-if="form.errors.section_letter" class="text-red-500 text-sm mt-1">
-                            {{ form.errors.section_letter }}
+                        <p v-if="form.errors.specialization_id" class="text-red-500 text-sm mt-1">
+                            {{ form.errors.specialization_id }}
                         </p>
                     </div>
 
-                </div>
+                    <div class="mb-4 grid grid-cols-2 gap-4">
 
-                <p
-                    v-if="scopeFull"
-                    class="mb-4 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 rounded-xl p-3"
-                >
-                    All available sections (A–E) have already been created for this year level.
-                </p>
+                        <div>
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                                Year Level
+                            </label>
 
-                <div class="mb-4">
-                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                        Generated Section Code
-                    </label>
+                            <select
+                                v-model="form.year_level"
+                                :disabled="!selectedProgram"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:bg-[var(--card-border)]/30 disabled:text-[var(--text-muted)]"
+                            >
+                                <option value="" disabled>
+                                    Select year level
+                                </option>
+                                <option
+                                    v-for="year in yearLevelOptions"
+                                    :key="year"
+                                    :value="year"
+                                >
+                                    Year {{ year }}
+                                </option>
+                            </select>
 
-                    <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm font-mono text-[var(--text-secondary)]">
-                        {{ generatedCode ?? 'Complete the fields above to generate a code' }}
+                            <p v-if="form.errors.year_level" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.year_level }}
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                                Section Letter
+                            </label>
+
+                            <select
+                                v-model="form.section_letter"
+                                :disabled="!scopeReady"
+                                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30 disabled:bg-[var(--card-border)]/30 disabled:text-[var(--text-muted)]"
+                            >
+                                <option value="" disabled>
+                                    Select letter
+                                </option>
+                                <option
+                                    v-for="letter in SECTION_LETTERS"
+                                    :key="letter"
+                                    :value="letter"
+                                    :disabled="usedLettersForScope.includes(letter)"
+                                >
+                                    {{ letter }}{{ usedLettersForScope.includes(letter) ? ' (Taken)' : '' }}
+                                </option>
+                            </select>
+
+                            <p v-if="form.errors.section_letter" class="text-red-500 text-sm mt-1">
+                                {{ form.errors.section_letter }}
+                            </p>
+                        </div>
+
                     </div>
-                </div>
 
-                <div class="mb-4">
-                    <div class="flex items-center justify-between mb-1">
-                        <label class="block font-medium text-sm text-[var(--text-secondary)]">
-                            Section Name
+                    <p
+                        v-if="scopeFull"
+                        class="mb-4 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 rounded-xl p-3"
+                    >
+                        All available sections (A–E) have already been created for this year level.
+                    </p>
+
+                    <div class="mb-4">
+                        <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                            Generated Section Code
                         </label>
+
+                        <div class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm font-mono text-[var(--text-secondary)]">
+                            {{ generatedCode ?? 'Complete the fields above to generate a code' }}
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block font-medium text-sm text-[var(--text-secondary)]">
+                                Section Name
+                            </label>
+
+                            <button
+                                v-if="generatedName"
+                                type="button"
+                                @click="useAutoName"
+                                class="text-sm text-blue-500 hover:underline"
+                            >
+                                Use auto-generated name
+                            </button>
+                        </div>
+
+                        <input
+                            v-model="form.section_name"
+                            @input="onSectionNameInput"
+                            type="text"
+                            placeholder="e.g. BS Information Technology - 1A"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        >
+
+                        <p v-if="form.errors.section_name" class="text-red-500 text-sm mt-1">
+                            {{ form.errors.section_name }}
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                            Capacity
+                        </label>
+
+                        <input
+                            v-model="form.capacity"
+                            @blur="clampCapacity"
+                            type="number"
+                            min="20"
+                            max="45"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        >
+
+                        <p class="text-[var(--text-muted)] text-sm mt-1">
+                            Must be between 20 and 45 students.
+                        </p>
+
+                        <p v-if="form.errors.capacity" class="text-red-500 text-sm mt-1">
+                            {{ form.errors.capacity }}
+                        </p>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
+                            Status
+                        </label>
+
+                        <select
+                            v-model="form.status"
+                            class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        >
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+
+                        <p v-if="form.errors.status" class="text-red-500 text-sm mt-1">
+                            {{ form.errors.status }}
+                        </p>
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+
+                        <Link
+                            :href="route('sections.index')"
+                            class="btn-neutral"
+                        >
+                            Cancel
+                        </Link>
 
                         <button
-                            v-if="generatedName"
-                            type="button"
-                            @click="useAutoName"
-                            class="text-sm text-blue-500 hover:underline"
+                            type="submit"
+                            :disabled="form.processing || scopeFull"
+                            class="btn-save"
                         >
-                            Use auto-generated name
+                            Save Section
                         </button>
+
                     </div>
 
-                    <input
-                        v-model="form.section_name"
-                        @input="onSectionNameInput"
-                        type="text"
-                        placeholder="e.g. BS Information Technology - 1A"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    >
+                </form>
 
-                    <p v-if="form.errors.section_name" class="text-red-500 text-sm mt-1">
-                        {{ form.errors.section_name }}
-                    </p>
-                </div>
+            </div>
 
-                <div class="mb-4">
-                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                        Capacity
-                    </label>
-
-                    <input
-                        v-model="form.capacity"
-                        @blur="clampCapacity"
-                        type="number"
-                        min="20"
-                        max="45"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    >
-
-                    <p class="text-[var(--text-muted)] text-sm mt-1">
-                        Must be between 20 and 45 students.
-                    </p>
-
-                    <p v-if="form.errors.capacity" class="text-red-500 text-sm mt-1">
-                        {{ form.errors.capacity }}
-                    </p>
-                </div>
-
-                <div class="mb-6">
-                    <label class="block font-medium mb-1.5 text-sm text-[var(--text-secondary)]">
-                        Status
-                    </label>
-
-                    <select
-                        v-model="form.status"
-                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                    >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                    </select>
-
-                    <p v-if="form.errors.status" class="text-red-500 text-sm mt-1">
-                        {{ form.errors.status }}
-                    </p>
-                </div>
-
-                <div class="flex justify-end gap-2">
-
-                    <Link
-                        :href="route('sections.index')"
-                        class="btn-neutral"
-                    >
-                        Cancel
-                    </Link>
-
-                    <button
-                        type="submit"
-                        :disabled="form.processing || scopeFull"
-                        class="btn-save"
-                    >
-                        Save Section
-                    </button>
-
-                </div>
-
-            </form>
-
-        </div>
+            </div>
 
         </div>
 

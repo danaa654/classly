@@ -78,12 +78,14 @@ function close() {
 </script>
 
 <template>
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-        <div class="bg-[var(--card-bg)] rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+
+            <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
             <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--card-border)]">
                 <div>
-                    <h3 class="font-bold text-[var(--text-primary)]">Delete Faculty Member</h3>
+                    <h3 class="font-semibold text-lg text-[var(--text-primary)]">Delete Faculty Member</h3>
                     <p class="text-xs text-[var(--text-muted)]">{{ faculty?.full_name }}</p>
                 </div>
                 <button type="button" class="text-[var(--text-muted)] hover:text-[var(--text-primary)]" @click="close">✕</button>
@@ -108,12 +110,12 @@ function close() {
 
                     <div v-else>
 
-                        <div class="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 mb-4">
-                            <p class="text-sm font-semibold text-amber-700">
+                        <div class="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 mb-4">
+                            <p class="text-sm font-semibold text-amber-600 dark:text-amber-300">
                                 This faculty member currently has {{ schedules.length }} scheduled
                                 {{ schedules.length === 1 ? 'class' : 'classes' }}.
                             </p>
-                            <p class="text-xs text-amber-700/80 mt-0.5">
+                            <p class="text-xs text-amber-600/80 dark:text-amber-300/80 mt-0.5">
                                 Deleting them will not automatically remove these classes from the Master Grid.
                                 Review the list below before continuing.
                             </p>
@@ -123,7 +125,7 @@ function close() {
                             <li
                                 v-for="schedule in schedules"
                                 :key="schedule.id"
-                                class="rounded-lg border border-[var(--card-border)] px-3 py-2"
+                                class="rounded-xl border border-[var(--card-border)] px-3 py-2"
                             >
                                 <p class="text-sm font-semibold text-[var(--text-primary)]">
                                     {{ schedule.subject_code }} — {{ schedule.subject_title }}
@@ -149,7 +151,7 @@ function close() {
                 <div v-else></div>
 
                 <div class="flex gap-2">
-                    <button type="button" class="btn-cancel" :disabled="deleting" @click="close">
+                    <button type="button" class="btn-neutral" :disabled="deleting" @click="close">
                         Cancel
                     </button>
                     <button

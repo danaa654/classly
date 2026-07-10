@@ -5,6 +5,7 @@ import { Link, useForm } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import { useAcademicTermForm, SEMESTERS, DAYS, TIME_INTERVALS } from '@/Composables/useAcademicTermForm'
 import { useFlashToast } from '@/Composables/useFlashToast'
+import { CalendarDaysIcon, ClockIcon, CalendarIcon, CheckCircleIcon, PencilSquareIcon, Cog6ToothIcon, Squares2X2Icon, LockClosedIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
     academicTerm: Object,
@@ -93,21 +94,38 @@ function confirmSave() {
 
         <Toast :toast="toast" />
 
-        <div class="mx-auto max-w-3xl">
+        <div class="relative mx-auto max-w-3xl">
 
-            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
-                Edit Academic Term
-            </h1>
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+            </div>
+
+            <div class="flex items-center gap-3 mb-6">
+                <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                    <PencilSquareIcon class="h-5.5 w-5.5" />
+                </div>
+                <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                    Edit Academic Term
+                </h1>
+            </div>
 
             <!-- Archived / read-only banner -->
             <div
                 v-if="isLocked"
-                class="mb-4 bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 text-sm rounded-lg px-4 py-3"
+                class="mb-4 flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 text-sm rounded-lg px-4 py-3"
             >
+                <LockClosedIcon class="h-4 w-4 flex-none" />
                 This Academic Term is Archived and read-only. Fields below are shown for reference only.
             </div>
 
-            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 transition-colors duration-300">
+            <div class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg p-6 transition-colors duration-300">
+
+            <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
             <fieldset :disabled="isLocked">
             <form @submit.prevent="openConfirm">
@@ -115,7 +133,8 @@ function confirmSave() {
                 <!-- Academic Period -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                    <h2 class="flex items-center gap-2 text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#D4A62A]/10 text-[#D4A62A]"><CalendarDaysIcon class="h-4 w-4" /></span>
                         Academic Period
                     </h2>
 
@@ -180,7 +199,8 @@ function confirmSave() {
                 <!-- Class Period -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                    <h2 class="flex items-center gap-2 text-lg font-semibold mb-3 pt-6 border-t border-[var(--card-border)] text-[var(--text-primary)]">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#D4A62A]/10 text-[#D4A62A]"><CalendarIcon class="h-4 w-4" /></span>
                         Class Period
                     </h2>
 
@@ -234,7 +254,8 @@ function confirmSave() {
                 <!-- School Hours -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                    <h2 class="flex items-center gap-2 text-lg font-semibold mb-3 pt-6 border-t border-[var(--card-border)] text-[var(--text-primary)]">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#D4A62A]/10 text-[#D4A62A]"><ClockIcon class="h-4 w-4" /></span>
                         School Hours
                     </h2>
 
@@ -329,7 +350,8 @@ function confirmSave() {
                 <!-- Scheduler Settings -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                    <h2 class="flex items-center gap-2 text-lg font-semibold mb-3 pt-6 border-t border-[var(--card-border)] text-[var(--text-primary)]">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#D4A62A]/10 text-[#D4A62A]"><Cog6ToothIcon class="h-4 w-4" /></span>
                         Scheduler Settings
                     </h2>
 
@@ -365,7 +387,8 @@ function confirmSave() {
                 <!-- Working Days -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                    <h2 class="flex items-center gap-2 text-lg font-semibold mb-3 pt-6 border-t border-[var(--card-border)] text-[var(--text-primary)]">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#D4A62A]/10 text-[#D4A62A]"><Squares2X2Icon class="h-4 w-4" /></span>
                         Working Days
                     </h2>
 
@@ -398,7 +421,8 @@ function confirmSave() {
                 <!-- Status & Activation -->
                 <div class="mb-6">
 
-                    <h2 class="text-lg font-semibold mb-3 text-[var(--text-primary)]">
+                    <h2 class="flex items-center gap-2 text-lg font-semibold mb-3 pt-6 border-t border-[var(--card-border)] text-[var(--text-primary)]">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#D4A62A]/10 text-[#D4A62A]"><CheckCircleIcon class="h-4 w-4" /></span>
                         Status & Activation
                     </h2>
 

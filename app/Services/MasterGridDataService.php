@@ -278,6 +278,12 @@ class MasterGridDataService
                 'teachingAssignment.faculty',
                 'schedule',
                 'preferredByRooms',
+                // Needed so presentOffering() can expose specialization_id
+                // without an extra query per offering — see the Generate
+                // Schedule modal's Section dropdown, which must filter
+                // Sections by Specialization (e.g. BSCRIM's FI/FB/LD/QD)
+                // and previously had no way to do that at all.
+                'curriculum',
             ])
             ->forTerm($academicTermId)
             ->when($departmentId, fn ($query) => $query->whereHas(
@@ -335,6 +341,15 @@ class MasterGridDataService
             'program_id' => $offering->program_id,
             'program_code' => $offering->program?->code,
             'department_id' => $offering->program?->department_id,
+            // Which Specialization this offering's Curriculum belongs to
+            // (null for Programs with no majors, e.g. BSIT/BSHM/BSTM).
+            // The Generate Schedule modal needs this to filter its
+            // Section dropdown to only Sections under the Specialization
+            // actually selected — without it, e.g. BSCRIM's four
+            // Specializations (FI/FB/LD/QD) all shared one merged Section
+            // list, making it easy to pick a Section that didn't match
+            // the chosen Specialization at all.
+            'specialization_id' => $offering->curriculum?->specialization_id,
             'year_level' => $offering->year_level,
             'section_id' => $offering->section_id,
             'section_code' => $offering->section?->section_code,

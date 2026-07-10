@@ -4,6 +4,14 @@ import Toast from '@/Components/Toast.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useFlashToast } from '@/Composables/useFlashToast'
+import {
+    BookOpenIcon,
+    PlusIcon,
+    PencilSquareIcon,
+    TrashIcon,
+    MagnifyingGlassIcon,
+    ClipboardDocumentListIcon,
+} from '@heroicons/vue/24/outline'
 
 const props = defineProps({
     curricula: Array,
@@ -143,197 +151,239 @@ function curriculumLabel(curriculum) {
 
         <Toast :toast="toast" />
 
-        <!-- Header -->
-        <div class="flex justify-between items-center mb-6">
+        <div class="relative">
 
-            <div>
-                <h1 class="text-3xl font-bold text-[var(--text-primary)]">
-                    Curriculums
-                </h1>
-
-                <p class="text-[var(--text-muted)] mt-1">
-                    Manage curriculums and their assigned subjects.
-                </p>
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
             </div>
 
-            <Link
-                :href="route('curriculums.create')"
-                class="btn-save"
-            >
-                + Add Curriculum
-            </Link>
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-6">
 
-        </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                        <BookOpenIcon class="h-5.5 w-5.5" />
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                            Curriculums
+                        </h1>
+                        <p class="text-sm text-[var(--text-muted)]">
+                            {{ curricula.length }} {{ curricula.length === 1 ? 'curriculum' : 'curriculums' }} on record
+                        </p>
+                    </div>
+                </div>
 
-        <!-- Toolbar with Filters -->
-        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-4 mb-4 flex flex-col sm:flex-row gap-3 transition-colors duration-300">
-
-            <input
-                v-model="search"
-                type="text"
-                placeholder="Search curriculum code or name..."
-                class="w-full sm:flex-1 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-                @keyup.enter="applyFiltersNow"
-            >
-
-            <select
-                v-model="programId"
-                class="w-full sm:w-56 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-            >
-                <option value="">All Programs</option>
-                <option
-                    v-for="program in programs"
-                    :key="program.id"
-                    :value="program.id"
+                <Link
+                    :href="route('curriculums.create')"
+                    class="btn-save inline-flex items-center gap-1.5"
                 >
-                    {{ program.code }} - {{ program.name }}
-                </option>
-            </select>
+                    <PlusIcon class="h-4 w-4" />
+                    Add Curriculum
+                </Link>
 
-            <select
-                v-model="status"
-                class="w-full sm:w-40 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
-            >
-                <option value="">All</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-            </select>
-
-        </div>
-
-        <!-- Table or Empty State -->
-        <div v-if="curricula.length === 0" class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-12 text-center transition-colors duration-300">
-
-            <div class="text-[var(--text-muted)] mb-3">
-                <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
             </div>
 
-            <h3 class="text-lg font-semibold text-[var(--text-primary)] mb-2">
-                {{ hasActiveFilters ? 'No curriculums match your filters' : 'No curriculums found' }}
-            </h3>
+            <!-- Toolbar with Filters -->
+            <div class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg p-4 mb-4 flex flex-col sm:flex-row gap-3 transition-colors duration-300">
 
-            <p class="text-[var(--text-muted)] mb-6">
-                {{ hasActiveFilters ? 'Try adjusting your search criteria.' : 'Create your first curriculum to get started.' }}
-            </p>
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
-            <Link
-                v-if="!hasActiveFilters"
-                :href="route('curriculums.create')"
-                class="inline-block btn-save"
-            >
-                + Add Curriculum
-            </Link>
-
-        </div>
-
-        <div v-else class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-x-auto transition-colors duration-300">
-
-            <table class="w-full min-w-[800px]">
-
-                <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
-
-                    <tr>
-                        <th class="p-4 text-left w-12 text-[var(--text-secondary)]">#</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Code</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Name</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Program</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Academic Year</th>
-                        <th class="p-4 text-center text-[var(--text-secondary)]">Effective Year</th>
-                        <th class="p-4 text-center text-[var(--text-secondary)]">Status</th>
-                        <th class="p-4 text-center whitespace-nowrap text-[var(--text-secondary)]">Actions</th>
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-                    <tr
-                        v-for="(curriculum, index) in curricula"
-                        :key="curriculum.id"
-                        class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
+                <div class="relative w-full sm:flex-1">
+                    <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                        v-model="search"
+                        type="text"
+                        placeholder="Search curriculum code or name..."
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] pl-9 pr-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        @keyup.enter="applyFiltersNow"
                     >
+                </div>
 
-                        <td class="p-4 text-[var(--text-secondary)]">
-                            {{ index + 1 }}
-                        </td>
+                <select
+                    v-model="programId"
+                    class="w-full sm:w-56 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                >
+                    <option value="">All Programs</option>
+                    <option
+                        v-for="program in programs"
+                        :key="program.id"
+                        :value="program.id"
+                    >
+                        {{ program.code }} - {{ program.name }}
+                    </option>
+                </select>
 
-                        <td class="p-4 font-semibold text-[var(--text-primary)]">
-                            {{ curriculum.code }}
-                        </td>
+                <select
+                    v-model="status"
+                    class="w-full sm:w-40 rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                >
+                    <option value="">All</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                </select>
 
-                        <td class="p-4 text-[var(--text-primary)]">
-                            {{ curriculum.name }}
-                        </td>
+            </div>
 
-                        <td class="p-4 text-[var(--text-secondary)]">
-                            {{ curriculumLabel(curriculum) }}
-                            <span class="text-[var(--text-muted)] text-xs block">
-                                {{ curriculum.program.department?.abbreviation }}
-                            </span>
-                        </td>
+            <!-- Table or Empty State -->
+            <div
+                v-if="curricula.length === 0"
+                class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg p-12 text-center transition-colors duration-300"
+            >
 
-                        <td class="p-4 text-[var(--text-secondary)]">
-                            {{ curriculum.academic_year }}
-                        </td>
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
-                        <td class="p-4 text-center text-[var(--text-secondary)]">
-                            {{ curriculum.effective_year }}
-                        </td>
+                <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#D4A62A]/10 text-[#D4A62A]">
+                    <BookOpenIcon class="h-6 w-6" />
+                </div>
 
-                        <td class="p-4 text-center">
+                <h3 class="font-medium text-[var(--text-secondary)]">
+                    {{ hasActiveFilters ? 'No curriculums match your filters' : 'No curriculums found' }}
+                </h3>
 
-                            <span
-                                v-if="curriculum.active"
-                                class="inline-flex px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-sm font-medium"
-                            >
-                                Active
-                            </span>
+                <p class="mt-1 text-sm text-[var(--text-muted)] mb-6">
+                    {{ hasActiveFilters ? 'Try adjusting your search criteria.' : 'Create your first curriculum to get started.' }}
+                </p>
 
-                            <span
-                                v-else
-                                class="inline-flex px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-sm font-medium"
-                            >
-                                Inactive
-                            </span>
+                <Link
+                    v-if="!hasActiveFilters"
+                    :href="route('curriculums.create')"
+                    class="btn-save inline-flex items-center gap-1.5"
+                >
+                    <PlusIcon class="h-4 w-4" />
+                    Add Curriculum
+                </Link>
 
-                        </td>
+            </div>
 
-                        <td class="p-4 text-center whitespace-nowrap">
+            <div v-else class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg transition-colors duration-300">
 
-                            <div class="flex justify-center gap-2">
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
-                                <Link
-                                    :href="route('curriculums.items.manage', curriculum.id)"
-                                    class="btn-info"
+                <div class="overflow-x-auto">
+
+                <table class="w-full min-w-[800px]">
+
+                    <thead class="border-b border-[var(--card-border)] bg-[var(--page-bg)]">
+
+                        <tr>
+                            <th class="p-4 text-left w-12 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">#</th>
+                            <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Code</th>
+                            <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Name</th>
+                            <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Program</th>
+                            <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Academic Year</th>
+                            <th class="p-4 text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Effective Year</th>
+                            <th class="p-4 text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Status</th>
+                            <th class="p-4 text-center whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Actions</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        <tr
+                            v-for="(curriculum, index) in curricula"
+                            :key="curriculum.id"
+                            class="group border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
+                        >
+
+                            <td class="p-4 text-[var(--text-secondary)] transition-shadow duration-150 group-hover:shadow-[inset_3px_0_0_#D4A62A]">
+                                {{ index + 1 }}
+                            </td>
+
+                            <td class="p-4 font-semibold text-[var(--text-primary)]">
+                                <span class="inline-flex items-center rounded-md border border-[#D4A62A]/30 bg-[#D4A62A]/10 px-2 py-1 text-xs font-semibold text-[#A8790E] dark:text-[#E8C766]">
+                                    {{ curriculum.code }}
+                                </span>
+                            </td>
+
+                            <td class="p-4 text-[var(--text-primary)]">
+                                {{ curriculum.name }}
+                            </td>
+
+                            <td class="p-4 text-[var(--text-secondary)]">
+                                {{ curriculumLabel(curriculum) }}
+                                <span class="text-[var(--text-muted)] text-xs block">
+                                    {{ curriculum.program.department?.abbreviation }}
+                                </span>
+                            </td>
+
+                            <td class="p-4 text-[var(--text-secondary)]">
+                                {{ curriculum.academic_year }}
+                            </td>
+
+                            <td class="p-4 text-center">
+                                <span class="inline-flex items-center rounded-full bg-[var(--page-bg)] border border-[var(--card-border)] px-2.5 py-0.5 text-xs font-medium text-[var(--text-secondary)]">
+                                    {{ curriculum.effective_year }}
+                                </span>
+                            </td>
+
+                            <td class="p-4 text-center">
+
+                                <span
+                                    v-if="curriculum.active"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm font-medium"
                                 >
-                                    Manage Subjects
-                                </Link>
+                                    <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                                    Active
+                                </span>
 
-                                <Link
-                                    :href="route('curriculums.edit', curriculum.id)"
-                                    class="btn-edit"
+                                <span
+                                    v-else
+                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-medium"
                                 >
-                                    Edit
-                                </Link>
+                                    <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                                    Inactive
+                                </span>
 
-                                <button
-                                    @click="requestDelete(curriculum)"
-                                    class="btn-delete"
-                                >
-                                    Delete
-                                </button>
+                            </td>
 
-                            </div>
+                            <td class="p-4 text-center whitespace-nowrap">
 
-                        </td>
+                                <div class="flex justify-center gap-2">
 
-                    </tr>
+                                    <Link
+                                        :href="route('curriculums.items.manage', curriculum.id)"
+                                        class="btn-info inline-flex items-center gap-1.5"
+                                    >
+                                        <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
+                                        Manage Subjects
+                                    </Link>
 
-                </tbody>
+                                    <Link
+                                        :href="route('curriculums.edit', curriculum.id)"
+                                        class="btn-edit inline-flex items-center gap-1.5"
+                                    >
+                                        <PencilSquareIcon class="h-3.5 w-3.5" />
+                                        Edit
+                                    </Link>
 
-            </table>
+                                    <button
+                                        @click="requestDelete(curriculum)"
+                                        class="btn-delete inline-flex items-center gap-1.5"
+                                    >
+                                        <TrashIcon class="h-3.5 w-3.5" />
+                                        Delete
+                                    </button>
+
+                                </div>
+
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+                </div>
+
+            </div>
 
         </div>
 
@@ -342,7 +392,9 @@ function curriculumLabel(curriculum) {
             v-if="pendingCurriculum"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
+
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
                 <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Delete Curriculum?
@@ -383,7 +435,9 @@ function curriculumLabel(curriculum) {
             v-if="blockedCurriculum"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
+
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
                 <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Unable to Delete
@@ -415,7 +469,9 @@ function curriculumLabel(curriculum) {
             v-if="confirmingCurriculum"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
         >
-            <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-xl w-full max-w-sm p-6">
+
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
                 <h3 class="text-lg font-semibold mb-2 text-[var(--text-primary)]">
                     Final Confirmation

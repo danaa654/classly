@@ -33,9 +33,13 @@ watch(() => props.show, (visible) => {
     }
 })
 
-// Program/Specialization stay in their own scope, but Year Level and
-// Section changing should clear the section pick if it no longer applies.
-watch([programId, yearLevel], () => {
+// Program, Specialization, and Year Level changing should all clear
+// the section pick if it no longer applies — Specialization is
+// included here now too, since sectionsForSelection filters by it
+// and a Section picked under one Specialization is never valid under
+// another (e.g. switching BSCRIM from Fingerprint Identification to
+// Firearms Identification must not leave BSCRIM-FI-1A selected).
+watch([programId, specializationId, yearLevel], () => {
     sectionId.value = null
 })
 
@@ -51,16 +55,32 @@ const hasSpecializations = computed(() => specializationsForProgram.value.length
 
 /**
  * Distinct Sections that actually have Subject Offerings for the
- * selected Program + Year Level in the active term — built from the
- * offerings already on the page rather than a separate fetch.
+ * selected Program + Year Level (+ Specialization, when the Program
+ * has one, e.g. BSCRIM's FI/FB/LD/QD) in the active term — built from
+ * the offerings already on the page rather than a separate fetch.
+ *
+ * Filtering on specialization_id here is required, not optional: for
+ * a Program with multiple Specializations, every Specialization's
+ * Sections previously got merged into one list regardless of which
+ * Specialization was actually selected above (e.g. picking BSCRIM ->
+ * Fingerprint Identification still showed BSCRIM-QD-1A, BSCRIM-FB-1A,
+ * BSCRIM-LD-1A alongside the correct BSCRIM-FI-1A). Picking the wrong
+ * one there produced a section with zero matching Subject Offerings,
+ * surfacing later as "No Subject Offerings to schedule" in Session
+ * Settings instead of at the point the mistake was actually made.
  */
 const sectionsForSelection = computed(() => {
     if (!programId.value || !yearLevel.value) return []
+    if (hasSpecializations.value && !specializationId.value) return []
 
     const seen = new Map()
 
     props.subjectOfferings
-        .filter((offering) => offering.program_id === programId.value && offering.year_level === yearLevel.value)
+        .filter((offering) =>
+            offering.program_id === programId.value
+            && offering.year_level === yearLevel.value
+            && (!hasSpecializations.value || offering.specialization_id === specializationId.value)
+        )
         .forEach((offering) => {
             if (offering.section_id && !seen.has(offering.section_id)) {
                 seen.set(offering.section_id, offering.section_code)

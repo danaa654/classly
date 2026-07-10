@@ -1,6 +1,7 @@
 <script setup>
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useForm } from '@inertiajs/vue3'
+import { PencilSquareIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
     program: Object,
@@ -23,16 +24,32 @@ function submit() {
 <template>
     <DashboardLayout>
 
-        <div class="mx-auto max-w-2xl">
+        <div class="relative mx-auto max-w-2xl">
 
-            <h1 class="text-3xl font-bold mb-6 text-[var(--text-primary)]">
-                Edit Program
-            </h1>
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+            </div>
+
+            <div class="flex items-center gap-3 mb-6">
+                <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                    <PencilSquareIcon class="h-5.5 w-5.5" />
+                </div>
+                <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                    Edit Program
+                </h1>
+            </div>
 
             <form
                 @submit.prevent="submit"
-                class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-5 transition-colors duration-300"
+                class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg p-6 space-y-5 transition-colors duration-300"
             >
+
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
                 <!-- College -->
                 <div>

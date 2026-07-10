@@ -29,7 +29,7 @@ class Curriculum extends Model
     ];
 
     // Append these attributes when converting to array/JSON
-    protected $appends = ['has_sections', 'has_items', 'display_name'];
+    protected $appends = ['has_sections', 'has_items', 'display_name', 'curriculum_range'];
 
     /*
     |--------------------------------------------------------------------------
@@ -120,5 +120,40 @@ class Curriculum extends Model
     public function getHasItemsAttribute()
     {
         return $this->curriculumItems()->exists();
+    }
+
+    /**
+     * The prospectus's expected coverage span, e.g. "2023-2027" for a
+     * curriculum effective in 2023 under a 4-year program — this is
+     * what a printed prospectus cover typically shows.
+     *
+     * Deliberately DERIVED, never stored: it's computed fresh from
+     * effective_year + the owning Program's `years` every time it's
+     * read, rather than being a static range baked in at creation.
+     * This means it always stays internally consistent even if a
+     * Program's duration is edited later, and — just as importantly —
+     * it does NOT represent an expiration date. A student who takes
+     * longer than the normal duration can still be actively following
+     * this curriculum well past its computed end year; see the
+     * "Should we fix our curriculum?" conversation for the full
+     * reasoning. This is a label for the cohort's *expected* span,
+     * not an enforced cutoff — nothing in the app should ever block
+     * usage of a curriculum because "today" falls outside this range.
+     *
+     * Falls back to a 4-year duration if the Program (or its `years`
+     * column) isn't available, so this never throws even on a
+     * partially-loaded model.
+     */
+    public function getCurriculumRangeAttribute(): ?string
+    {
+        if (! $this->effective_year) {
+            return null;
+        }
+
+        $duration = $this->program?->years ?: 4;
+
+        $endYear = (int) $this->effective_year + $duration - 1;
+
+        return "{$this->effective_year}-{$endYear}";
     }
 }

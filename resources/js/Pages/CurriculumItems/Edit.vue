@@ -2,6 +2,7 @@
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
 import { computed, watch } from 'vue'
+import { ClipboardDocumentListIcon, ArrowLeftIcon } from '@heroicons/vue/24/outline'
 
 defineOptions({
     layout: DashboardLayout,
@@ -112,29 +113,41 @@ function submit() {
 
 <Head title="Edit Curriculum Item" />
 
-<div>
+<div class="relative">
+
+    <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+    <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+        <div
+            class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+            style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+        ></div>
+        <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+    </div>
 
     <!-- Header -->
 
     <div class="flex justify-between items-center mb-6">
 
-        <div>
-
-            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
-                Edit Curriculum Item
-            </h1>
-
-            <p class="text-[var(--text-muted)] mt-1">
-                Update {{ curriculumItem.display_title ?? curriculumItem.title ?? curriculumItem.subject?.subject_code }}
-            </p>
-
+        <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                <ClipboardDocumentListIcon class="h-5.5 w-5.5" />
+            </div>
+            <div>
+                <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                    Edit Curriculum Item
+                </h1>
+                <p class="text-sm text-[var(--text-muted)]">
+                    Update {{ curriculumItem.display_title ?? curriculumItem.title ?? curriculumItem.subject?.subject_code }}
+                </p>
+            </div>
         </div>
 
         <Link
             :href="backHref"
-            class="text-[var(--text-secondary)] hover:underline"
+            class="inline-flex items-center gap-1 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline transition-colors duration-150"
         >
-            &larr; Back
+            <ArrowLeftIcon class="h-3.5 w-3.5" />
+            Back
         </Link>
 
     </div>
@@ -143,8 +156,10 @@ function submit() {
 
     <form
         @submit.prevent="submit"
-        class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow p-6 space-y-6"
+        class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg p-6 space-y-6 transition-colors duration-300"
     >
+
+        <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
         <!-- Item Type -->
 
@@ -156,7 +171,7 @@ function submit() {
 
             <select
                 v-model="form.item_type"
-                class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg md:w-1/3 transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] md:w-1/3 transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="Subject">Subject</option>
                 <option value="OJT">Practicum / OJT</option>
@@ -180,7 +195,7 @@ function submit() {
 
                 <select
                     v-model="form.curriculum_id"
-                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option
                         v-for="curriculum in curricula"
@@ -205,7 +220,7 @@ function submit() {
 
                 <select
                     v-model.number="form.year_level"
-                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option :value="1">1st Year</option>
                     <option :value="2">2nd Year</option>
@@ -229,7 +244,7 @@ function submit() {
 
                 <select
                     v-model.number="form.semester"
-                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 >
                     <option :value="1">First Semester</option>
                     <option :value="2">Second Semester</option>
@@ -254,7 +269,7 @@ function submit() {
 
             <select
                 v-model="form.subject_id"
-                class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
             >
                 <option value="" disabled>Select subject</option>
 
@@ -289,7 +304,7 @@ function submit() {
 
                     <select
                         v-model="form.subject_id"
-                        class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     >
                         <option value="" disabled>Select practicum subject</option>
 
@@ -326,7 +341,7 @@ function submit() {
                         type="number"
                         min="1"
                         placeholder="e.g. 486"
-                        class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                        class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                     />
 
                     <p v-if="form.errors.ojt_hours" class="text-red-600 text-sm mt-1">
@@ -341,7 +356,7 @@ function submit() {
 
             <div
                 v-if="selectedPracticumSubject"
-                class="mt-4 flex justify-between items-center rounded-lg bg-[var(--page-bg)] border border-[var(--card-border)] px-4 py-3 text-sm"
+                class="mt-4 flex justify-between items-center rounded-xl bg-[var(--page-bg)] border border-[var(--card-border)] px-4 py-3 text-sm"
             >
                 <span class="font-semibold text-[var(--text-primary)]">
                     {{ selectedPracticumSubject.subject_code }}
@@ -367,7 +382,7 @@ function submit() {
                     v-model.number="form.sort_order"
                     type="number"
                     min="0"
-                    class="w-full border-[var(--card-border)] bg-[var(--page-bg)] text-[var(--text-primary)] rounded-lg transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
+                    class="w-full rounded-xl border border-[var(--card-border)] bg-[var(--page-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-all duration-200 focus:border-[#D4A62A] focus:outline-none focus:ring-2 focus:ring-[#D4A62A]/30"
                 />
 
                 <p v-if="form.errors.sort_order" class="text-red-600 text-sm mt-1">

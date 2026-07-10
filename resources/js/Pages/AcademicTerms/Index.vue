@@ -4,6 +4,7 @@ import Toast from '@/Components/Toast.vue'
 import { Link, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 import { useFlashToast } from '@/Composables/useFlashToast'
+import { CalendarDaysIcon, PlusIcon, PencilSquareIcon, TrashIcon, LockClosedIcon } from '@heroicons/vue/24/outline'
 
 defineProps({
     academicTerms: Array,
@@ -115,36 +116,60 @@ function finalizeDelete() {
 
         <Toast :toast="toast" />
 
-        <div class="flex justify-between items-center mb-6">
+        <div class="relative">
 
-            <h1 class="text-3xl font-bold text-[var(--text-primary)]">
-                Academic Terms
-            </h1>
+            <!-- Subtle brand texture: faint grid + one soft gold glow, static (no animation) -->
+            <div class="pointer-events-none absolute -inset-x-6 -inset-y-6 -z-10 overflow-hidden">
+                <div
+                    class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                    style="background-image: linear-gradient(#1e3a5f 1px, transparent 1px), linear-gradient(90deg, #1e3a5f 1px, transparent 1px); background-size: 42px 42px;"
+                ></div>
+                <div class="absolute -top-16 right-0 h-64 w-64 rounded-full bg-[#D4A62A]/10 blur-3xl"></div>
+            </div>
 
-            <Link
-                :href="route('academic-terms.create')"
-                class="btn-save"
-            >
-                Add Academic Term
-            </Link>
+            <div class="flex justify-between items-center mb-6">
 
-        </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A62A]/30 bg-[#D4A62A]/10 text-[#D4A62A]">
+                        <CalendarDaysIcon class="h-5.5 w-5.5" />
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold [font-family:'Fraunces',serif] text-[var(--text-primary)]">
+                            Academic Terms
+                        </h1>
+                        <p class="text-sm text-[var(--text-muted)]">
+                            {{ academicTerms.length }} {{ academicTerms.length === 1 ? 'term' : 'terms' }} on record
+                        </p>
+                    </div>
+                </div>
 
-        <div class="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow overflow-hidden transition-colors duration-300">
+                <Link
+                    :href="route('academic-terms.create')"
+                    class="btn-save inline-flex items-center gap-1.5"
+                >
+                    <PlusIcon class="h-4 w-4" />
+                    Add Academic Term
+                </Link>
+
+            </div>
+
+        <div class="relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-lg transition-colors duration-300">
+
+            <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4A62A] to-transparent"></div>
 
             <table class="w-full">
 
-                <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
+                <thead class="border-b border-[var(--card-border)] bg-[var(--page-bg)]">
 
                     <tr>
-                        <th class="p-4 text-left w-12 text-[var(--text-secondary)]">#</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Academic Year</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Semester</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Class Dates</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">School Hours</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Status</th>
-                        <th class="p-4 text-left text-[var(--text-secondary)]">Active</th>
-                        <th class="p-4 text-center whitespace-nowrap text-[var(--text-secondary)]">
+                        <th class="p-4 text-left w-12 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">#</th>
+                        <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Academic Year</th>
+                        <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Semester</th>
+                        <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Class Dates</th>
+                        <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">School Hours</th>
+                        <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Status</th>
+                        <th class="p-4 text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Active</th>
+                        <th class="p-4 text-center whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                             Actions
                         </th>
                     </tr>
@@ -156,10 +181,10 @@ function finalizeDelete() {
                     <tr
                         v-for="(term, index) in academicTerms"
                         :key="term.id"
-                        class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
+                        class="group border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
                     >
 
-                        <td class="p-4 text-[var(--text-secondary)]">
+                        <td class="p-4 text-[var(--text-secondary)] transition-shadow duration-150 group-hover:shadow-[inset_3px_0_0_#D4A62A]">
                             {{ index + 1 }}
                         </td>
 
@@ -185,9 +210,10 @@ function finalizeDelete() {
 
                         <td class="p-4">
                             <span
-                                class="px-3 py-1 rounded-full text-sm"
+                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm"
                                 :class="statusClasses(term.status)"
                             >
+                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                                 {{ term.status }}
                             </span>
                         </td>
@@ -196,15 +222,17 @@ function finalizeDelete() {
 
                             <span
                                 v-if="term.active"
-                                class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm"
+                                class="inline-flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm"
                             >
+                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                                 Active
                             </span>
 
                             <span
                                 v-else
-                                class="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-sm"
+                                class="inline-flex items-center gap-1.5 bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-sm"
                             >
+                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
                                 Inactive
                             </span>
 
@@ -217,16 +245,18 @@ function finalizeDelete() {
                                 <Link
                                     v-if="term.status !== 'Archived'"
                                     :href="route('academic-terms.edit', term.id)"
-                                    class="btn-edit"
+                                    class="btn-edit inline-flex items-center gap-1.5"
                                 >
+                                    <PencilSquareIcon class="h-3.5 w-3.5" />
                                     Edit
                                 </Link>
 
                                 <span
                                     v-else
                                     title="Archived Academic Terms are read-only."
-                                    class="rounded-full bg-[var(--page-bg)] text-[var(--text-muted)] px-5 py-2 text-sm font-semibold cursor-not-allowed"
+                                    class="inline-flex items-center gap-1.5 rounded-full bg-[var(--page-bg)] text-[var(--text-muted)] px-5 py-2 text-sm font-semibold cursor-not-allowed"
                                 >
+                                    <LockClosedIcon class="h-3.5 w-3.5" />
                                     Edit
                                 </span>
 
@@ -238,9 +268,10 @@ function finalizeDelete() {
                                         : term.status === 'Archived'
                                             ? 'Archived Academic Terms are permanent historical record and cannot be deleted.'
                                             : 'Delete this Academic Term'"
-                                    class="btn-delete"
+                                    class="btn-delete inline-flex items-center gap-1.5"
                                     :class="(term.active || term.status === 'Archived') && 'opacity-50 cursor-not-allowed'"
                                 >
+                                    <TrashIcon class="h-3.5 w-3.5" />
                                     Delete
                                 </button>
 
@@ -254,9 +285,13 @@ function finalizeDelete() {
 
                         <td
                             colspan="8"
-                            class="text-center p-8 text-[var(--text-muted)]"
+                            class="p-12 text-center"
                         >
-                            No academic terms found.
+                            <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#D4A62A]/10 text-[#D4A62A]">
+                                <CalendarDaysIcon class="h-6 w-6" />
+                            </div>
+                            <p class="font-medium text-[var(--text-secondary)]">No academic terms yet</p>
+                            <p class="mt-1 text-sm text-[var(--text-muted)]">Add your first academic term to get scheduling started.</p>
                         </td>
 
                     </tr>
@@ -264,6 +299,8 @@ function finalizeDelete() {
                 </tbody>
 
             </table>
+
+        </div>
 
         </div>
 
