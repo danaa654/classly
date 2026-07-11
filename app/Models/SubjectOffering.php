@@ -95,6 +95,36 @@ class SubjectOffering extends Model
         'hours_per_meeting',
     ];
 
+    /**
+     * Weekly hours for THIS offering, with the Subject master's hours
+     * as a fallback ONLY when this row has never had its own value
+     * set. This is the Bulk Update Weekly Hours feature's read side:
+     * Session Settings, the Greedy Scheduler, and the Master Grid all
+     * read ->hours (this accessor) rather than the raw column, so a
+     * Registrar's per-Term override (e.g. Programming 1 scheduled at
+     * 4 hrs/week instead of the curriculum's 5) is honored everywhere
+     * scheduling happens — while the Subject master itself is never
+     * written to by that action (see
+     * SubjectOfferingController::bulkUpdateWeeklyHours()).
+     *
+     * Priority: 1) this row's own `hours` column, 2) subject.hours as
+     * a fallback for rows generated before this column was always
+     * populated. Only triggers a `subject` lookup when the column is
+     * actually null, and prefers the already-loaded relation when
+     * present — no extra query for the common case where every
+     * offering already carries its own hours.
+     */
+    public function getHoursAttribute($value): ?int
+    {
+        if ($value !== null) {
+            return (int) $value;
+        }
+
+        $subject = $this->relationLoaded('subject') ? $this->subject : $this->subject()->first();
+
+        return $subject?->hours !== null ? (int) $subject->hours : null;
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Relationships
@@ -102,6 +132,7 @@ class SubjectOffering extends Model
     */
 
     public function academicTerm()
+
     {
         return $this->belongsTo(AcademicTerm::class);
     }
@@ -430,18 +461,32 @@ class SubjectOffering extends Model
      * call sites that access a single offering's overall_status
      * without eager-loading `schedule` first (unchanged behavior from
      * before this relation existed).
+     *
+     * The fallback result is cached per-instance: computeOverallStatus()
+     * and getRoomStatusAttribute() both call this, so without caching,
+     * any call site that forgets to eager-load `schedule` pays for the
+     * same DB::table() lookup TWICE per offering instead of once. This
+     * is a safety net, not a substitute for eager-loading — a caller
+     * listing 200+ offerings without `with('schedule')` still fires one
+     * query per offering, just no longer two.
      */
+    private ?bool $hasScheduleAssignedCache = null;
+
     private function hasScheduleAssigned(): bool
     {
         if ($this->relationLoaded('schedule')) {
             return $this->schedule !== null;
         }
 
-        if (! self::hasTableCached('schedules') || ! self::hasColumnCached('schedules', 'subject_offering_id')) {
-            return false;
+        if ($this->hasScheduleAssignedCache !== null) {
+            return $this->hasScheduleAssignedCache;
         }
 
-        return DB::table('schedules')->where('subject_offering_id', $this->id)->exists();
+        if (! self::hasTableCached('schedules') || ! self::hasColumnCached('schedules', 'subject_offering_id')) {
+            return $this->hasScheduleAssignedCache = false;
+        }
+
+        return $this->hasScheduleAssignedCache = DB::table('schedules')->where('subject_offering_id', $this->id)->exists();
     }
 
     /*

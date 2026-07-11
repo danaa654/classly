@@ -201,7 +201,14 @@ class ScheduleValidationService
             }
         }
 
-        // 8. Faculty overload — warning only, never blocks saving.
+        // 8. Faculty overload — a hard conflict, same as Faculty
+        // Loading's assertWithinMaxUnits(). Master Grid used to only
+        // WARN here and still let the block save, which meant a
+        // faculty member's effective cap could be silently blown past
+        // by a drag-and-drop/Edit Schedule change even though Faculty
+        // Loading itself would have refused the exact same assignment.
+        // Blocking it here closes that gap: whichever workspace a
+        // faculty member's load is changed from, the same cap applies.
         if ($block['faculty_id']) {
             $faculty = Faculty::find($block['faculty_id']);
 
@@ -209,8 +216,9 @@ class ScheduleValidationService
             // Load Overload) — same cap TeachingAssignmentService and
             // GreedyScheduleService enforce. Comparing against the raw
             // max_units column here would raise a false "over their max
-            // load" warning for a faculty member who has been legitimately
-            // approved to carry more.
+            // load" conflict for a faculty member who has been
+            // legitimately approved to carry more (see
+            // FacultyLoadOverloadService).
             if ($faculty && $faculty->effective_max_units) {
                 $loadedUnits = $allBlocks
                     ->where('faculty_id', $block['faculty_id'])
@@ -218,11 +226,12 @@ class ScheduleValidationService
                     ->sum(fn ($b) => (int) ($b['units'] ?? 0));
 
                 if ($loadedUnits > $faculty->effective_max_units) {
-                    $warnings[] = [
-                        'type' => self::TYPE_OVERLOAD,
-                        'message' => "{$faculty->full_name} is loaded {$loadedUnits}/{$faculty->effective_max_units} units — over their max load.",
-                        'current' => $this->summarize($block),
-                    ];
+                    $conflicts[] = $this->conflict(
+                        self::TYPE_OVERLOAD,
+                        $block,
+                        null,
+                        "{$faculty->full_name} would be loaded {$loadedUnits}/{$faculty->effective_max_units} units — over their max load. Request a Faculty Load Overload or choose a different faculty member."
+                    );
                 }
             }
         }

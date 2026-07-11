@@ -61,6 +61,7 @@ class ActivityHistoryService
         'subject_offering.generated',
         'subject_offering.regenerated',
         'subject_offering.deleted',
+        'subject_offering.weekly_hours_bulk_updated',
 
         'faculty_loading.assigned',
         'faculty_loading.removed',
@@ -107,6 +108,10 @@ class ActivityHistoryService
         'subject_offering.generated' => ['subject-offering', 'blue'],
         'subject_offering.regenerated' => ['subject-offering', 'blue'],
         'subject_offering.deleted' => ['subject-offering', 'gray'],
+        // Yellow = "Manual Change" per the spec's six-color palette —
+        // this is a Registrar hand-editing a value, not a generation
+        // or a deletion.
+        'subject_offering.weekly_hours_bulk_updated' => ['subject-offering', 'yellow'],
 
         'faculty_loading.assigned' => ['faculty', 'green'],
         'faculty_loading.removed' => ['faculty', 'yellow'],
@@ -295,6 +300,30 @@ class ActivityHistoryService
             description: "{$count} subject offering(s) removed",
             metadata: ['removed' => $count],
             academicTerm: $term,
+        );
+    }
+
+    /**
+     * Bulk Update Weekly Hours — a Registrar/Admin overriding the
+     * per-Term weekly hours on a hand-picked set of Subject Offerings
+     * (see SubjectOfferingController::bulkUpdateWeeklyHours()). Only
+     * the Subject Offering rows themselves change; the Subject
+     * master, Curriculum, and Prospectus are never touched, which is
+     * why this reads as a "Manual Change" (yellow) milestone rather
+     * than a Generation one.
+     *
+     * @param  array  $metadata  e.g. ['program' => 'BSIT', 'year_level' => 1,
+     *                            'section' => 'BSIT-1A', 'weekly_hours' => '5 → 4']
+     */
+    public static function recordBulkWeeklyHoursUpdated(AcademicTerm $term, int $count, array $metadata = []): ?ActivityHistory
+    {
+        return self::record(
+            event: 'subject_offering.weekly_hours_bulk_updated',
+            title: 'Bulk Weekly Hours Updated',
+            description: "{$count} Subject Offering(s) updated",
+            metadata: array_merge(['updated' => $count], $metadata),
+            academicTerm: $term,
+            module: 'Subject Offering',
         );
     }
 

@@ -2,10 +2,15 @@
 const props = defineProps({
     show: { type: Boolean, default: false },
     conflicts: { type: Array, default: () => [] },
-    recommendations: { type: Object, default: null }, // { faculty: [], rooms: [], times: [] }
+    recommendations: { type: Object, default: null }, // { faculty: [], rooms: [], times: [], meeting_splits: [] }
+    // Same meaning/gating as EditScheduleModal's prop of the same name
+    // — meeting_splits changes meetings_per_week, which is only safe
+    // to offer for a fresh, not-yet-committed placement. See that
+    // prop's docblock on EditScheduleModal for the full reasoning.
+    allowSessionSettings: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['dismiss', 'apply-faculty', 'apply-room', 'apply-time'])
+const emit = defineEmits(['dismiss', 'apply-faculty', 'apply-room', 'apply-time', 'apply-meeting-split'])
 
 function typeLabel(type) {
     return {
@@ -94,7 +99,23 @@ function timeLabel(minutes) {
                     </button>
                 </div>
 
-                <p v-if="!recommendations.faculty?.length && !recommendations.rooms?.length && !recommendations.times?.length" class="text-xs text-slate-400 italic">
+                <div v-if="allowSessionSettings && recommendations.meeting_splits?.length" class="mb-2">
+                    <p class="text-[11px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Or Meet More Often</p>
+                    <button
+                        v-for="(s, i) in recommendations.meeting_splits"
+                        :key="i"
+                        type="button"
+                        class="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 mb-1.5 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                        @click="emit('apply-meeting-split', s)"
+                    >
+                        <p class="text-xs font-bold text-slate-700 dark:text-slate-200">
+                            {{ s.meetings_per_week }}x/week — {{ s.hours_per_meeting }} hrs each
+                        </p>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">{{ s.message }}</p>
+                    </button>
+                </div>
+
+                <p v-if="!recommendations.faculty?.length && !recommendations.rooms?.length && !recommendations.times?.length && !(allowSessionSettings && recommendations.meeting_splits?.length)" class="text-xs text-slate-400 italic">
                     No automatic alternatives found — try a different manual change.
                 </p>
             </template>

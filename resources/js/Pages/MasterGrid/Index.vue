@@ -732,6 +732,37 @@ function applySuggestedTime({ days, day, start_minutes, end_minutes }) {
 }
 
 /**
+ * Applies a "meet more often" suggestion (see
+ * ScheduleRecommendationService::suggestMeetingSplits() and
+ * EditScheduleModal's "Or Meet More Often" section). Unlike
+ * applySuggestedFaculty/Room/Time, this changes meetings_per_week
+ * itself — total weekly hours stay exactly what they already were
+ * (splitting is redistributing the same hours across more/shorter
+ * meetings, never adding or removing hours), only the day-combo,
+ * time, and meeting count change.
+ *
+ * Only ever reachable when allowSessionSettings is true — the
+ * suggestion list itself is hidden otherwise (see EditScheduleModal's
+ * v-if on that section) — so applyEdit's existing "persist hours/
+ * meetings_per_week via session-settings.update" path already covers
+ * committing this when the person clicks Apply Changes; nothing extra
+ * is needed here beyond feeding validateDraft the new fields.
+ */
+function applySuggestedMeetingSplit({ days, day, start_minutes, end_minutes, meetings_per_week }) {
+    const comboDays = days && days.length ? days : [day]
+
+    validateDraft({
+        faculty_id: draftGroup.value[0]?.faculty_id ?? null,
+        room_id: draftGroup.value[0]?.room_id ?? null,
+        start_minutes,
+        end_minutes,
+        days: comboDays,
+        meetings_per_week,
+        hours: draftGroup.value[0]?.hours ?? editingGroup.value[0]?.hours ?? null,
+    })
+}
+
+/**
  * Commits the current draft. A 'preview' edit patches the row(s)
  * inside the still-unsaved Schedule Preview result — nothing here is
  * in the database yet, so a conflict is recorded (each affected
@@ -1106,6 +1137,7 @@ const hasActiveTerm = computed(() => !!props.activeTerm)
     @apply-faculty="applySuggestedFaculty"
     @apply-room="applySuggestedRoom"
     @apply-time="applySuggestedTime"
+    @apply-meeting-split="applySuggestedMeetingSplit"
     @remove="handleRemoveSchedule"
 />
 

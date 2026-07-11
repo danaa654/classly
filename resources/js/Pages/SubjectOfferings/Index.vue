@@ -1,12 +1,15 @@
 <script setup>
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
+import axios from 'axios'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import BulkUpdateWeeklyHoursModal from './BulkUpdateWeeklyHoursModal.vue'
 import {
     ClipboardDocumentListIcon,
     PrinterIcon,
     Cog6ToothIcon,
     TrashIcon,
+    ClockIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -147,6 +150,131 @@ function destroy(offering) {
 
     router.delete(route('subject-offerings.destroy', offering.id), { preserveScroll: true })
 }
+
+/*
+|--------------------------------------------------------------------------
+| Bulk Update Weekly Hours
+|--------------------------------------------------------------------------
+|
+| Selection is scoped to the CURRENT page's rows (offerings.data) —
+| the same set the "Select All" checkbox in the header toggles. This
+| intentionally mirrors what "currently filtered rows" means once the
+| table is paginated: a bulk action can only ever act on rows the
+| Registrar can actually see and confirm in the modal below, not on
+| every row across every page that happens to match the filters.
+*/
+
+const selectedIds = ref(new Set())
+const showBulkModal = ref(false)
+const bulkSubmitting = ref(false)
+const flash = ref(null)
+
+const currentPageIds = computed(() => [...new Set(props.offerings.data.map(o => o.id))])
+
+const selectedCount = computed(() => selectedIds.value.size)
+
+const allOnPageSelected = computed(() =>
+    currentPageIds.value.length > 0 && currentPageIds.value.every(id => selectedIds.value.has(id))
+)
+
+const someOnPageSelected = computed(() =>
+    currentPageIds.value.some(id => selectedIds.value.has(id)) && ! allOnPageSelected.value
+)
+
+function isSelected(id) {
+    return selectedIds.value.has(id)
+}
+
+function toggleRow(id) {
+    const next = new Set(selectedIds.value)
+    if (next.has(id)) {
+        next.delete(id)
+    } else {
+        next.add(id)
+    }
+    selectedIds.value = next
+}
+
+function toggleSelectAllOnPage() {
+    const next = new Set(selectedIds.value)
+
+    if (allOnPageSelected.value) {
+        currentPageIds.value.forEach(id => next.delete(id))
+    } else {
+        currentPageIds.value.forEach(id => next.add(id))
+    }
+
+    selectedIds.value = next
+}
+
+const selectedOfferings = computed(() => {
+    // Defensive de-dupe by id. selectedIds is a Set, so it can never
+    // itself hold a duplicate — but if offerings.data ever contains
+    // two row objects sharing the same id (e.g. a stale/merged page
+    // reload), a plain .filter() would match both copies and the
+    // modal would show every selected subject twice with a count
+    // that doesn't match the "Selected N" bar above the table. Using
+    // a Map keyed by id guarantees exactly one entry per id no matter
+    // how many times it appears in the source array.
+    const byId = new Map()
+
+    for (const o of props.offerings.data) {
+        if (selectedIds.value.has(o.id) && ! byId.has(o.id)) {
+            byId.set(o.id, {
+                id: o.id,
+                edp_code: o.edp_code,
+                subject_code: o.subject?.subject_code ?? o.edp_code,
+                descriptive_title: o.subject?.descriptive_title ?? '',
+                hours: o.hours,
+            })
+        }
+    }
+
+    return Array.from(byId.values())
+})
+
+function openBulkModal() {
+    if (selectedCount.value === 0) return
+    showBulkModal.value = true
+}
+
+function closeBulkModal() {
+    if (bulkSubmitting.value) return
+    showBulkModal.value = false
+}
+
+async function applyBulkUpdate(newHours) {
+    bulkSubmitting.value = true
+
+    try {
+        const { data } = await axios.post(route('subject-offerings.bulk-update-weekly-hours'), {
+            subject_offering_ids: Array.from(selectedIds.value),
+            hours: newHours,
+        })
+
+        flash.value = { type: 'success', message: data.message }
+        showBulkModal.value = false
+        selectedIds.value = new Set()
+
+        // Reload only the `offerings` prop — filters, sort order, and
+        // the current page all stay exactly as they were, per spec.
+        router.reload({ only: ['offerings'], preserveScroll: true, preserveState: true })
+    } catch (error) {
+        flash.value = {
+            type: 'error',
+            message: error.response?.data?.message ?? 'Failed to update Weekly Hours. Please try again.',
+        }
+    } finally {
+        bulkSubmitting.value = false
+        setTimeout(() => { flash.value = null }, 6000)
+    }
+}
+
+// A page reload (new filters/sort/page) invalidates any selection
+// made against the previous set of rows.
+watch(() => props.offerings.data, () => {
+    selectedIds.value = new Set()
+})
 </script>
 
 <template>
@@ -165,6 +293,17 @@ function destroy(offering) {
             </div>
 
             <div class="flex flex-col gap-6">
+
+            <!-- Bulk action flash -->
+            <div
+                v-if="flash"
+                class="rounded-xl border px-4 py-3 text-sm font-medium"
+                :class="flash.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-800'"
+            >
+                {{ flash.message }}
+            </div>
 
             <!-- Header -->
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -316,6 +455,32 @@ function destroy(offering) {
                 </div>
             </div>
 
+            <!-- Bulk Update Weekly Hours bar -->
+            <div
+                v-if="can.bulkUpdateWeeklyHours"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3 shadow"
+            >
+                <div class="text-sm text-[var(--text-muted)]">
+                    <template v-if="selectedCount > 0">
+                        <span class="font-semibold text-[var(--text-primary)]">Selected</span>
+                        — {{ selectedCount }} Subject Offering{{ selectedCount === 1 ? '' : 's' }}
+                    </template>
+                    <template v-else>
+                        Select rows below to bulk update their Weekly Hours.
+                    </template>
+                </div>
+
+                <button
+                    type="button"
+                    :disabled="selectedCount === 0"
+                    @click="openBulkModal"
+                    class="btn-info inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    <ClockIcon class="h-4 w-4" />
+                    Bulk Update Weekly Hours
+                </button>
+            </div>
+
             <!-- Table -->
             <div class="relative overflow-hidden bg-[var(--card-bg)] border border-[var(--card-border)] rounded-2xl shadow-lg transition-colors duration-300">
 
@@ -324,6 +489,15 @@ function destroy(offering) {
                 <table class="w-full text-left text-sm">
                     <thead class="bg-[var(--page-bg)] border-b border-[var(--card-border)]">
                         <tr>
+                            <th v-if="can.bulkUpdateWeeklyHours" class="w-10 px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    class="h-4.5 w-4.5 cursor-pointer rounded border-2 border-[#8A94A6] bg-white text-[#D4A62A] accent-[#D4A62A] focus:ring-2 focus:ring-[#D4A62A]/40"
+                                    :checked="allOnPageSelected"
+                                    :indeterminate="someOnPageSelected"
+                                    @change="toggleSelectAllOnPage"
+                                />
+                            </th>
                             <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">EDP Code</th>
                             <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Program</th>
                             <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Year</th>
@@ -343,7 +517,16 @@ function destroy(offering) {
                             v-for="offering in offerings.data"
                             :key="offering.id"
                             class="border-t border-[var(--card-border)] transition-colors duration-150 hover:bg-[var(--page-bg)]"
+                            :class="{ 'bg-[#D4A62A]/5': can.bulkUpdateWeeklyHours && isSelected(offering.id) }"
                         >
+                            <td v-if="can.bulkUpdateWeeklyHours" class="px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    class="h-4.5 w-4.5 cursor-pointer rounded border-2 border-[#8A94A6] bg-white text-[#D4A62A] accent-[#D4A62A] focus:ring-2 focus:ring-[#D4A62A]/40"
+                                    :checked="isSelected(offering.id)"
+                                    @change="toggleRow(offering.id)"
+                                />
+                            </td>
                             <td class="px-4 py-3 font-mono font-medium text-[var(--text-primary)]">
                                 {{ offering.edp_code }}
                             </td>
@@ -407,7 +590,7 @@ function destroy(offering) {
                         </tr>
 
                         <tr v-if="offerings.data.length === 0">
-                            <td colspan="12" class="text-center py-8 text-[var(--text-muted)]">
+                            <td :colspan="can.bulkUpdateWeeklyHours ? 13 : 12" class="text-center py-8 text-[var(--text-muted)]">
                                 No Subject Offerings found. Try adjusting your filters<template v-if="can.generate">, or
                                 <Link :href="route('subject-offerings.create')" class="underline">generate offerings</Link>
                                 for a Curriculum</template>.
@@ -436,5 +619,13 @@ function destroy(offering) {
             </div>
             </div>
         </div>
+
+        <BulkUpdateWeeklyHoursModal
+            :open="showBulkModal"
+            :offerings="selectedOfferings"
+            :submitting="bulkSubmitting"
+            @close="closeBulkModal"
+            @apply="applyBulkUpdate"
+        />
     </AppLayout>
 </template>

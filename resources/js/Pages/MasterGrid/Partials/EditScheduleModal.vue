@@ -53,7 +53,7 @@ const props = defineProps({
     removing: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['close', 'field-changed', 'apply', 'apply-faculty', 'apply-room', 'apply-time', 'remove'])
+const emit = defineEmits(['close', 'field-changed', 'apply', 'apply-faculty', 'apply-room', 'apply-time', 'apply-meeting-split', 'remove'])
 
 // Remove Schedule only makes sense for an already-committed grid
 // block being managed by someone who can actually write — never for
@@ -1055,7 +1055,34 @@ onBeforeUnmount(() => {
                         </button>
                     </div>
 
-                    <p v-if="!recommendations.faculty?.length && !recommendations.rooms?.length && !recommendations.times?.length" class="text-xs text-slate-400 italic">
+                    <!--
+                        Meeting-split suggestions ("meet more often, for
+                        less time each" — see ScheduleRecommendationService::
+                        suggestMeetingSplits()). Gated to allowSessionSettings
+                        ONLY: accepting one of these changes meetings_per_week,
+                        which onMeetingsChange's own docblock says is only
+                        safe for a fresh placement, never an edit of an
+                        already-saved multi-day grid block. Editing a saved
+                        block simply never shows this section, same as it
+                        never lets Hours/Meetings-per-week be touched at all.
+                    -->
+                    <div v-if="allowSessionSettings && recommendations.meeting_splits?.length">
+                        <p class="text-[11px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Or Meet More Often</p>
+                        <button
+                            v-for="(s, i) in recommendations.meeting_splits"
+                            :key="i"
+                            type="button"
+                            class="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 mb-1.5 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                            @click="emit('apply-meeting-split', s)"
+                        >
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                {{ s.meetings_per_week }}x/week — {{ s.hours_per_meeting }} hrs each
+                            </p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">{{ s.message }}</p>
+                        </button>
+                    </div>
+
+                    <p v-if="!recommendations.faculty?.length && !recommendations.rooms?.length && !recommendations.times?.length && !(allowSessionSettings && recommendations.meeting_splits?.length)" class="text-xs text-slate-400 italic">
                         No automatic alternatives found — try a different manual change.
                     </p>
                 </div>

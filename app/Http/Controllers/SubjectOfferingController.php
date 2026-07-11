@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkUpdateWeeklyHoursRequest;
 use App\Http\Requests\GenerateSubjectOfferingRequest;
 use App\Models\AcademicTerm;
 use App\Models\Curriculum;
@@ -14,8 +15,10 @@ use App\Services\SubjectOfferingGeneratorService;
 use App\Services\AuditLogService;
 use App\Services\ActivityHistoryService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class SubjectOfferingController extends Controller implements HasMiddleware
@@ -183,6 +186,12 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             'can' => [
                 'generate' => auth()->user()->can('generate', SubjectOffering::class),
                 'delete' => auth()->user()->hasAnyRole(['Admin', 'Registrar']),
+                // Dean/Assistant Dean/OIC can see Weekly Hours (it's
+                // already in the Hours column below) but never select
+                // rows or open the Bulk Update modal — same tier as
+                // `delete` above, not the broader "can view this page
+                // at all" tier the route middleware already enforces.
+                'bulkUpdateWeeklyHours' => auth()->user()->hasAnyRole(['Admin', 'Registrar']),
             ],
 
         ]);
@@ -374,5 +383,123 @@ class SubjectOfferingController extends Controller implements HasMiddleware
         );
 
         return back()->with('success', "{$edpCode} deleted.");
+    }
+
+    /**
+     * Bulk Update Weekly Hours — lets a Registrar/Admin override the
+     * per-Term weekly hours for a hand-picked set of Subject
+     * Offerings (e.g. "schedule Programming 1 at 4 hrs/week instead
+     * of the curriculum's 5 for this Section, this Term only"),
+     * without ever touching the Subject master, the Curriculum, or
+     * the Prospectus — see SubjectOffering::getHoursAttribute() for
+     * the read side that makes this override visible to Session
+     * Settings / the Greedy Scheduler / the Master Grid.
+     *
+     * A JSON endpoint (not an Inertia redirect) on purpose, same
+     * convention as MasterGridController's axios-driven actions —
+     * the Index page reloads just the `offerings` prop afterward so
+     * filters/sorting/pagination are preserved instead of a full
+     * navigation resetting them.
+     */
+    public function bulkUpdateWeeklyHours(BulkUpdateWeeklyHoursRequest $request): JsonResponse
+    {
+        abort_unless(
+            auth()->user()->hasAnyRole(['Admin', 'Registrar']),
+            403,
+            'Only Admin and Registrar can perform Bulk Update Weekly Hours.'
+        );
+
+        $validated = $request->validated();
+
+        $offerings = SubjectOffering::with([
+                'academicTerm',
+                'subject:id,subject_code,descriptive_title',
+                'section:id,section_code',
+                'program:id,code',
+            ])
+            ->whereIn('id', $validated['subject_offering_ids'])
+            ->get();
+
+        abort_if($offerings->isEmpty(), 404, 'No matching Subject Offerings were found.');
+
+        // A mixed selection spanning more than one Academic Term must
+        // never partially apply — assertWritable() throws on the
+        // first Archived/locked term it finds, before any row is
+        // touched, same guard store()/destroy() already use above.
+        $offerings->pluck('academicTerm')->filter()->unique('id')->each(
+            fn (AcademicTerm $term) => $this->workspace->assertWritable($term)
+        );
+
+        $newHours = (int) $validated['hours'];
+
+        $changes = [];
+
+        DB::transaction(function () use ($offerings, $newHours, &$changes) {
+            foreach ($offerings as $offering) {
+                $changes[] = [
+                    'edp_code' => $offering->edp_code,
+                    // getRawOriginal bypasses the fallback accessor
+                    // (SubjectOffering::getHoursAttribute) so the log
+                    // always reflects this row's actual previous
+                    // value, not a value borrowed from the Subject
+                    // master.
+                    'from' => $offering->getRawOriginal('hours'),
+                    'to' => $newHours,
+                ];
+
+                // ONLY the `hours` column on THIS row. subject_id,
+                // curriculum_id, curriculum_item_id, and every other
+                // field are left untouched — this is the one write
+                // path for the feature, and it never reaches the
+                // Subject master, Curriculum, or Prospectus.
+                $offering->update(['hours' => $newHours]);
+            }
+        });
+
+        $term = $offerings->first()->academicTerm;
+
+        $fromValues = collect($changes)->pluck('from')->unique()->filter(fn ($v) => $v !== null)->values();
+        $fromLabel = $fromValues->isEmpty()
+            ? '—'
+            : ($fromValues->count() === 1 ? (string) $fromValues->first() : $fromValues->join(', '));
+
+        $label = $term?->display_name ?? 'Multiple Terms';
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Subject Offering',
+            model: $term,
+            description: "Bulk updated Weekly Hours for {$offerings->count()} Subject Offering(s)",
+            oldValues: ['weekly_hours' => $fromLabel],
+            newValues: [
+                'weekly_hours' => $newHours,
+                'affected_subject_offerings' => $offerings->count(),
+                'edp_codes' => $offerings->pluck('edp_code')->values(),
+            ],
+            recordName: $label,
+        );
+
+        // Activity History milestone. NOTE: ActivityHistoryService
+        // needs a small addition to support this — see
+        // recordBulkWeeklyHoursUpdated() below, mirroring the shape
+        // of the existing recordSubjectOfferingsGenerated() /
+        // recordScheduleManuallyAdjusted() wrapper methods.
+        if ($term) {
+            ActivityHistoryService::recordBulkWeeklyHoursUpdated(
+                $term,
+                $offerings->count(),
+                [
+                    'program' => $offerings->first()->program?->code,
+                    'year_level' => $offerings->first()->year_level,
+                    'section' => $offerings->first()->section?->section_code,
+                    'weekly_hours' => "{$fromLabel} → {$newHours}",
+                ]
+            );
+        }
+
+        return response()->json([
+            'message' => "{$offerings->count()} Subject Offering(s) updated to {$newHours} weekly hours.",
+            'updated_count' => $offerings->count(),
+        ]);
     }
 }

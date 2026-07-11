@@ -70,6 +70,11 @@ class ScheduleRecommendationService
             'faculty' => $this->suggestFaculty($block, $known),
             'rooms' => $this->suggestRooms($block, $known),
             'times' => $this->suggestTimes($block, $known, $term),
+            // "What if this met more often, for less time each?" — see
+            // suggestMeetingSplits() docblock. Only ever proposes MORE
+            // frequent, SHORTER meetings than the block's current
+            // meetings_per_week, never fewer/longer.
+            'meeting_splits' => $this->suggestMeetingSplits($block, $known, $term),
         ];
     }
 
@@ -331,6 +336,146 @@ class ScheduleRecommendationService
         }
 
         return $suggestions;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Meeting Splits ("meet more often, for less time each")
+    |--------------------------------------------------------------------------
+    |
+    | Example this exists for: a 4-hour, 1x/week subject can't find a
+    | single 4-hour block anywhere, but Wed 3–5PM (2 hrs) IS free. As a
+    | single-block subject that 2-hour gap is useless — but if the
+    | subject instead met 2x/week at 2 hrs each, that same gap (plus a
+    | matching gap on its paired day) becomes a valid placement.
+    |
+    | This only ever proposes going from the block's CURRENT
+    | meetings_per_week to a HIGHER one (never lower — we don't
+    | recommend consolidating shorter meetings into one longer block,
+    | since that's a curriculum/Session Settings decision, not a
+    | conflict-resolution one). Candidates are capped at 3x/week
+    | because that's the highest meetings_per_week SessionSettingsService
+    | and GreedyScheduleService support (see
+    | SessionSettingsService::ALLOWED_MEETINGS_PER_WEEK).
+    |
+    | Each candidate's per-meeting duration is total hours*60 divided
+    | evenly by the candidate meeting count, same rounding
+    | GreedyScheduleService::generateForSection() uses — so a suggestion
+    | here, if accepted, produces exactly the placement the Greedy
+    | Scheduler itself would have produced had Session Settings already
+    | been saved with that meetings_per_week.
+    |
+    | This does NOT persist anything. Accepting a suggestion still goes
+    | through the normal path: update the offering's meetings_per_week
+    | (Session Settings, or SubjectOffering::update() directly), then
+    | re-place the block — same as any other recommendation here.
+    */
+    private function suggestMeetingSplits(array $block, Collection $allBlocks, AcademicTerm $term, int $maxMeetings = 3): array
+    {
+        $currentMeetings = (int) ($block['meetings_per_week'] ?? 1) ?: 1;
+
+        $totalMinutes = ($block['hours'] ?? null) !== null
+            ? (int) $block['hours'] * 60
+            : (($block['end_minutes'] ?? 0) - ($block['start_minutes'] ?? 0)) * $currentMeetings;
+
+        if ($totalMinutes <= 0 || $currentMeetings >= $maxMeetings) {
+            return [];
+        }
+
+        $suggestions = [];
+
+        for ($candidateMeetings = $currentMeetings + 1; $candidateMeetings <= $maxMeetings; $candidateMeetings++) {
+            $duration = (int) round($totalMinutes / $candidateMeetings);
+
+            if ($duration <= 0) {
+                continue;
+            }
+
+            $slot = $this->findFirstFreeSlot($block, $allBlocks, $term, $candidateMeetings, $duration);
+
+            if (! $slot) {
+                continue;
+            }
+
+            $suggestions[] = array_merge($slot, [
+                'meetings_per_week' => $candidateMeetings,
+                'hours_per_meeting' => round($duration / 60, 2),
+                'message' => "No {$this->hoursLabel($totalMinutes)} slot is free — switching this subject to {$candidateMeetings}x/week ({$this->hoursLabel($duration)} each) fits at "
+                    . $this->comboLabel($slot['days']) . ' ' . $this->validator->label($slot['start_minutes']) . '–' . $this->validator->label($slot['end_minutes']) . '.',
+            ]);
+        }
+
+        return $suggestions;
+    }
+
+    /**
+     * Core slot search shared conceptually with suggestTimes() — same
+     * grid, same lunch/working-day rules, same "every day in the combo
+     * must be simultaneously free" logic — but parameterized on
+     * meetings/duration so it can be reused for a DIFFERENT
+     * meetings_per_week than the block currently has (suggestTimes()
+     * itself intentionally stays untouched/duration-locked to the
+     * block's existing config, since that's still the primary,
+     * same-config suggestion list).
+     */
+    private function findFirstFreeSlot(array $block, Collection $allBlocks, AcademicTerm $term, int $meetings, int $duration): ?array
+    {
+        $dayFields = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        $workingDays = array_values(array_filter($dayFields, fn ($f) => (bool) $term->{$f}));
+
+        [$schoolStart, $schoolEnd] = $this->validator->schoolHours($term);
+        [$lunchStart, $lunchEnd] = $this->validator->lunchWindow($term);
+        $interval = $term->time_interval ?: 30;
+
+        if ($schoolStart === null || $schoolEnd === null) {
+            return null;
+        }
+
+        $combos = $this->resolveDayCombos($meetings, $workingDays, $block['day'] ?? null);
+
+        foreach ($combos as $combo) {
+            for ($start = $schoolStart; $start + $duration <= $schoolEnd; $start += $interval) {
+                $end = $start + $duration;
+
+                if ($lunchStart !== null && $lunchEnd !== null && $start < $lunchEnd && $end > $lunchStart) {
+                    continue;
+                }
+
+                $comboIsFree = true;
+
+                foreach ($combo as $day) {
+                    $dayIsFree = ! $this->hasOverlap($allBlocks, $block, 'faculty_id', $block['faculty_id'] ?? null, $day, $start, $end)
+                        && ! $this->hasOverlap($allBlocks, $block, 'room_id', $block['room_id'] ?? null, $day, $start, $end)
+                        && ! $this->hasOverlap($allBlocks, $block, 'section_id', $block['section_id'] ?? null, $day, $start, $end);
+
+                    if (! $dayIsFree) {
+                        $comboIsFree = false;
+                        break;
+                    }
+                }
+
+                if (! $comboIsFree) {
+                    continue;
+                }
+
+                return [
+                    'days' => $combo,
+                    'day' => $combo[0],
+                    'start_minutes' => $start,
+                    'end_minutes' => $end,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /** "4 hrs" / "2.5 hrs" — used in meeting-split suggestion messages. */
+    private function hoursLabel(int $minutes): string
+    {
+        $hours = round($minutes / 60, 2);
+
+        return rtrim(rtrim((string) $hours, '0'), '.') . ' hrs';
     }
 
     /**

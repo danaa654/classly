@@ -158,6 +158,31 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
                         // though this table has no room_id of its own.
                         // See SubjectOffering::preferredByRooms().
                         'subjectOffering.preferredByRooms',
+                        // Eager-loaded so SubjectOffering's
+                        // faculty_status/room_status/overall_status
+                        // accessors (all in $appends, so they run for
+                        // EVERY offering whenever this prop is
+                        // serialized) never fall back to a per-row
+                        // query. Without these two, every one of this
+                        // term's offerings fired up to 3 extra queries
+                        // each on page load — see
+                        // SubjectOffering::hasScheduleAssigned() and
+                        // getFacultyStatusAttribute(). Distinct from
+                        // TeachingAssignment::schedule() below (a
+                        // hasOneThrough on THIS model) — that one does
+                        // NOT populate subjectOffering->schedule, since
+                        // they're different relations on different
+                        // models even though they read the same table.
+                        'subjectOffering.schedule',
+                        'subjectOffering.teachingAssignment',
+                        // computeOverallStatus() reads
+                        // $this->academicTerm->status and
+                        // ->class_end_date for every offering — the
+                        // one relation still missing after the first
+                        // fix, and still enough on its own to lazy-
+                        // load once per offering (269+ extra queries)
+                        // without it.
+                        'subjectOffering.academicTerm',
                         // The actual committed Master Grid schedule
                         // block for this assignment's offering, if
                         // Generate Schedule + Save Schedule has already
@@ -188,6 +213,22 @@ class TeachingAssignmentController extends Controller implements HasMiddleware
                         'section.curriculum.program.department',
                         'curriculumItem',
                         'preferredByRooms',
+                        // Same fix as 'teachingAssignments' above —
+                        // without these two, the faculty_status/
+                        // room_status/overall_status accessors
+                        // (appended on every SubjectOffering) each fall
+                        // back to a per-row query across all 269+
+                        // offerings in this term. See
+                        // SubjectOffering::hasScheduleAssigned().
+                        'schedule',
+                        'teachingAssignment',
+                        // Same reason as above — computeOverallStatus()
+                        // reads $this->academicTerm on every offering.
+                        // This was the one relation still missing after
+                        // the first eager-load fix, and on its own was
+                        // enough to keep this prop firing ~269 lazy-
+                        // loaded queries.
+                        'academicTerm',
                     ])
                     ->where('academic_term_id', $planningTerm->id)
                     ->when($departmentId, fn ($query) => $query->whereHas(

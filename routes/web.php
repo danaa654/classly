@@ -234,6 +234,15 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('subject-offerings/{subjectOffering}', [SubjectOfferingController::class, 'destroy'])
             ->name('subject-offerings.destroy');
 
+        // Bulk Update Weekly Hours — Admin + Registrar only, same tier
+        // as store()/destroy() above. A JSON endpoint (not a full
+        // Inertia navigation) so the Index page can reload just the
+        // `offerings` prop afterward and keep filters/sorting/
+        // pagination exactly as they were — see
+        // SubjectOfferingController::bulkUpdateWeeklyHours().
+        Route::post('subject-offerings/bulk-update-weekly-hours', [SubjectOfferingController::class, 'bulkUpdateWeeklyHours'])
+            ->name('subject-offerings.bulk-update-weekly-hours');
+
         /*
         |--------------------------------------------------------------------------
         | Audit Logs
