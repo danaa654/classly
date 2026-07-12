@@ -554,18 +554,43 @@ class FacultyController extends Controller implements HasMiddleware
      */
     public function destroy(Request $request, Faculty $faculty)
     {
+        // Widened beyond schedules() alone — a Teaching Assignment can
+        // exist (Faculty Loading) even before a Master Grid Schedule
+        // row is committed (see MasterGridController::syncTeachingAssignment(),
+        // which is the reverse case: a Schedule can exist without a
+        // Teaching Assignment). Either one means this faculty member
+        // is genuinely "in use", so both should trigger the same
+        // double-confirm warning, not just schedules().
         $hasSchedule = $faculty->schedules()->exists();
+        $hasTeachingAssignment = $faculty->teachingAssignments()->exists();
 
-        if ($hasSchedule && ! $request->boolean('confirmed')) {
+        if (($hasSchedule || $hasTeachingAssignment) && ! $request->boolean('confirmed')) {
             return back()->with(
                 'warning',
-                "{$faculty->full_name} already has scheduled classes. Confirm again to delete anyway."
+                "{$faculty->full_name} already has scheduled classes or teaching assignments. Confirm again to delete anyway."
             );
         }
 
         $facultyName = $faculty->full_name;
 
-        $faculty->delete();
+        // Even after confirmation, a plain delete() can still throw a
+        // raw FK violation from tables this method never checks
+        // (faculty_subjects, faculty_load_overloads,
+        // faculty_subject_offering, faculty_load_activities) — the
+        // confirm above only accounts for schedules/teaching
+        // assignments. Wrapping in try/catch turns that into a
+        // friendly redirect instead of a 500, same pattern as every
+        // other destroy() in this codebase.
+        try {
+            $faculty->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with(
+                'error',
+                "Unable to delete {$facultyName}. They still have related records (subject assignments, overload requests, or activity history) that must be removed first."
+            );
+        }
 
         AuditLogService::log(
             action: 'deleted',

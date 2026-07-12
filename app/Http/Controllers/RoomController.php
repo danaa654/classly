@@ -354,7 +354,15 @@ class RoomController extends Controller implements HasMiddleware
 
         $roomCode = $room->room_code;
 
-        $room->delete();
+        try {
+            $room->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('rooms.index')
+                ->with('error', "Unable to delete {$roomCode}. It still has related records that must be removed first.");
+        }
 
         AuditLogService::log(
             action: 'deleted',

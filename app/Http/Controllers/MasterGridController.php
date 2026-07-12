@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\AcademicTerm;
+use App\Models\Department;
 use App\Models\Schedule;
 use App\Models\SubjectOffering;
 use App\Models\TeachingAssignment;
 use App\Models\User;
+use App\Notifications\MasterGridScheduleSaved;
 use App\Services\GreedyScheduleService;
 use App\Services\MasterGridDataService;
 use App\Services\ScheduleRecommendationService;
@@ -20,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Inertia;
 use Throwable;
 
@@ -339,6 +342,46 @@ class MasterGridController extends Controller implements HasMiddleware
 
         $blocks = collect($validated['blocks']);
 
+        // Rule 5/7 of College Finalization: reject the batch if it
+        // would actually WRITE a change to a finalized college's
+        // schedule. Deliberately NOT "any finalized-college offering
+        // present in $blocks at all" — Save Schedule resubmits the
+        // full grid on every save, including untouched blocks from
+        // OTHER colleges that just happen to still be on screen. Only
+        // offerings whose incoming day/time/room/faculty actually
+        // differs from what's already committed (or that don't exist
+        // in `schedules` yet at all) count as a real write; an
+        // unmodified finalized block riding along in the payload is a
+        // no-op and must not block someone else's unrelated edit.
+        $existingSchedules = Schedule::whereIn('subject_offering_id', $blocks->pluck('subject_offering_id')->unique())
+            ->get()
+            ->groupBy('subject_offering_id');
+
+        $changedOfferingIds = $blocks
+            ->filter(function (array $block) use ($existingSchedules) {
+                $existing = $existingSchedules->get($block['subject_offering_id'], collect())
+                    ->firstWhere('day', $block['day']);
+
+                if (! $existing) {
+                    return true; // brand new meeting row -> a real write
+                }
+
+                return (int) $existing->room_id !== (int) ($block['room_id'] ?? null)
+                    || (int) $existing->start_minutes !== (int) ($block['start_minutes'] ?? null)
+                    || (int) $existing->end_minutes !== (int) ($block['end_minutes'] ?? null)
+                    || (int) $existing->faculty_id !== (int) ($block['faculty_id'] ?? null);
+            })
+            ->pluck('subject_offering_id')
+            ->unique();
+
+        \App\Models\SubjectOffering::whereIn('id', $changedOfferingIds)
+            ->with('program')
+            ->get()
+            ->pluck('program.department_id')
+            ->filter()
+            ->unique()
+            ->each(fn ($departmentId) => \App\Services\TermFinalizationService::abortIfDepartmentFinalized($departmentId, $planningTerm->id));
+
         $conflictsByOffering = $this->validator->validateAll($blocks, $planningTerm);
 
         if (! empty($conflictsByOffering)) {
@@ -436,6 +479,8 @@ class MasterGridController extends Controller implements HasMiddleware
             regenerated: $isRegeneration,
         );
 
+        $this->notifyDepartmentsOfSave($changedOfferingIds, $planningTerm, auth()->user());
+
         return response()->json([
             'message' => 'Schedule generated successfully.',
         ]);
@@ -472,6 +517,13 @@ class MasterGridController extends Controller implements HasMiddleware
 
         $this->workspace->assertWritable($planningTerm);
 
+        $offering = \App\Models\SubjectOffering::with('program')
+            ->find($validated['subject_offering_id']);
+
+        if ($offering && $departmentId = $offering->program?->department_id) {
+            \App\Services\TermFinalizationService::abortIfDepartmentFinalized($departmentId, $planningTerm->id);
+        }
+
         $deleted = Schedule::forTerm($planningTerm->id)
             ->where('subject_offering_id', $validated['subject_offering_id'])
             ->delete();
@@ -499,6 +551,81 @@ class MasterGridController extends Controller implements HasMiddleware
             'message' => 'Schedule removed — this subject is unscheduled again.',
             'subject_offering_id' => (int) $validated['subject_offering_id'],
         ]);
+    }
+
+    /**
+     * Groups $changedOfferingIds (real writes only — see save()'s
+     * docblock on why this is $changedOfferingIds and not every
+     * offering in the payload) by department and sends one batched
+     * MasterGridScheduleSaved notification per affected college. A
+     * single save touching 12 subjects across CCS and CTE sends
+     * exactly 2 notifications (one per college), never 12.
+     *
+     * General Education offerings (department_id null) are skipped —
+     * same reasoning as every other department-scoped notification in
+     * this app: there's no single Dean/OIC to address it to.
+     */
+    private function notifyDepartmentsOfSave($changedOfferingIds, AcademicTerm $term, User $performedBy): void
+    {
+        if ($changedOfferingIds->isEmpty()) {
+            return;
+        }
+
+        $byDepartment = SubjectOffering::whereIn('id', $changedOfferingIds)
+            ->with('program')
+            ->get()
+            ->groupBy(fn (SubjectOffering $offering) => $offering->program?->department_id);
+
+        foreach ($byDepartment as $departmentId => $offerings) {
+            if (! $departmentId) {
+                continue;
+            }
+
+            $department = Department::find($departmentId);
+
+            if (! $department) {
+                continue;
+            }
+
+            $recipients = $this->resolveStakeholders($department, $performedBy);
+
+            if ($recipients->isEmpty()) {
+                continue;
+            }
+
+            Notification::send($recipients, new MasterGridScheduleSaved(
+                $department,
+                $term,
+                $performedBy,
+                $offerings->count()
+            ));
+        }
+    }
+
+    /**
+     * Admin + Registrar + Assistant Dean (global tiers) merged with
+     * one college's Dean/OIC (department-scoped tier), deduplicated,
+     * with whoever performed the save removed from the list. Exact
+     * same recipient rule as
+     * TermFinalizationService::resolveStakeholders() — duplicated
+     * here rather than shared, since Master Grid's save() lives in
+     * this controller directly with no owning notification service of
+     * its own (unlike Faculty Load Overload / College Finalization,
+     * which each have one). If this rule needs to change, update both
+     * places.
+     */
+    private function resolveStakeholders(Department $department, User $performedBy): \Illuminate\Support\Collection
+    {
+        $global = User::role(['Admin', 'Registrar', 'Assistant Dean'])->get();
+
+        $departmentScoped = User::role(['Dean', 'OIC'])
+            ->where('department_id', $department->id)
+            ->get();
+
+        return $global->merge($departmentScoped)
+            ->unique('id')
+            ->reject(fn (User $user) => $user->id === $performedBy->id)
+            ->values();
     }
 
     /**

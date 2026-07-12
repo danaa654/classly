@@ -189,14 +189,6 @@ const fireflies = Array.from({ length: 22 }, (_, i) => ({
                             :class="folder.accent.glow"
                         ></div>
 
-                        <!-- Level badge -->
-                        <span
-                            class="absolute left-0 top-0 rounded-br-xl rounded-tl-2xl bg-gradient-to-r px-3.5 py-1.5 text-[11px] font-bold tracking-wide text-white shadow-sm"
-                            :class="folder.accent.badge"
-                        >
-                            LEVEL 0
-                        </span>
-
                         <!-- Icon -->
                         <div
                             class="relative mx-auto mb-5 mt-5 flex h-16 w-16 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-105"

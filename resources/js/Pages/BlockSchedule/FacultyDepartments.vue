@@ -176,7 +176,7 @@ const fireflies = Array.from({ length: 16 }, (_, i) => ({
                             </div>
 
                             <h2 class="text-lg font-extrabold" style="color: var(--text-primary)">{{ department.code }}</h2>
-                            <p class="mb-3 text-sm" style="color: var(--text-muted)">{{ department.name }}</p>
+                            <p class="mb-3 text-sm font-bold" style="color: var(--text-primary)">{{ department.name }}</p>
 
                             <span
                                 class="inline-block rounded-full px-3 py-1 text-xs font-bold"
@@ -214,7 +214,7 @@ const fireflies = Array.from({ length: 16 }, (_, i) => ({
                             </div>
 
                             <h2 class="text-lg font-extrabold" style="color: var(--text-primary)">{{ department.code }}</h2>
-                            <p class="mb-3 text-sm" style="color: var(--text-muted)">{{ department.name }}</p>
+                            <p class="mb-3 text-sm font-bold" style="color: var(--text-primary)">{{ department.name }}</p>
 
                             <span
                                 class="inline-block rounded-full px-3 py-1 text-xs font-bold"

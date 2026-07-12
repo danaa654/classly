@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateCurriculumItemRequest;
 use App\Models\Curriculum;
 use App\Models\CurriculumItem;
 use App\Models\Subject;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -169,6 +170,8 @@ class CurriculumItemController extends Controller implements HasMiddleware
             ->where('semester', $validated['semester'])
             ->max('sort_order');
 
+        $curriculum = Curriculum::find($validated['curriculum_id']);
+
         foreach ($toAssign as $subjectId) {
             $nextSortOrder += 10;
 
@@ -185,6 +188,26 @@ class CurriculumItemController extends Controller implements HasMiddleware
 
         $assignedCount = count($toAssign);
         $skippedCount = count($validated['subject_ids']) - $assignedCount;
+
+        // Audit Log — one summary row for the whole batch, not one
+        // per subject, same "bulk action gets one log entry" pattern
+        // as SubjectOfferingController::bulkUpdateWeeklyHours(). This
+        // is curriculum prospectus setup (master data), not a
+        // scheduling milestone, so it belongs in Audit Logs.
+        AuditLogService::log(
+            action: 'created',
+            module: 'Curriculum',
+            model: $curriculum,
+            description: "Added {$assignedCount} subject(s) to {$curriculum?->code} (Year {$validated['year_level']}, Semester {$validated['semester']})",
+            newValues: [
+                'curriculum' => $curriculum?->code,
+                'year_level' => $validated['year_level'],
+                'semester' => $validated['semester'],
+                'subject_ids' => $toAssign,
+                'assigned_count' => $assignedCount,
+            ],
+            recordName: $curriculum?->code,
+        );
 
         $message = $assignedCount === 1
             ? '1 subject added successfully.'
@@ -212,7 +235,7 @@ class CurriculumItemController extends Controller implements HasMiddleware
             ->where('semester', $validated['semester'])
             ->max('sort_order');
 
-        CurriculumItem::create([
+        $item = CurriculumItem::create([
             'curriculum_id' => $validated['curriculum_id'],
             'item_type' => CurriculumItem::TYPE_OJT,
             'subject_id' => $validated['subject_id'],
@@ -222,6 +245,24 @@ class CurriculumItemController extends Controller implements HasMiddleware
             'sort_order' => $nextSortOrder,
             'active' => $validated['active'],
         ]);
+
+        $curriculum = Curriculum::find($validated['curriculum_id']);
+        $item->loadMissing('subject');
+
+        AuditLogService::log(
+            action: 'created',
+            module: 'Curriculum',
+            model: $curriculum,
+            description: "Added Practicum/OJT item ({$item->subject?->descriptive_title}) to {$curriculum?->code}",
+            newValues: [
+                'curriculum' => $curriculum?->code,
+                'subject' => $item->subject?->descriptive_title,
+                'ojt_hours' => $item->ojt_hours,
+                'year_level' => $item->year_level,
+                'semester' => $item->semester,
+            ],
+            recordName: $curriculum?->code,
+        );
 
         return redirect()
             ->route('curriculums.items.manage', $validated['curriculum_id'])
@@ -281,7 +322,36 @@ class CurriculumItemController extends Controller implements HasMiddleware
 
         $validated['sort_order'] = $validated['sort_order'] ?? $curriculumItem->sort_order;
 
+        // Captured BEFORE any changes are applied, same convention as
+        // every other controller's update() in this codebase — this
+        // is what makes old_values possible below.
+        $curriculumItem->loadMissing(['curriculum', 'subject']);
+        $oldValues = [
+            'curriculum' => $curriculumItem->curriculum?->code,
+            'subject' => $curriculumItem->subject?->descriptive_title,
+            'year_level' => $curriculumItem->year_level,
+            'semester' => $curriculumItem->semester,
+            'sort_order' => $curriculumItem->sort_order,
+        ];
+
         $curriculumItem->update($validated);
+        $curriculumItem->refresh()->loadMissing(['curriculum', 'subject']);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Curriculum',
+            model: $curriculumItem,
+            description: "Updated curriculum item in {$curriculumItem->curriculum?->code}",
+            oldValues: $oldValues,
+            newValues: [
+                'curriculum' => $curriculumItem->curriculum?->code,
+                'subject' => $curriculumItem->subject?->descriptive_title,
+                'year_level' => $curriculumItem->year_level,
+                'semester' => $curriculumItem->semester,
+                'sort_order' => $curriculumItem->sort_order,
+            ],
+            recordName: $curriculumItem->curriculum?->code,
+        );
 
         return redirect()
             ->route('curriculums.items.manage', $validated['curriculum_id'])
@@ -297,7 +367,43 @@ class CurriculumItemController extends Controller implements HasMiddleware
      */
     public function destroy(CurriculumItem $curriculumItem)
     {
-        $curriculumItem->delete();
+        // Block removal if a Subject Offering has already been
+        // generated from this item for some Academic Term. Offerings
+        // are snapshotted at generation time (see
+        // SubjectOfferingGeneratorService), so this item is the
+        // source record they point back to — removing it here would
+        // either throw a raw FK violation or (worse, if the
+        // constraint were ever relaxed) silently orphan real
+        // scheduling data. Same guard pattern as
+        // CurriculumController::destroy() and
+        // SubjectOfferingController::destroy()'s own
+        // teachingAssignment check.
+        if ($curriculumItem->subjectOfferings()->exists()) {
+            return back()->with('error', 'Unable to remove this item — Subject Offerings have already been generated from it. Remove those offerings first.');
+        }
+
+        // Captured before delete() — nothing left in the database to
+        // read back afterward, same reasoning as
+        // SectionController::destroy()'s Audit Log call.
+        $curriculumItem->loadMissing(['curriculum', 'subject']);
+        $curriculumCode = $curriculumItem->curriculum?->code;
+        $subjectLabel = $curriculumItem->subject?->descriptive_title;
+
+        try {
+            $curriculumItem->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Unable to remove this item from the curriculum.');
+        }
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Curriculum',
+            description: "Removed curriculum item ({$subjectLabel}) from {$curriculumCode}",
+            oldValues: ['curriculum' => $curriculumCode, 'subject' => $subjectLabel],
+            recordName: $curriculumCode,
+        );
 
         return back()->with('success', 'Item removed from curriculum successfully.');
     }

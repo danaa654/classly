@@ -44,12 +44,12 @@ function closeMenu() {
 
 /*
 |--------------------------------------------------------------------------
-| Notifications — Faculty Load Overload
+| Notifications — Faculty Load Overload + College Finalization
 |--------------------------------------------------------------------------
 |
 | Shared on every page by HandleInertiaRequests as
 | page.props.overloadNotifications (unread only, current user only).
-| Three shapes flow through this one list — distinguished by
+| Five shapes flow through this one list — distinguished by
 | notification.type:
 |
 |   - ...FacultyLoadOverloadRequested        — sent to Admin/Registrar
@@ -63,6 +63,27 @@ function closeMenu() {
 |     Dean/OIC when Admin/Registrar directly adds overload units to
 |     one of their faculty. Read-only, dismiss only — nothing to
 |     approve, it's already applied.
+|   - ...ScheduleFinalized                    — sent to Admin/
+|     Registrar/Assistant Dean + that college's Dean/OIC (minus
+|     whoever performed the action) when a college's schedule is
+|     finalized. Read-only, dismiss only.
+|   - ...ScheduleUnfinalized                  — same recipients as
+|     above, for the schedule being reopened for editing. Read-only,
+|     dismiss only.
+|   - ...MasterGridScheduleSaved                — sent to Admin/
+|     Registrar/Assistant Dean + that college's Dean/OIC (minus
+|     whoever performed the action) when a Master Grid save actually
+|     changes one or more of that college's Subject Offerings.
+|     Batched per college per save. Read-only, dismiss only.
+|   - ...SubjectOfferingsGenerated                — same recipients as
+|     above, sent when new Subject Offerings are generated for a
+|     college's curriculum. Read-only, dismiss only.
+|   - ...SectionCreated                             — same recipients
+|     as above, sent when a new Section is created under a college's
+|     curriculum. Unlike the others, this one IS actionable — clicking
+|     it dismisses and jumps to that Section's Edit page (see
+|     goToSection() below), the same "dismiss + navigate" pattern as
+|     the overload request notification.
 |
 | If other notification types get added later, this is the one place
 | that needs to grow to merge them in.
@@ -77,6 +98,26 @@ function isRequestNotification(notification) {
 
 function isAppliedNotification(notification) {
     return notification.type?.endsWith('FacultyLoadOverloadAppliedByAdmin')
+}
+
+function isFinalizedNotification(notification) {
+    return notification.type?.endsWith('ScheduleFinalized')
+}
+
+function isUnfinalizedNotification(notification) {
+    return notification.type?.endsWith('ScheduleUnfinalized')
+}
+
+function isSavedNotification(notification) {
+    return notification.type?.endsWith('MasterGridScheduleSaved')
+}
+
+function isGeneratedNotification(notification) {
+    return notification.type?.endsWith('SubjectOfferingsGenerated')
+}
+
+function isSectionCreatedNotification(notification) {
+    return notification.type?.endsWith('SectionCreated')
 }
 
 const notificationsOpen = ref(false)
@@ -111,6 +152,14 @@ function goToFacultyLoading(notification) {
     dismissNotification(notification)
     notificationsOpen.value = false
     router.visit(route('teaching-assignments.index'))
+}
+
+// A new-Section notification is actionable — clicking it dismisses it
+// and takes the recipient straight to that Section's Edit page.
+function goToSection(notification) {
+    dismissNotification(notification)
+    notificationsOpen.value = false
+    router.visit(route('sections.edit', notification.data.section_id))
 }
 
 // "Just now" / "5m ago" / "3h ago" / "2d ago" — small and dependency-free
@@ -313,7 +362,7 @@ function timeAgo(isoString) {
                         </button>
                     </div>
 
-                    <div class="overflow-y-auto">
+                    <div class="overflow-y-auto notif-scroll">
                         <p v-if="!notifications.length" class="px-3 py-6 text-center text-[12px] text-white/40">
                             You're all caught up.
                         </p>
@@ -350,6 +399,91 @@ function timeAgo(isoString) {
                                 <div class="min-w-0 flex-1 cursor-pointer" @click="goToFacultyLoading(notification)">
                                     <p class="text-[11px] font-bold uppercase tracking-wide text-sky-300">
                                         Overload Units Added
+                                    </p>
+                                    <p class="mt-0.5 text-[12px] leading-snug text-white/80">
+                                        {{ notification.data.message }}
+                                    </p>
+                                    <div class="mt-1 text-[10px] text-white/40">
+                                        {{ timeAgo(notification.created_at) }}
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- A college's schedule was finalized (now read-only) -->
+                            <template v-else-if="isFinalizedNotification(notification)">
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400"></span>
+
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-violet-300">
+                                        Schedule Finalized
+                                    </p>
+                                    <p class="mt-0.5 text-[12px] leading-snug text-white/80">
+                                        {{ notification.data.message }}
+                                    </p>
+                                    <div class="mt-1 text-[10px] text-white/40">
+                                        {{ timeAgo(notification.created_at) }}
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- A college's schedule was reopened for editing -->
+                            <template v-else-if="isUnfinalizedNotification(notification)">
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-400"></span>
+
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-teal-300">
+                                        Schedule Reopened
+                                    </p>
+                                    <p class="mt-0.5 text-[12px] leading-snug text-white/80">
+                                        {{ notification.data.message }}
+                                    </p>
+                                    <div class="mt-1 text-[10px] text-white/40">
+                                        {{ timeAgo(notification.created_at) }}
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Master Grid save changed one or more of this college's offerings -->
+                            <template v-else-if="isSavedNotification(notification)">
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400"></span>
+
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-indigo-300">
+                                        Master Grid Saved
+                                    </p>
+                                    <p class="mt-0.5 text-[12px] leading-snug text-white/80">
+                                        {{ notification.data.message }}
+                                    </p>
+                                    <div class="mt-1 text-[10px] text-white/40">
+                                        {{ timeAgo(notification.created_at) }}
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- New Subject Offerings generated for a college's curriculum -->
+                            <template v-else-if="isGeneratedNotification(notification)">
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-lime-400"></span>
+
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-lime-300">
+                                        Subject Offerings Generated
+                                    </p>
+                                    <p class="mt-0.5 text-[12px] leading-snug text-white/80">
+                                        {{ notification.data.message }}
+                                    </p>
+                                    <div class="mt-1 text-[10px] text-white/40">
+                                        {{ timeAgo(notification.created_at) }}
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- New Section created under a college's curriculum -->
+                            <template v-else-if="isSectionCreatedNotification(notification)">
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-fuchsia-400"></span>
+
+                                <div class="min-w-0 flex-1 cursor-pointer" @click="goToSection(notification)">
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-fuchsia-300">
+                                        Section Created
                                     </p>
                                     <p class="mt-0.5 text-[12px] leading-snug text-white/80">
                                         {{ notification.data.message }}
@@ -404,3 +538,29 @@ function timeAgo(isoString) {
         </div>
     </header>
 </template>
+
+<style scoped>
+/* Thin scrollbar for the notifications dropdown list — Firefox */
+.notif-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+/* Thin scrollbar — Chrome / Safari / Edge */
+.notif-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.notif-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.notif-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-radius: 9999px;
+}
+
+.notif-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+}
+</style>

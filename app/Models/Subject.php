@@ -162,6 +162,18 @@ class Subject extends Model
             ->withTimestamps();
     }
 
+    // Every Subject Offering generated for this subject
+    // (subject_offerings.subject_id) — offerings are snapshotted
+    // copies taken at generation time, but they still carry a direct
+    // FK back to the Subject master row. Needed by
+    // SubjectController::destroy() to block deletion once offerings
+    // exist, the same way CurriculumItem::subjectOfferings() blocks
+    // it one level up.
+    public function subjectOfferings()
+    {
+        return $this->hasMany(SubjectOffering::class);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Faculty Assignment

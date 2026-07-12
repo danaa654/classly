@@ -37,6 +37,56 @@ use Inertia\Inertia;
  */
 class BlockScheduleController extends Controller implements HasMiddleware
 {
+    /**
+     * Canonical Mon->Sat ordering for the `day` column, which is
+     * stored as a plain lowercase string (no inherent sort order of
+     * its own) — used so a 2x/3x subject's meeting days always print
+     * "monday, wednesday" rather than whatever order the rows
+     * happened to come back from the database in.
+     */
+    private const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+    /**
+     * Collapses a Subject Offering's/Teaching Assignment's full set of
+     * committed Schedule rows (one per meeting day — see Schedule.php)
+     * into the single day/time/room shape every Block Schedule /
+     * Faculty Schedule row displays. Every meeting day shares the same
+     * start/end/room (Edit Schedule only ever exposes one Start/Room
+     * field for a whole 2x/3x group — see EditScheduleModal.vue), so
+     * it's safe to read those off the first row and only fan out the
+     * `day` value itself across all of them.
+     *
+     * Returns the same "Unscheduled"-friendly null shape as before
+     * when there are no Schedule rows yet.
+     */
+    private function summarizeSchedule($schedules): array
+    {
+        $schedules = collect($schedules);
+
+        if ($schedules->isEmpty()) {
+            return [
+                'days' => [],
+                'start_minutes' => null,
+                'end_minutes' => null,
+                'room_code' => null,
+            ];
+        }
+
+        $first = $schedules->first();
+
+        return [
+            'days' => $schedules
+                ->pluck('day')
+                ->unique()
+                ->sortBy(fn ($day) => array_search($day, self::DAY_ORDER))
+                ->values()
+                ->all(),
+            'start_minutes' => $first->start_minutes,
+            'end_minutes' => $first->end_minutes,
+            'room_code' => $first->room?->room_code,
+        ];
+    }
+
     public function __construct(
         private readonly SchedulingWorkspaceService $workspace
     ) {
@@ -151,10 +201,38 @@ class BlockScheduleController extends Controller implements HasMiddleware
         $sections = $term
             ? Section::whereHas('curriculum.program', fn ($q) => $q->where('department_id', $department->id))
                 ->whereHas('subjectOfferings', fn ($q) => $q->where('academic_term_id', $term->id))
-                ->withCount(['subjectOfferings as offering_count' => fn ($q) => $q->where('academic_term_id', $term->id)])
+                ->withCount([
+                    'subjectOfferings as offering_count' => fn ($q) => $q->where('academic_term_id', $term->id),
+
+                    // How many of this block's offerings already have
+                    // at least one committed Master Grid Schedule row
+                    // (day/time/room) — see SubjectOffering::schedule().
+                    // This is what schedule_status below is derived
+                    // from: comparing this against offering_count tells
+                    // us whether the block is fully scheduled, partly
+                    // scheduled, or untouched.
+                    'subjectOfferings as scheduled_count' => fn ($q) => $q
+                        ->where('academic_term_id', $term->id)
+                        ->whereHas('schedule'),
+                ])
                 ->orderBy('year_level')
                 ->orderBy('section_code')
                 ->get(['id', 'section_code', 'section_name', 'year_level', 'curriculum_id'])
+
+                // Derived, not stored — a block's schedule_status is
+                // always a live reflection of offering_count vs
+                // scheduled_count, so it can never drift out of sync
+                // with the underlying Schedule rows the way a cached
+                // status column could.
+                ->map(function (Section $section) {
+                    $section->schedule_status = match (true) {
+                        $section->scheduled_count === 0 => 'red',
+                        $section->scheduled_count < $section->offering_count => 'orange',
+                        default => 'green',
+                    };
+
+                    return $section;
+                })
             : collect();
 
         return Inertia::render('BlockSchedule/Sections', [
@@ -177,7 +255,7 @@ class BlockScheduleController extends Controller implements HasMiddleware
      * without a PDF library, and a printed handout needs every
      * matching row, not a page of 20.
      *
-     * Reuses the exact same offering->schedule mapping shape as
+     * Reuses the exact same offering->schedules summarizing shape as
      * show() above (edp_code/subject_code/hours/day/room/faculty) so
      * the single-Block print preview a Registrar already knows and
      * this whole-department version never drift apart in what
@@ -194,7 +272,7 @@ class BlockScheduleController extends Controller implements HasMiddleware
                     'subject:id,subject_code,descriptive_title',
                     'section:id,section_code,section_name,year_level',
                     'teachingAssignment.faculty:id,first_name,last_name',
-                    'teachingAssignment.schedule.room:id,room_code,building',
+                    'teachingAssignment.schedules.room:id,room_code,building',
                 ])
                 ->where('academic_term_id', $term->id)
                 ->whereHas(
@@ -222,7 +300,7 @@ class BlockScheduleController extends Controller implements HasMiddleware
                         ->sortBy('edp_code')
                         ->values()
                         ->map(function (SubjectOffering $offering) {
-                            $schedule = $offering->teachingAssignment?->schedule;
+                            $summary = $this->summarizeSchedule($offering->teachingAssignment?->schedules ?? []);
 
                             return [
                                 'edp_code' => $offering->edp_code,
@@ -230,10 +308,7 @@ class BlockScheduleController extends Controller implements HasMiddleware
                                 'descriptive_title' => $offering->subject?->descriptive_title,
                                 'units' => $offering->units,
                                 'faculty_name' => $offering->teachingAssignment?->faculty?->full_name,
-                                'day' => $schedule?->day,
-                                'start_minutes' => $schedule?->start_minutes,
-                                'end_minutes' => $schedule?->end_minutes,
-                                'room_code' => $schedule?->room?->room_code,
+                                ...$summary,
                             ];
                         }),
                 ];
@@ -253,7 +328,7 @@ class BlockScheduleController extends Controller implements HasMiddleware
      * Level 3 — the actual block schedule: one row per Subject
      * Offering in this Section for the Working Term, with Day/Time/
      * Room pulled from its committed Schedule (via
-     * teachingAssignment->schedule — see TeachingAssignment::schedule())
+     * teachingAssignment->schedules — see TeachingAssignment::schedules())
      * and Faculty from its Teaching Assignment. A Subject Offering
      * that hasn't been scheduled yet on Master Grid simply shows
      * "Unscheduled" / "TBA" — this page never invents a placement.
@@ -268,13 +343,13 @@ class BlockScheduleController extends Controller implements HasMiddleware
             ? SubjectOffering::with([
                     'subject:id,subject_code,descriptive_title',
                     'teachingAssignment.faculty:id,first_name,last_name',
-                    'teachingAssignment.schedule.room:id,room_code,building',
+                    'teachingAssignment.schedules.room:id,room_code,building',
                 ])
                 ->where('academic_term_id', $term->id)
                 ->where('section_id', $section->id)
                 ->get()
                 ->map(function (SubjectOffering $offering) {
-                    $schedule = $offering->teachingAssignment?->schedule;
+                    $summary = $this->summarizeSchedule($offering->teachingAssignment?->schedules ?? []);
 
                     return [
                         'id' => $offering->id,
@@ -283,10 +358,7 @@ class BlockScheduleController extends Controller implements HasMiddleware
                         'descriptive_title' => $offering->subject?->descriptive_title,
                         'units' => $offering->units,
                         'faculty_name' => $offering->teachingAssignment?->faculty?->full_name,
-                        'day' => $schedule?->day,
-                        'start_minutes' => $schedule?->start_minutes,
-                        'end_minutes' => $schedule?->end_minutes,
-                        'room_code' => $schedule?->room?->room_code,
+                        ...$summary,
                     ];
                 })
                 ->sortBy('edp_code')
@@ -645,14 +717,14 @@ class BlockScheduleController extends Controller implements HasMiddleware
         return TeachingAssignment::with([
                 'subjectOffering.subject:id,subject_code,descriptive_title',
                 'subjectOffering.section:id,section_code,section_name',
-                'schedule.room:id,room_code,building',
+                'schedules.room:id,room_code,building',
             ])
             ->where('faculty_id', $faculty->id)
             ->forTerm($term->id)
             ->get()
             ->map(function (TeachingAssignment $ta) {
                 $offering = $ta->subjectOffering;
-                $schedule = $ta->schedule;
+                $summary = $this->summarizeSchedule($ta->schedules);
 
                 return [
                     'id' => $ta->id,
@@ -661,10 +733,7 @@ class BlockScheduleController extends Controller implements HasMiddleware
                     'descriptive_title' => $offering?->subject?->descriptive_title,
                     'section_code' => $offering?->section?->section_code,
                     'units' => $offering?->units,
-                    'day' => $schedule?->day,
-                    'start_minutes' => $schedule?->start_minutes,
-                    'end_minutes' => $schedule?->end_minutes,
-                    'room_code' => $schedule?->room?->room_code,
+                    ...$summary,
                 ];
             })
             ->sortBy('edp_code')

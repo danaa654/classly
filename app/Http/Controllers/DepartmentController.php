@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -61,7 +62,7 @@ class DepartmentController extends Controller implements HasMiddleware
             'active' => 'required|boolean',
         ]);
 
-        Department::create([
+        $department = Department::create([
             'name' => $validated['name'],
 
             'abbreviation' => strtoupper($validated['abbreviation']),
@@ -70,6 +71,24 @@ class DepartmentController extends Controller implements HasMiddleware
 
             'active' => $validated['active'],
         ]);
+
+        // Audit Log — master data setup, same tier as
+        // Sections/Curriculums/Specializations, not a scheduling
+        // milestone, so this belongs in Audit Logs, not Activity
+        // History. 'College' is already a valid module in
+        // AuditLogService::MODULES.
+        AuditLogService::log(
+            action: 'created',
+            module: 'College',
+            model: $department,
+            description: "Created college {$department->name} ({$department->abbreviation})",
+            newValues: [
+                'name' => $department->name,
+                'abbreviation' => $department->abbreviation,
+                'description' => $department->description,
+                'active' => $department->active,
+            ],
+        );
 
         return redirect()
             ->route('departments.index')
@@ -109,6 +128,16 @@ class DepartmentController extends Controller implements HasMiddleware
             'active' => 'required|boolean',
         ]);
 
+        // Captured BEFORE any changes are applied, same convention as
+        // UserController::update() / SectionController::update() —
+        // this is what makes old_values possible below.
+        $oldValues = [
+            'name' => $department->name,
+            'abbreviation' => $department->abbreviation,
+            'description' => $department->description,
+            'active' => $department->active,
+        ];
+
         $department->update([
             'name' => $validated['name'],
 
@@ -118,6 +147,20 @@ class DepartmentController extends Controller implements HasMiddleware
 
             'active' => $validated['active'],
         ]);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'College',
+            model: $department,
+            description: "Updated college {$department->name}",
+            oldValues: $oldValues,
+            newValues: [
+                'name' => $department->name,
+                'abbreviation' => $department->abbreviation,
+                'description' => $department->description,
+                'active' => $department->active,
+            ],
+        );
 
         return redirect()
             ->route('departments.index')
@@ -129,7 +172,42 @@ class DepartmentController extends Controller implements HasMiddleware
      */
     public function destroy(Department $department)
     {
-        $department->delete();
+        // Block deletion if this college still has programs attached.
+        // Curricula and Specializations both hang off Program (not
+        // Department directly), so checking programs() is sufficient —
+        // if there are no programs left, there can't be any curricula
+        // or specializations tied to this college either. Same pattern
+        // as CurriculumController::destroy()'s sections/curriculumItems
+        // check.
+        if ($department->programs()->exists()) {
+            return redirect()
+                ->route('departments.index')
+                ->with('error', 'Unable to delete this college. It has associated programs, curriculums, or specializations. Please remove or reassign them first.');
+        }
+
+        // Captured before delete() — nothing left in the database to
+        // read back afterward, same reasoning as
+        // SectionController::destroy()'s Audit Log call.
+        $name = $department->name;
+        $abbreviation = $department->abbreviation;
+
+        try {
+            $department->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('departments.index')
+                ->with('error', 'Unable to delete the selected college.');
+        }
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'College',
+            description: "Deleted college {$name} ({$abbreviation})",
+            oldValues: ['name' => $name, 'abbreviation' => $abbreviation],
+            recordName: $name,
+        );
 
         return redirect()
             ->route('departments.index')

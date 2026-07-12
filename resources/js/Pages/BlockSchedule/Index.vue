@@ -20,6 +20,22 @@ const accents = [
     { badge: 'bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300', ring: 'ring-orange-300', tab: 'bg-orange-500' },
 ]
 
+// One distinct emoji per college, keyed by department code, so each
+// folder card reads at a glance instead of every card sharing the
+// same generic folder icon. Falls back to a generic mortarboard for
+// any department code not listed here (new colleges added later,
+// etc.) — see the emojiFor() helper below.
+const DEPARTMENT_EMOJI = {
+    CCS: '💻',   // College of Computer Studies — computer
+    CCJ: '👮',   // College of Criminal Justice — police officer
+    CTE: '🧑‍🏫', // College of Teacher Education — teacher
+    SHTM: '🍽️',  // School of Hospitality and Tourism Management — dining/hospitality
+}
+
+function emojiFor(department) {
+    return DEPARTMENT_EMOJI[department.code] ?? '🎓'
+}
+
 // Same ambient background treatment as the Block Schedule landing
 // page — grid-line texture plus rising bubbles (light mode) /
 // drifting fireflies (dark mode) — computed once at setup time so
@@ -160,14 +176,12 @@ const fireflies = Array.from({ length: 16 }, (_, i) => ({
                         {{ department.code }}
                     </span>
 
-                    <div class="mx-auto mb-4 mt-4 flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/5">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-slate-500 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                        </svg>
+                    <div class="mx-auto mb-4 mt-4 flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 text-3xl dark:bg-white/5">
+                        {{ emojiFor(department) }}
                     </div>
 
                     <h2 class="text-lg font-extrabold" style="color: var(--text-primary)">{{ department.code }}</h2>
-                    <p class="mb-3 text-sm" style="color: var(--text-muted)">{{ department.name }}</p>
+                    <p class="mb-3 text-sm font-bold" style="color: var(--text-primary)">{{ department.name }}</p>
 
                     <span
                         class="inline-block rounded-full px-3 py-1 text-xs font-bold"

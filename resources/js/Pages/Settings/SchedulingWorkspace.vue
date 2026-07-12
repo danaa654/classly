@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue';
-import { useForm, Head } from '@inertiajs/vue3';
+import { computed, reactive } from 'vue';
+import { useForm, Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
@@ -8,6 +8,10 @@ const props = defineProps({
     planningTerm: Object,
     academicTerms: Array,
     can: Object,
+    departmentFinalizations: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const form = useForm({
@@ -23,6 +27,43 @@ const submit = () => {
 const isDirty = computed(
     () => form.academic_term_id !== (props.planningTerm?.id ?? null)
 );
+
+/**
+ * Two-step inline confirmation for Finalize/Unfinalize, matching the
+ * Remove Schedule pattern already used in the Master Grid workspace —
+ * clicking the action button once arms it (confirmingId), clicking
+ * again within the same row actually submits.
+ */
+const confirming = reactive({ id: null, action: null });
+const expandedDetails = reactive({});
+
+const arm = (departmentId, action) => {
+    confirming.id = departmentId;
+    confirming.action = action;
+};
+
+const cancelConfirm = () => {
+    confirming.id = null;
+    confirming.action = null;
+};
+
+const isConfirming = (departmentId, action) =>
+    confirming.id === departmentId && confirming.action === action;
+
+const runAction = (department, action) => {
+    const routeName = action === 'finalize'
+        ? 'settings.finalization.finalize'
+        : 'settings.finalization.unfinalize';
+
+    router.post(route(routeName, department.department_id), {}, {
+        preserveScroll: true,
+        onFinish: cancelConfirm,
+    });
+};
+
+const toggleDetails = (departmentId) => {
+    expandedDetails[departmentId] = !expandedDetails[departmentId];
+};
 </script>
 
 <template>
@@ -131,6 +172,131 @@ const isDirty = computed(
                         </button>
                     </div>
                 </form>
+            </div>
+
+            <!-- College Finalization Status (Admin/Registrar act, everyone views) -->
+            <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div class="p-6">
+                    <h3 class="text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                        College Finalization Status
+                    </h3>
+                    <p class="mt-2 text-sm text-gray-500 dark:text-slate-400">
+                        Lock a college's schedule for the Active Academic Term once every subject offering is
+                        fully scheduled. Finalized colleges become read-only across Master Grid, Faculty
+                        Loading, Subject Offerings, and Teaching Assignments until an Admin/Registrar
+                        unfinalizes them again.
+                    </p>
+
+                    <div v-if="!activeTerm" class="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
+                        There is no Active Academic Term, so no college can be finalized right now.
+                    </div>
+
+                    <div v-else class="mt-4 divide-y divide-gray-200 dark:divide-slate-800">
+                        <div
+                            v-for="dept in departmentFinalizations"
+                            :key="dept.department_id"
+                            class="py-4"
+                        >
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-900 dark:text-white">
+                                        {{ dept.department_name }}
+                                    </p>
+                                    <p class="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                                        <template v-if="dept.total_subjects === 0">
+                                            No Subject Offerings generated yet
+                                        </template>
+                                        <template v-else-if="dept.ready">
+                                            &#9989; Fully Scheduled ({{ dept.scheduled_subjects }}/{{ dept.total_subjects }})
+                                        </template>
+                                        <template v-else>
+                                            {{ dept.scheduled_subjects }}/{{ dept.total_subjects }} subjects scheduled
+                                            &bull;
+                                            <button
+                                                type="button"
+                                                class="underline hover:text-gray-700 dark:hover:text-slate-200"
+                                                @click="toggleDetails(dept.department_id)"
+                                            >
+                                                View Details
+                                            </button>
+                                        </template>
+                                    </p>
+                                </div>
+
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                                        :class="dept.finalized
+                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                                            : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400'"
+                                    >
+                                        {{ dept.finalized ? 'Finalized' : 'Draft' }}
+                                    </span>
+
+                                    <template v-if="can.edit">
+                                        <button
+                                            v-if="!dept.finalized"
+                                            type="button"
+                                            :disabled="!dept.ready"
+                                            :title="!dept.ready ? `${dept.incomplete_count} subject offering(s) still incomplete` : ''"
+                                            class="inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                                            :class="isConfirming(dept.department_id, 'finalize')
+                                                ? 'bg-rose-600 text-white hover:bg-rose-500'
+                                                : 'bg-indigo-600 text-white hover:bg-indigo-500'"
+                                            @click="isConfirming(dept.department_id, 'finalize')
+                                                ? runAction(dept, 'finalize')
+                                                : arm(dept.department_id, 'finalize')"
+                                        >
+                                            {{ isConfirming(dept.department_id, 'finalize') ? 'Confirm Finalize?' : 'Finalize' }}
+                                        </button>
+
+                                        <button
+                                            v-else
+                                            type="button"
+                                            class="inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold shadow-sm"
+                                            :class="isConfirming(dept.department_id, 'unfinalize')
+                                                ? 'bg-rose-600 text-white hover:bg-rose-500'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'"
+                                            @click="isConfirming(dept.department_id, 'unfinalize')
+                                                ? runAction(dept, 'unfinalize')
+                                                : arm(dept.department_id, 'unfinalize')"
+                                        >
+                                            {{ isConfirming(dept.department_id, 'unfinalize') ? 'Confirm Unfinalize?' : 'Unfinalize' }}
+                                        </button>
+
+                                        <button
+                                            v-if="confirming.id === dept.department_id"
+                                            type="button"
+                                            class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"
+                                            @click="cancelConfirm"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <p v-if="isConfirming(dept.department_id, 'unfinalize')" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                                Unfinalizing reopens {{ dept.department_name }}'s schedule for editing across
+                                Master Grid, Faculty Loading, Subject Offerings, and Teaching Assignments.
+                            </p>
+
+                            <ul
+                                v-if="expandedDetails[dept.department_id] && dept.incomplete_subjects"
+                                class="mt-3 space-y-1 rounded-md bg-gray-50 p-3 text-xs text-gray-600 dark:bg-slate-800/60 dark:text-slate-300"
+                            >
+                                <li v-for="row in dept.incomplete_subjects" :key="row.subject_offering_id">
+                                    <span class="font-medium">{{ row.subject_code }} &bull; {{ row.section }}</span>
+                                    — missing: {{ row.missing.join(', ') }}
+                                </li>
+                            </ul>
+                        </div>
+
+                        <p v-if="!departmentFinalizations.length" class="py-4 text-sm text-gray-500 dark:text-slate-400">
+                            No colleges found.
+                        </p>
+                    </div>
+                </div>
             </div>
 
         </div>

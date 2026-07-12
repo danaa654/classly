@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Program;
 use App\Models\Department;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -70,7 +71,29 @@ class ProgramController extends Controller implements HasMiddleware
 
         ]);
 
-        Program::create($validated);
+        $program = Program::create($validated);
+
+        // Audit Log — master data setup, same tier as
+        // College/Sections/Curriculum, not a scheduling milestone, so
+        // this belongs in Audit Logs, not Activity History. 'Program'
+        // isn't in AuditLogService::MODULES' static UI list, but that
+        // list is a convenience only (not a DB constraint) — the
+        // Audit Logs filter dropdown is populated from actual distinct
+        // rows already logged, so 'Program' shows up there correctly
+        // once this fires.
+        AuditLogService::log(
+            action: 'created',
+            module: 'Program',
+            model: $program,
+            description: "Created program {$program->name} ({$program->code})",
+            newValues: [
+                'code' => $program->code,
+                'name' => $program->name,
+                'department_id' => $program->department_id,
+                'years' => $program->years,
+                'active' => $program->active,
+            ],
+        );
 
         return redirect()
             ->route('programs.index')
@@ -120,7 +143,33 @@ class ProgramController extends Controller implements HasMiddleware
 
         ]);
 
+        // Captured BEFORE any changes are applied, same convention as
+        // every other controller's update() in this codebase — this
+        // is what makes old_values possible below.
+        $oldValues = [
+            'code' => $program->code,
+            'name' => $program->name,
+            'department_id' => $program->department_id,
+            'years' => $program->years,
+            'active' => $program->active,
+        ];
+
         $program->update($validated);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Program',
+            model: $program,
+            description: "Updated program {$program->name}",
+            oldValues: $oldValues,
+            newValues: [
+                'code' => $program->code,
+                'name' => $program->name,
+                'department_id' => $program->department_id,
+                'years' => $program->years,
+                'active' => $program->active,
+            ],
+        );
 
         return redirect()
             ->route('programs.index')
@@ -132,7 +181,41 @@ class ProgramController extends Controller implements HasMiddleware
      */
     public function destroy(Program $program)
     {
-        $program->delete();
+        // Block deletion if this program still has curricula or
+        // specializations attached. Same pattern as
+        // DepartmentController::destroy() and
+        // CurriculumController::destroy() — check for dependents
+        // before attempting delete() so we can show a friendly error
+        // instead of letting the DB throw a raw FK violation.
+        if ($program->curricula()->exists() || $program->specializations()->exists()) {
+            return redirect()
+                ->route('programs.index')
+                ->with('error', 'Unable to delete this program. It has associated curriculums or specializations. Please remove or reassign them first.');
+        }
+
+        // Captured before delete() — nothing left in the database to
+        // read back afterward, same reasoning as
+        // SectionController::destroy()'s Audit Log call.
+        $code = $program->code;
+        $name = $program->name;
+
+        try {
+            $program->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('programs.index')
+                ->with('error', 'Unable to delete the selected program.');
+        }
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Program',
+            description: "Deleted program {$name} ({$code})",
+            oldValues: ['code' => $code, 'name' => $name],
+            recordName: $name,
+        );
 
         return redirect()
             ->route('programs.index')

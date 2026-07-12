@@ -381,9 +381,42 @@ class SubjectController extends Controller implements HasMiddleware
      */
     public function destroy(Request $request, Subject $subject)
     {
+        // Block deletion if this subject is still attached to any
+        // curriculum's prospectus, has already had Subject Offerings
+        // generated from it, or is set as another subject's
+        // prerequisite. Same guard pattern as
+        // CurriculumController/CurriculumItemController::destroy() —
+        // check dependents before attempting delete() so we can show
+        // a friendly error instead of a raw FK violation.
+        if ($subject->curriculumItems()->exists()) {
+            return redirect()
+                ->route('subjects.index', $request->query())
+                ->with('error', 'Unable to delete this subject. It is still assigned to one or more curriculums.');
+        }
+
+        if ($subject->subjectOfferings()->exists()) {
+            return redirect()
+                ->route('subjects.index', $request->query())
+                ->with('error', 'Unable to delete this subject. Subject Offerings have already been generated for it.');
+        }
+
+        if ($subject->dependents()->exists()) {
+            return redirect()
+                ->route('subjects.index', $request->query())
+                ->with('error', 'Unable to delete this subject. It is set as a prerequisite for another subject.');
+        }
+
         $subjectCode = $subject->subject_code;
 
-        $subject->delete();
+        try {
+            $subject->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('subjects.index', $request->query())
+                ->with('error', 'Unable to delete the selected subject.');
+        }
 
         AuditLogService::log(
             action: 'deleted',

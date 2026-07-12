@@ -16,6 +16,7 @@ use App\Http\Controllers\SubjectOfferingController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\SectionController;
 use App\Http\Controllers\AcademicTermController;
+use App\Http\Controllers\TermFinalizationController;
 use App\Http\Controllers\TeachingAssignmentController;
 use App\Http\Controllers\FacultyLoadOverloadController;
 use App\Http\Controllers\MasterGridController;
@@ -88,6 +89,18 @@ Route::middleware(['auth'])->group(function () {
         // without navigating to the Settings page first.
         Route::put('working-term', [SettingsController::class, 'updateSchedulingWorkspace'])
             ->name('working-term.update');
+
+        // Settings > Scheduling Workspace > College Finalization —
+        // only callable against the current Active term (see
+        // TermFinalizationController); Dean/Assistant Dean/OIC can
+        // still VIEW status via the schedulingWorkspace() route above
+        // (that route sits in the broader role group), they just
+        // can't hit these two.
+        Route::post('settings/finalization/{department}/finalize', [TermFinalizationController::class, 'finalize'])
+            ->name('settings.finalization.finalize');
+
+        Route::post('settings/finalization/{department}/unfinalize', [TermFinalizationController::class, 'unfinalize'])
+            ->name('settings.finalization.unfinalize');
 
     });
 

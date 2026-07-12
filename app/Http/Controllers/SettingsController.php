@@ -37,7 +37,8 @@ use Inertia\Inertia;
 class SettingsController extends Controller implements HasMiddleware
 {
     public function __construct(
-        private readonly SchedulingWorkspaceService $workspace
+        private readonly SchedulingWorkspaceService $workspace,
+        private readonly \App\Services\TermFinalizationService $finalization,
     ) {
     }
 
@@ -90,6 +91,15 @@ class SettingsController extends Controller implements HasMiddleware
             'can' => [
                 'edit' => auth()->user()->hasAnyRole(['Admin', 'Registrar']),
             ],
+
+            // College Finalization Status table — always computed
+            // against the ACTIVE term (Rule 1: Planning status is
+            // irrelevant to finalization), never the Planning term
+            // above. Empty array when there's no Active term yet, in
+            // which case the Vue side disables every Finalize button.
+            'departmentFinalizations' => $this->workspace->getActiveTerm()
+                ? $this->finalization->getFinalizationStatus($this->workspace->getActiveTerm()->id)
+                : [],
 
         ]);
     }

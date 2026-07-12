@@ -81,6 +81,30 @@ class TeachingAssignment extends Model
         );
     }
 
+    /**
+     * EVERY committed Master Grid schedule block for this assignment's
+     * Subject Offering — not just the first one. A 2x/3x-meeting
+     * subject has one `schedules` row per meeting day (see Schedule.php
+     * and MasterGridController::save()'s per-day updateOrCreate()), and
+     * schedule() above (hasOneThrough) only ever surfaces one of them.
+     * Anywhere a Registrar/Dean is meant to actually SEE the weekly
+     * schedule — Block Schedule, Faculty Schedule — must read from
+     * here, or a 2x/week class silently reads back as if it only met
+     * once. schedule() is left in place for callers that only need a
+     * single-row existence/"is this scheduled at all" check.
+     */
+    public function schedules()
+    {
+        return $this->hasManyThrough(
+            Schedule::class,
+            SubjectOffering::class,
+            'id',                   // subject_offerings.id
+            'subject_offering_id',  // schedules.subject_offering_id
+            'subject_offering_id',  // teaching_assignments.subject_offering_id
+            'id'                    // subject_offerings.id
+        );
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Scopes

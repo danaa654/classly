@@ -131,7 +131,7 @@ class FacultyLoadOverloadService
      */
     private function notifyRequester(FacultyLoadOverload $overload): void
     {
-        $overload->loadMissing('requestedBy');
+        $overload->loadMissing(['requestedBy', 'reviewedBy', 'faculty']);
 
         if (! $overload->requestedBy || $overload->requestedBy->id === $overload->reviewed_by) {
             return;
@@ -149,6 +149,8 @@ class FacultyLoadOverloadService
      */
     private function notifyReviewers(FacultyLoadOverload $overload): void
     {
+        $overload->loadMissing(['faculty', 'requestedBy']);
+
         $reviewers = User::role(['Admin', 'Registrar'])->get();
 
         Notification::send($reviewers, new FacultyLoadOverloadRequested($overload));
@@ -168,6 +170,7 @@ class FacultyLoadOverloadService
      */
     private function notifyDepartmentOfAppliedOverload(FacultyLoadOverload $overload, User $performedBy): void
     {
+        $overload->loadMissing('faculty');
         $faculty = $overload->faculty;
 
         if (! $faculty || ! $faculty->department_id) {

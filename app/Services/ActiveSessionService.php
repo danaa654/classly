@@ -57,25 +57,71 @@ class ActiveSessionService
     ];
 
     /**
+     * How close together two ActiveSession rows for the same user/
+     * device have to be created to be treated as "the same login",
+     * not two genuinely separate logins. Covers Laravel's
+     * session()->regenerate() call during the login pipeline, which
+     * changes the session_id mid-flow and would otherwise orphan the
+     * pre-regeneration row (see the "absorb" step below).
+     */
+    private const SAME_LOGIN_WINDOW_SECONDS = 15;
+
+    /**
      * First touch of a session — writes login_at, so it's never
      * clobbered by later touchActivity() calls within the same
      * session.
+     *
+     * Laravel regenerates the session ID as part of the login
+     * pipeline (session fixation protection). If startSession() and
+     * the very next TrackActiveSession-driven touchActivity() were
+     * keyed purely on session_id, that ID change produces TWO rows
+     * for one real login: an orphaned pre-regeneration row that never
+     * gets touched again, plus a fresh post-regeneration row — the
+     * "duplicate card" bug. To prevent that, before creating a new
+     * row we look for an existing row for this same user, same IP +
+     * browser + OS, created within SAME_LOGIN_WINDOW_SECONDS, and —
+     * if found — reuse (absorb) that row under the new session_id
+     * instead of inserting a second one. Genuinely separate logins (a
+     * different device, or the same device more than a few seconds
+     * later) still get their own row, so multi-device sessions keep
+     * working correctly.
      */
     public static function startSession(Request $request, User $user): ActiveSession
     {
         $now = now();
+        $sessionId = $request->session()->getId();
+        $ip = $request->ip();
+        $browser = self::parseBrowser($request->userAgent());
+        $os = self::parseOperatingSystem($request->userAgent());
+
+        $staleRow = ActiveSession::where('user_id', $user->id)
+            ->where('session_id', '!=', $sessionId)
+            ->where('ip_address', $ip)
+            ->where('browser', $browser)
+            ->where('operating_system', $os)
+            ->where('login_at', '>=', $now->copy()->subSeconds(self::SAME_LOGIN_WINDOW_SECONDS))
+            ->orderByDesc('login_at')
+            ->first();
+
+        $attributes = [
+            'user_id' => $user->id,
+            'login_at' => $now,
+            'last_activity_at' => $now,
+            'current_page' => self::resolvePageLabel($request),
+            'browser' => $browser,
+            'operating_system' => $os,
+            'ip_address' => $ip,
+        ];
+
+        if ($staleRow) {
+            $staleRow->update(['session_id' => $sessionId, ...$attributes]);
+
+            return $staleRow;
+        }
 
         return ActiveSession::updateOrCreate(
-            ['session_id' => $request->session()->getId()],
-            [
-                'user_id' => $user->id,
-                'login_at' => $now,
-                'last_activity_at' => $now,
-                'current_page' => self::resolvePageLabel($request),
-                'browser' => self::parseBrowser($request->userAgent()),
-                'operating_system' => self::parseOperatingSystem($request->userAgent()),
-                'ip_address' => $request->ip(),
-            ]
+            ['session_id' => $sessionId],
+            $attributes
         );
     }
 
@@ -91,21 +137,44 @@ class ActiveSessionService
     {
         $sessionId = $request->session()->getId();
         $now = now();
+        $ip = $request->ip();
+        $browser = self::parseBrowser($request->userAgent());
+        $os = self::parseOperatingSystem($request->userAgent());
 
         $existing = ActiveSession::where('session_id', $sessionId)->first();
 
-        ActiveSession::updateOrCreate(
-            ['session_id' => $sessionId],
-            [
-                'user_id' => $user->id,
-                'login_at' => $existing?->login_at ?? $now,
-                'last_activity_at' => $now,
-                'current_page' => self::resolvePageLabel($request),
-                'browser' => self::parseBrowser($request->userAgent()),
-                'operating_system' => self::parseOperatingSystem($request->userAgent()),
-                'ip_address' => $request->ip(),
-            ]
-        );
+        // Safety net mirroring startSession()'s absorb logic: if this
+        // exact session_id has no row yet (e.g. this request is the
+        // first one to run after a mid-request session regeneration,
+        // beating startSession() to it), reuse a just-created row for
+        // the same user/device instead of inserting a duplicate.
+        if (! $existing) {
+            $existing = ActiveSession::where('user_id', $user->id)
+                ->where('session_id', '!=', $sessionId)
+                ->where('ip_address', $ip)
+                ->where('browser', $browser)
+                ->where('operating_system', $os)
+                ->where('login_at', '>=', $now->copy()->subSeconds(self::SAME_LOGIN_WINDOW_SECONDS))
+                ->orderByDesc('login_at')
+                ->first();
+        }
+
+        $attributes = [
+            'session_id' => $sessionId,
+            'user_id' => $user->id,
+            'login_at' => $existing?->login_at ?? $now,
+            'last_activity_at' => $now,
+            'current_page' => self::resolvePageLabel($request),
+            'browser' => $browser,
+            'operating_system' => $os,
+            'ip_address' => $ip,
+        ];
+
+        if ($existing) {
+            $existing->update($attributes);
+        } else {
+            ActiveSession::create($attributes);
+        }
     }
 
     /**

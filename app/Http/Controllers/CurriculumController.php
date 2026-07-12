@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Curriculum;
 use App\Models\Program;
 use App\Models\Specialization;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -150,7 +151,28 @@ class CurriculumController extends Controller implements HasMiddleware
 
         $validated['code'] = strtoupper($validated['code']);
 
-        Curriculum::create($validated);
+        $curriculum = Curriculum::create($validated);
+
+        // Audit Log — master data setup, same tier as
+        // Program/College/Sections/Specialization, not a scheduling
+        // milestone, so this belongs in Audit Logs, not Activity
+        // History. 'Curriculum' is already a valid module in
+        // AuditLogService::MODULES.
+        AuditLogService::log(
+            action: 'created',
+            module: 'Curriculum',
+            model: $curriculum,
+            description: "Created curriculum {$curriculum->code} - {$curriculum->name}",
+            newValues: [
+                'code' => $curriculum->code,
+                'name' => $curriculum->name,
+                'program_id' => $curriculum->program_id,
+                'specialization_id' => $curriculum->specialization_id,
+                'academic_year' => $curriculum->academic_year,
+                'effective_year' => $curriculum->effective_year,
+                'active' => $curriculum->active,
+            ],
+        );
 
         return redirect()
             ->route('curriculums.index')
@@ -238,7 +260,37 @@ class CurriculumController extends Controller implements HasMiddleware
 
         $validated['code'] = strtoupper($validated['code']);
 
+        // Captured BEFORE any changes are applied, same convention as
+        // every other controller's update() in this codebase — this
+        // is what makes old_values possible below.
+        $oldValues = [
+            'code' => $curriculum->code,
+            'name' => $curriculum->name,
+            'program_id' => $curriculum->program_id,
+            'specialization_id' => $curriculum->specialization_id,
+            'academic_year' => $curriculum->academic_year,
+            'effective_year' => $curriculum->effective_year,
+            'active' => $curriculum->active,
+        ];
+
         $curriculum->update($validated);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Curriculum',
+            model: $curriculum,
+            description: "Updated curriculum {$curriculum->code}",
+            oldValues: $oldValues,
+            newValues: [
+                'code' => $curriculum->code,
+                'name' => $curriculum->name,
+                'program_id' => $curriculum->program_id,
+                'specialization_id' => $curriculum->specialization_id,
+                'academic_year' => $curriculum->academic_year,
+                'effective_year' => $curriculum->effective_year,
+                'active' => $curriculum->active,
+            ],
+        );
 
         return redirect()
             ->route('curriculums.index')
@@ -305,6 +357,7 @@ class CurriculumController extends Controller implements HasMiddleware
         }
 
         $code = $curriculum->code;
+        $name = $curriculum->name;
 
         try {
             $curriculum->delete();
@@ -315,6 +368,17 @@ class CurriculumController extends Controller implements HasMiddleware
                 ->route('curriculums.index')
                 ->with('error', 'Unable to delete the selected curriculum.');
         }
+
+        // Captured before delete() — nothing left in the database to
+        // read back afterward, same reasoning as
+        // SectionController::destroy()'s Audit Log call.
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Curriculum',
+            description: "Deleted curriculum {$code} - {$name}",
+            oldValues: ['code' => $code, 'name' => $name],
+            recordName: $code,
+        );
 
         return redirect()
             ->route('curriculums.index')

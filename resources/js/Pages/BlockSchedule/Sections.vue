@@ -11,6 +11,20 @@ defineProps({
 
 const { darkMode } = useAppShell()
 
+// Maps the backend-derived schedule_status ('red' | 'orange' | 'green')
+// to the dot color + label shown on each block card. Kept as a lookup
+// rather than inline ternaries so the legend footer and the per-card
+// dot both read from the same single source of truth.
+const STATUS_META = {
+    green: { dot: 'bg-emerald-500', ring: 'ring-emerald-300', label: 'Fully scheduled' },
+    orange: { dot: 'bg-amber-500', ring: 'ring-amber-300', label: 'Partially scheduled' },
+    red: { dot: 'bg-rose-500', ring: 'ring-rose-300', label: 'Unscheduled' },
+}
+
+function statusMeta(section) {
+    return STATUS_META[section.schedule_status] ?? STATUS_META.red
+}
+
 // Same ambient background treatment as the rest of Block Schedule —
 // grid-line texture plus rising bubbles (light mode) / drifting
 // fireflies (dark mode) — computed once at setup time so
@@ -151,14 +165,40 @@ const fireflies = Array.from({ length: 16 }, (_, i) => ({
                         class="flex items-center justify-between rounded-xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                         style="background: var(--card-bg); border-color: var(--card-border)"
                     >
-                        <div>
-                            <p class="text-base font-bold" style="color: var(--text-primary)">{{ section.section_code }}</p>
-                            <p class="text-xs" style="color: var(--text-muted)">Year {{ section.year_level }} — {{ section.offering_count }} subject(s)</p>
+                        <div class="flex items-center gap-3">
+                            <!-- Blinking status light: green = every offering has a
+                                 committed schedule, orange = some but not all,
+                                 red = none scheduled yet. See
+                                 BlockScheduleController::sections() for how
+                                 schedule_status is derived. -->
+                            <span class="relative flex h-3 w-3 shrink-0" :title="statusMeta(section).label">
+                                <span
+                                    class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                                    :class="statusMeta(section).dot"
+                                ></span>
+                                <span
+                                    class="relative inline-flex h-3 w-3 rounded-full"
+                                    :class="statusMeta(section).dot"
+                                ></span>
+                            </span>
+
+                            <div>
+                                <p class="text-base font-bold" style="color: var(--text-primary)">{{ section.section_code }}</p>
+                                <p class="text-xs" style="color: var(--text-muted)">Year {{ section.year_level }} — {{ section.offering_count }} subject(s)</p>
+                            </div>
                         </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                         </svg>
                     </Link>
+                </div>
+
+                <!-- Legend -->
+                <div v-if="sections.length" class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border px-4 py-3" style="background: var(--card-bg); border-color: var(--card-border)">
+                    <div v-for="(meta, key) in STATUS_META" :key="key" class="flex items-center gap-2">
+                        <span class="h-2.5 w-2.5 rounded-full" :class="meta.dot"></span>
+                        <span class="text-xs font-semibold" style="color: var(--text-muted)">{{ meta.label }}</span>
+                    </div>
                 </div>
 
                 <p v-if="!sections.length" class="mt-10 text-center text-sm" style="color: var(--text-muted)">

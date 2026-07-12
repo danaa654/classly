@@ -18,9 +18,14 @@ function formatTime(minutes) {
     return `${h12}:${String(m).padStart(2, '0')} ${suffix}`
 }
 
+function capitalize(day) {
+    return day.charAt(0).toUpperCase() + day.slice(1)
+}
+
 function timeRange(row) {
-    if (!row.day) return 'Unscheduled'
-    return `${row.day} · ${formatTime(row.start_minutes)} – ${formatTime(row.end_minutes)}`
+    if (!row.days?.length) return 'Unscheduled'
+    const dayList = row.days.map(capitalize).join(', ')
+    return `${dayList} · ${formatTime(row.start_minutes)} – ${formatTime(row.end_minutes)}`
 }
 </script>
 
@@ -65,7 +70,7 @@ function timeRange(row) {
                             </td>
                             <td class="px-5 py-3">
                                 <span
-                                    :class="row.day ? 'text-slate-700' : 'italic text-slate-400'"
+                                    :class="row.days?.length ? 'text-slate-700' : 'italic text-slate-400'"
                                     class="text-sm font-medium"
                                 >
                                     {{ timeRange(row) }}

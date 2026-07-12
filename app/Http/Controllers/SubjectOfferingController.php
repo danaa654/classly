@@ -6,10 +6,13 @@ use App\Http\Requests\BulkUpdateWeeklyHoursRequest;
 use App\Http\Requests\GenerateSubjectOfferingRequest;
 use App\Models\AcademicTerm;
 use App\Models\Curriculum;
+use App\Models\Department;
 use App\Models\Program;
 use App\Models\Section;
 use App\Models\Specialization;
 use App\Models\SubjectOffering;
+use App\Models\User;
+use App\Notifications\SubjectOfferingsGenerated;
 use App\Services\SchedulingWorkspaceService;
 use App\Services\SubjectOfferingGeneratorService;
 use App\Services\AuditLogService;
@@ -19,6 +22,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Inertia;
 
 class SubjectOfferingController extends Controller implements HasMiddleware
@@ -352,9 +356,78 @@ class SubjectOfferingController extends Controller implements HasMiddleware
             ['curriculum' => $curriculum->display_name]
         );
 
+        $this->notifyDepartmentOfGeneration($curriculum, $academicTerm, auth()->user(), $summary['created']);
+
         return redirect()
             ->route('subject-offerings.index', ['academic_term_id' => $academicTerm->id])
             ->with('success', $message);
+    }
+
+    /**
+     * Notifies the curriculum's own college — Admin, Registrar,
+     * Assistant Dean, and that college's Dean/OIC, minus whoever
+     * performed the generation (see resolveStakeholders() below) —
+     * that new Subject Offerings just landed for them. Skipped
+     * entirely if the curriculum's program has no department_id
+     * (there's no single Dean/OIC to address it to) or if there's no
+     * one to notify after excluding the actor.
+     */
+    private function notifyDepartmentOfGeneration(
+        Curriculum $curriculum,
+        AcademicTerm $academicTerm,
+        User $performedBy,
+        int $createdCount
+    ): void {
+        $departmentId = $curriculum->program?->department_id;
+
+        if (! $departmentId) {
+            return;
+        }
+
+        $department = Department::find($departmentId);
+
+        if (! $department) {
+            return;
+        }
+
+        $recipients = $this->resolveStakeholders($department, $performedBy);
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::send($recipients, new SubjectOfferingsGenerated(
+            $department,
+            $academicTerm,
+            $curriculum,
+            $performedBy,
+            $createdCount
+        ));
+    }
+
+    /**
+     * Admin + Registrar + Assistant Dean (global tiers) merged with
+     * one college's Dean/OIC (department-scoped tier), deduplicated,
+     * with whoever performed the action removed from the list. Same
+     * recipient rule as TermFinalizationService::resolveStakeholders()
+     * and MasterGridController::resolveStakeholders() — duplicated
+     * here rather than shared, since none of these three currently
+     * have one common owning service for cross-module notification
+     * recipients. If this rule needs to change, update all three
+     * places.
+     */
+    private function resolveStakeholders(Department $department, User $performedBy): \Illuminate\Support\Collection
+    {
+        $global = User::role(['Admin', 'Registrar', 'Assistant Dean'])->get();
+
+        $departmentScoped = User::role(['Dean', 'OIC'])
+            ->where('department_id', $department->id)
+            ->get();
+
+        return $global->merge($departmentScoped)
+            ->unique('id')
+            ->reject(fn (User $user) => $user->id === $performedBy->id)
+            ->values();
     }
 
     public function destroy(SubjectOffering $subjectOffering)

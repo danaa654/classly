@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Program;
 use App\Models\Specialization;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -96,7 +97,25 @@ class SpecializationController extends Controller implements HasMiddleware
             $validated['code'] = strtoupper($validated['code']);
         }
 
-        Specialization::create($validated);
+        $specialization = Specialization::create($validated);
+
+        // Audit Log — master data setup, same tier as
+        // Program/College/Sections/Curriculum, not a scheduling
+        // milestone, so this belongs in Audit Logs, not Activity
+        // History. 'Specialization' is already a valid module in
+        // AuditLogService::MODULES.
+        AuditLogService::log(
+            action: 'created',
+            module: 'Specialization',
+            model: $specialization,
+            description: "Created specialization {$specialization->name}",
+            newValues: [
+                'program_id' => $specialization->program_id,
+                'code' => $specialization->code,
+                'name' => $specialization->name,
+                'active' => $specialization->active,
+            ],
+        );
 
         return redirect()
             ->route('specializations.index')
@@ -173,7 +192,31 @@ class SpecializationController extends Controller implements HasMiddleware
             $validated['code'] = strtoupper($validated['code']);
         }
 
+        // Captured BEFORE any changes are applied, same convention as
+        // every other controller's update() in this codebase — this
+        // is what makes old_values possible below.
+        $oldValues = [
+            'program_id' => $specialization->program_id,
+            'code' => $specialization->code,
+            'name' => $specialization->name,
+            'active' => $specialization->active,
+        ];
+
         $specialization->update($validated);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Specialization',
+            model: $specialization,
+            description: "Updated specialization {$specialization->name}",
+            oldValues: $oldValues,
+            newValues: [
+                'program_id' => $specialization->program_id,
+                'code' => $specialization->code,
+                'name' => $specialization->name,
+                'active' => $specialization->active,
+            ],
+        );
 
         return redirect()
             ->route('specializations.index')
@@ -185,7 +228,40 @@ class SpecializationController extends Controller implements HasMiddleware
      */
     public function destroy(Specialization $specialization)
     {
-        $specialization->delete();
+        // Block deletion if this specialization still has curricula
+        // attached (curricula.specialization_id is nullable, but any
+        // curriculum that was created under this specialization still
+        // references it). Same pattern as DepartmentController and
+        // ProgramController's destroy() methods.
+        if ($specialization->curricula()->exists()) {
+            return redirect()
+                ->route('specializations.index')
+                ->with('error', 'Unable to delete this specialization. It has associated curriculums. Please remove or reassign them first.');
+        }
+
+        // Captured before delete() — nothing left in the database to
+        // read back afterward, same reasoning as
+        // SectionController::destroy()'s Audit Log call.
+        $name = $specialization->name;
+        $code = $specialization->code;
+
+        try {
+            $specialization->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('specializations.index')
+                ->with('error', 'Unable to delete the selected specialization.');
+        }
+
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Specialization',
+            description: "Deleted specialization {$name}",
+            oldValues: ['name' => $name, 'code' => $code],
+            recordName: $name,
+        );
 
         return redirect()
             ->route('specializations.index')

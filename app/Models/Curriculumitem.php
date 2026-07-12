@@ -121,6 +121,17 @@ class CurriculumItem extends Model
         return $this->hasMany(TeachingAssignment::class);
     }
 
+    // Every Subject Offering generated FROM this curriculum item
+    // (subject_offerings.curriculum_item_id). Needed by
+    // CurriculumItemController::destroy() to block removal once
+    // scheduling work has already been generated for it — an
+    // offering is a snapshot taken at generation time, so deleting
+    // the item underneath it would orphan real scheduling data.
+    public function subjectOfferings()
+    {
+        return $this->hasMany(SubjectOffering::class);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Scopes

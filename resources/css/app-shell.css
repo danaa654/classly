@@ -175,6 +175,19 @@ td {
 .custom-scrollbar-theme::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 99px; }
 .custom-scrollbar-theme::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
+/* ─── Global page scrollbar ────────────────────────────────────
+   Applies the same thin, theme-aware treatment to the main
+   document scrollbar (html/body), since most pages scroll at
+   the page level rather than inside a wrapped panel. */
+html {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: var(--card-border) transparent;
+}
+html::-webkit-scrollbar { width: 5px; }
+html::-webkit-scrollbar-track { background: transparent; }
+html::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 99px; }
+html::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
 /* ─── Layout shell ───────────────────────────────────────────── */
 #layout-shell {
     display: flex;

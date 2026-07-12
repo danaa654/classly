@@ -2,12 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Curriculum;
+use App\Models\Department;
 use App\Models\Program;
 use App\Models\Section;
 use App\Models\Specialization;
+use App\Models\User;
+use App\Notifications\SectionCreated;
 use App\Services\SectionCodeService;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -135,7 +141,7 @@ class SectionController extends Controller implements HasMiddleware
     {
         [$validated, $curriculum, $sectionCode] = $this->processSection($request);
 
-        Section::create([
+        $section = Section::create([
 
             'curriculum_id' => $curriculum->id,
 
@@ -153,9 +159,94 @@ class SectionController extends Controller implements HasMiddleware
 
         ]);
 
+        // Audit Log — Sections is master data (same tier as
+        // Departments/Curriculums/Specializations), not a scheduling
+        // milestone, so this belongs in Audit Logs, not Activity
+        // History. Matches UserController::store()'s pattern.
+        AuditLogService::log(
+            action: 'created',
+            module: 'Sections',
+            model: $section,
+            description: "Created section {$section->section_code}",
+            newValues: [
+                'section_code' => $section->section_code,
+                'section_name' => $section->section_name,
+                'curriculum' => $curriculum->display_name,
+                'year_level' => $section->year_level,
+                'capacity' => $section->capacity,
+                'status' => $section->status,
+            ],
+        );
+
+        $this->notifyDepartmentOfSectionCreated($curriculum, $section, auth()->user());
+
         return redirect()
             ->route('sections.index')
             ->with('success', 'Section created successfully.');
+    }
+
+    /**
+     * Notifies the new Section's own college — Admin, Registrar,
+     * Assistant Dean, and that college's Dean/OIC, minus whoever
+     * created it (see resolveStakeholders() below). $curriculum comes
+     * straight from processSection()'s already-resolved return value,
+     * loaded fresh with 'program.department' / 'specialization' here
+     * since processSection() doesn't eager-load either — Section
+     * creation is a one-at-a-time action, so this is a single extra
+     * query, not an N+1 concern.
+     *
+     * Skipped entirely if the curriculum's program has no
+     * department_id (there's no single Dean/OIC to address it to) or
+     * if there's no one to notify after excluding the actor.
+     */
+    private function notifyDepartmentOfSectionCreated(Curriculum $curriculum, Section $section, User $performedBy): void
+    {
+        $curriculum->loadMissing(['program', 'specialization']);
+
+        $departmentId = $curriculum->program?->department_id;
+
+        if (! $departmentId) {
+            return;
+        }
+
+        $department = Department::find($departmentId);
+
+        if (! $department) {
+            return;
+        }
+
+        $recipients = $this->resolveStakeholders($department, $performedBy);
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::send($recipients, new SectionCreated($department, $curriculum, $section, $performedBy));
+    }
+
+    /**
+     * Admin + Registrar + Assistant Dean (global tiers) merged with
+     * one college's Dean/OIC (department-scoped tier), deduplicated,
+     * with whoever performed the action removed from the list. Same
+     * recipient rule as TermFinalizationService::resolveStakeholders(),
+     * MasterGridController::resolveStakeholders(), and
+     * SubjectOfferingController::resolveStakeholders() — duplicated
+     * here for the same reason as those three: no shared owning
+     * service exists yet for cross-module notification recipients. If
+     * this rule needs to change, update all four places.
+     */
+    private function resolveStakeholders(Department $department, User $performedBy): Collection
+    {
+        $global = User::role(['Admin', 'Registrar', 'Assistant Dean'])->get();
+
+        $departmentScoped = User::role(['Dean', 'OIC'])
+            ->where('department_id', $department->id)
+            ->get();
+
+        return $global->merge($departmentScoped)
+            ->unique('id')
+            ->reject(fn (User $user) => $user->id === $performedBy->id)
+            ->values();
     }
 
     /**
@@ -185,6 +276,17 @@ class SectionController extends Controller implements HasMiddleware
      */
     public function update(Request $request, Section $section)
     {
+        // Captured BEFORE any changes are applied, same convention as
+        // UserController::update() — this is what makes old_values
+        // possible below.
+        $oldValues = [
+            'section_code' => $section->section_code,
+            'section_name' => $section->section_name,
+            'year_level' => $section->year_level,
+            'capacity' => $section->capacity,
+            'status' => $section->status,
+        ];
+
         [$validated, $curriculum, $sectionCode] = $this->processSection($request, $section);
 
         $section->update([
@@ -204,6 +306,22 @@ class SectionController extends Controller implements HasMiddleware
             'status' => $validated['status'],
 
         ]);
+
+        AuditLogService::log(
+            action: 'updated',
+            module: 'Sections',
+            model: $section,
+            description: "Updated section {$section->section_code}",
+            oldValues: $oldValues,
+            newValues: [
+                'section_code' => $section->section_code,
+                'section_name' => $section->section_name,
+                'curriculum' => $curriculum->display_name,
+                'year_level' => $section->year_level,
+                'capacity' => $section->capacity,
+                'status' => $section->status,
+            ],
+        );
 
         return redirect()
             ->route('sections.index')
@@ -241,6 +359,17 @@ class SectionController extends Controller implements HasMiddleware
                 ->with('error', 'Unable to delete the selected section.');
 
         }
+
+        // old_values only — there's nothing left in the database to
+        // read back after delete(), same reasoning as
+        // TeachingAssignmentController::destroy()'s Audit Log call.
+        AuditLogService::log(
+            action: 'deleted',
+            module: 'Sections',
+            description: "Deleted section {$sectionCode}",
+            oldValues: ['section_code' => $sectionCode],
+            recordName: $sectionCode,
+        );
 
         return redirect()
             ->back()

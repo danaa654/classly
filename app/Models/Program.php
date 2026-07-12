@@ -31,4 +31,13 @@ class Program extends Model
         return $this->hasMany(Specialization::class);
     }
 
+    // A program can have multiple curriculum versions (e.g. one per
+    // effective_year / specialization). Needed by
+    // ProgramController::destroy() to block deletion when curricula
+    // still reference this program.
+    public function curricula()
+    {
+        return $this->hasMany(Curriculum::class);
+    }
+
 }

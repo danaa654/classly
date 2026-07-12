@@ -57,6 +57,8 @@ class ActivityHistoryService
         'academic_term.working_term_changed',
         'academic_term.planning_term_selected',
         'academic_term.archived',
+        'academic_term.college_finalized',
+        'academic_term.college_unfinalized',
 
         'subject_offering.generated',
         'subject_offering.regenerated',
@@ -104,6 +106,11 @@ class ActivityHistoryService
         'academic_term.working_term_changed' => ['calendar', 'blue'],
         'academic_term.planning_term_selected' => ['calendar', 'blue'],
         'academic_term.archived' => ['archive', 'gray'],
+        // Purple = "Publishing"/lock-related per the six-color spec —
+        // finalize/unfinalize is a lock action on committed data, the
+        // same family as publishing.published/unpublished below.
+        'academic_term.college_finalized' => ['lock', 'purple'],
+        'academic_term.college_unfinalized' => ['lock', 'purple'],
 
         'subject_offering.generated' => ['subject-offering', 'blue'],
         'subject_offering.regenerated' => ['subject-offering', 'blue'],
@@ -274,6 +281,32 @@ class ActivityHistoryService
             event: 'academic_term.archived',
             title: 'Academic Term Archived',
             description: "{$term->display_name} was archived",
+            academicTerm: $term,
+        );
+    }
+
+    /**
+     * College (Department) Finalize/Unfinalize — see
+     * TermFinalizationService, the single caller of these two.
+     */
+    public static function recordCollegeFinalized(\App\Models\Department $department, AcademicTerm $term): ?ActivityHistory
+    {
+        return self::record(
+            event: 'academic_term.college_finalized',
+            title: 'College Finalized',
+            description: "{$department->name} was finalized for {$term->display_name}",
+            metadata: ['department' => $department->name],
+            academicTerm: $term,
+        );
+    }
+
+    public static function recordCollegeUnfinalized(\App\Models\Department $department, AcademicTerm $term): ?ActivityHistory
+    {
+        return self::record(
+            event: 'academic_term.college_unfinalized',
+            title: 'College Unfinalized',
+            description: "{$department->name} was unfinalized for {$term->display_name} and is editable again",
+            metadata: ['department' => $department->name],
             academicTerm: $term,
         );
     }

@@ -147,13 +147,13 @@ class HandleInertiaRequests extends Middleware
                 'deleted' => fn () => $request->session()->get('deleted'),
             ],
 
-            // Unread Faculty Load Overload notifications for the
-            // current user — shared on EVERY page (not just Faculty
-            // Loading), since the people involved could be off working
-            // anywhere else in the app when one of these fires. Three
-            // types feed into this single prop, merged and sorted
-            // together so the Topbar dropdown renders one unified
-            // list:
+            // Unread notifications for the current user — shared on
+            // EVERY page (not just Faculty Loading or Scheduling
+            // Workspace), since the people involved could be off
+            // working anywhere else in the app when one of these
+            // fires. Five types feed into this single prop, merged
+            // and sorted together so the Topbar dropdown renders one
+            // unified list:
             //
             //   - FacultyLoadOverloadReviewed        — "your request
             //     was approved/declined", sent to the requester.
@@ -162,18 +162,56 @@ class HandleInertiaRequests extends Middleware
             //   - FacultyLoadOverloadAppliedByAdmin   — "Admin/
             //     Registrar added overload units to your department's
             //     faculty member", sent to that department's Dean/OIC.
+            //   - ScheduleFinalized                   — "a college's
+            //     schedule was finalized (now read-only)", sent to
+            //     Admin/Registrar/Assistant Dean + that college's
+            //     Dean/OIC, minus whoever performed the action — see
+            //     TermFinalizationService::notifyDepartmentOfFinalization().
+            //   - ScheduleUnfinalized                  — same
+            //     recipients as above, for the schedule being
+            //     reopened — see
+            //     TermFinalizationService::notifyDepartmentOfUnfinalization().
+            //   - MasterGridScheduleSaved              — "N subjects
+            //     changed in a Master Grid save", same recipient rule
+            //     as the two above, batched per college per save — see
+            //     MasterGridController::notifyDepartmentsOfSave().
+            //   - SubjectOfferingsGenerated             — "N Subject
+            //     Offerings generated for a curriculum", same
+            //     recipient rule, one notification per generate()
+            //     call — see
+            //     SubjectOfferingController::notifyDepartmentOfGeneration().
+            //   - SectionCreated                        — "a new
+            //     Section was created", same recipient rule, one
+            //     notification per store() call — see
+            //     SectionController::notifyDepartmentOfSectionCreated().
+            //     Unlike the others, this one carries an actionable
+            //     section_id so the Topbar can navigate straight to
+            //     the Section's Edit page.
+            //
+            // Kept as the same 'overloadNotifications' prop key (not
+            // renamed) so the existing Topbar.vue/useNotifications
+            // frontend wiring doesn't need to change — only the list
+            // of types being merged into it grew.
             //
             // Empty array for guests/unauthenticated requests. See
             // FacultyLoadOverloadController::markNotificationRead()/
-            // markAllNotificationsRead() for how the frontend dismisses
-            // these, and Topbar.vue for how `notification.type` picks
-            // which card layout to render.
+            // markAllNotificationsRead() for how the frontend
+            // dismisses these (markAllNotificationsRead's own
+            // whitelist must be kept in sync with this one, or "mark
+            // all as read" will silently skip whichever type is
+            // missing from it), and Topbar.vue for how
+            // `notification.type` picks which card layout to render.
             'overloadNotifications' => fn () => $user
                 ? $user->unreadNotifications()
                     ->whereIn('type', [
                         \App\Notifications\FacultyLoadOverloadReviewed::class,
                         \App\Notifications\FacultyLoadOverloadRequested::class,
                         \App\Notifications\FacultyLoadOverloadAppliedByAdmin::class,
+                        \App\Notifications\ScheduleFinalized::class,
+                        \App\Notifications\ScheduleUnfinalized::class,
+                        \App\Notifications\MasterGridScheduleSaved::class,
+                        \App\Notifications\SubjectOfferingsGenerated::class,
+                        \App\Notifications\SectionCreated::class,
                     ])
                     ->orderByDesc('created_at')
                     ->get(['id', 'type', 'data', 'created_at'])

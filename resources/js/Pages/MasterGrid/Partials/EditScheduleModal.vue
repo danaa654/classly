@@ -235,6 +235,14 @@ function recomputeEnd() {
 // watcher's very first, immediate invocation touches it.
 const dragOffset = reactive({ x: 0, y: 0 })
 
+// Only surface the "pick a faculty" message after the person actually
+// tries to Apply — showing it the instant an unassigned block opens
+// would read as an error before they've done anything wrong. Declared
+// up here (ahead of the watch() below, which resets it on every block
+// load) rather than down by apply(), since that watch fires
+// immediately and would otherwise reference this before it exists.
+const attemptedApplyWithoutFaculty = ref(false)
+
 watch(() => props.blocks, (blocks) => {
     if (!blocks.length) return
 
@@ -248,8 +256,23 @@ watch(() => props.blocks, (blocks) => {
     facultyOverride.value = false
     facultyDepartmentFilter.value = null
     facultyDropdownOpen.value = false
+    attemptedApplyWithoutFaculty.value = false
     dragOffset.x = 0
     dragOffset.y = 0
+
+    // draft.days (seeded from however many block rows came in) and
+    // draft.meetings_per_week (seeded from the stored field above) are
+    // two independent reads of "how many times a week" that can drift
+    // apart — a fresh drag-and-drop always builds exactly ONE synthetic
+    // block regardless of the offering's meetings_per_week (see
+    // handleDropSubject in Index.vue), and a Preview group can carry
+    // leftover day-rows from before a Session Settings edit changed
+    // meetings_per_week. Only reconcile when the Meetings/Week field is
+    // actually live (allowSessionSettings) — otherwise draft.days is the
+    // authoritative, already-saved set of days and must be left alone.
+    if (props.allowSessionSettings) {
+        resizeDaysToMeetings()
+    }
 
     recomputeEnd()
 }, { immediate: true })
@@ -279,7 +302,7 @@ function onDayChange() {
  * nothing here has been saved yet, so there's no risk of silently
  * losing a real committed schedule row.
  */
-function onMeetingsChange() {
+function resizeDaysToMeetings() {
     const target = draft.meetings_per_week || 1
     const usedDays = new Set(draft.days.filter(Boolean))
 
@@ -294,7 +317,10 @@ function onMeetingsChange() {
     if (draft.days.length > target) {
         draft.days = draft.days.slice(0, target)
     }
+}
 
+function onMeetingsChange() {
+    resizeDaysToMeetings()
     recomputeEnd()
     emitChange()
 }
@@ -324,13 +350,28 @@ const hasConflicts = computed(() => props.conflicts.length > 0)
 // context.
 const hasSavedConflict = computed(() => props.conflicts.some((c) => c.conflicting?.is_saved))
 
+// A 'grid' Apply writes straight into `schedules` — an unassigned
+// faculty there isn't just a cosmetic gap, it also means
+// MasterGridController::syncTeachingAssignment() has nothing to sync,
+// so the class silently never shows up on Faculty Loading at all, not
+// even as "unassigned". Scoped to 'grid' only: Schedule Preview's
+// Failed-row flow is explicitly designed to let Room/Day be placed
+// before Faculty is decided, ahead of the batch Save.
+const facultyMissing = computed(() => props.context === 'grid' && !draft.faculty_id)
+
 // Whether Apply should be disabled outright: either the normal 'grid'
 // rule (any unresolved conflict blocks a live database write), or —
 // regardless of context — a conflict against an already-saved block.
-const blocksApply = computed(() => (props.context === 'grid' && hasConflicts.value) || hasSavedConflict.value)
+const blocksApply = computed(() => (props.context === 'grid' && hasConflicts.value) || hasSavedConflict.value || facultyMissing.value)
 
 function apply() {
     if (props.validating) return
+
+    if (facultyMissing.value) {
+        attemptedApplyWithoutFaculty.value = true
+        return
+    }
+
     if (blocksApply.value) return
     emit('apply', { ...draft, days: [...draft.days] })
 }
@@ -605,6 +646,7 @@ function toggleFacultyDropdown() {
 function selectFaculty(facultyId) {
     draft.faculty_id = facultyId
     facultyDropdownOpen.value = false
+    attemptedApplyWithoutFaculty.value = false
     emitChange()
 }
 
@@ -789,7 +831,9 @@ onBeforeUnmount(() => {
                                     type="button"
                                     :disabled="readOnly"
                                     class="w-full flex items-center justify-between rounded-lg border text-left text-slate-800 dark:text-slate-100 text-sm px-2 py-1.5 focus:outline-none focus:ring-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                                    :class="facultyOverride
+                                    :class="attemptedApplyWithoutFaculty
+                                        ? 'border-red-400 bg-red-50 dark:bg-red-900/10 dark:border-red-600 focus:border-red-500 focus:ring-red-400/30'
+                                        : facultyOverride
                                         ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-600 focus:border-amber-500 focus:ring-amber-400/30'
                                         : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:border-[#D4A62A] focus:ring-[#D4A62A]/30'"
                                     @click="toggleFacultyDropdown"
@@ -857,6 +901,9 @@ onBeforeUnmount(() => {
                                 ⚠ Outside the normal Major/Minor + Department eligibility rules. Use only for a
                                 genuine exception (e.g. a Cross-Department or General Education faculty covering this
                                 {{ isMajor ? 'Major' : 'Minor' }}).
+                            </p>
+                            <p v-if="attemptedApplyWithoutFaculty" class="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1">
+                                Please choose a faculty member before saving this schedule block.
                             </p>
                         </div>
 

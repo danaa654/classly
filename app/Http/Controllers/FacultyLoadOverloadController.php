@@ -133,12 +133,16 @@ class FacultyLoadOverloadController extends Controller implements HasMiddleware
     }
 
     /**
-     * Dismiss every unread Faculty Load Overload notification for the
-     * current user at once — the dropdown's "Mark all as read".
-     * Covers all three notification types (request submitted / request
-     * reviewed / overload applied by Admin) so a future, unrelated
-     * notification feature sharing the same `notifications` table
-     * isn't silently swept up by this action too.
+     * Dismiss every unread notification for the current user at once
+     * — the dropdown's "Mark all as read". Covers every type merged
+     * into HandleInertiaRequests' `overloadNotifications` shared prop
+     * (Faculty Load Overload's three types plus College Finalization's
+     * two) so a future, unrelated notification feature sharing the
+     * same `notifications` table isn't silently swept up by this
+     * action too. Keep this whitelist in sync with the one in
+     * HandleInertiaRequests::share() — a type present in one but not
+     * the other either can't be dismissed in bulk, or (worse) never
+     * shows up in the dropdown to begin with.
      */
     public function markAllNotificationsRead()
     {
@@ -147,6 +151,11 @@ class FacultyLoadOverloadController extends Controller implements HasMiddleware
                 \App\Notifications\FacultyLoadOverloadReviewed::class,
                 \App\Notifications\FacultyLoadOverloadRequested::class,
                 \App\Notifications\FacultyLoadOverloadAppliedByAdmin::class,
+                \App\Notifications\ScheduleFinalized::class,
+                \App\Notifications\ScheduleUnfinalized::class,
+                \App\Notifications\MasterGridScheduleSaved::class,
+                \App\Notifications\SubjectOfferingsGenerated::class,
+                \App\Notifications\SectionCreated::class,
             ])
             ->update(['read_at' => now()]);
 

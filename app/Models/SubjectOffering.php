@@ -200,6 +200,21 @@ class SubjectOffering extends Model
     }
 
     /**
+     * EVERY committed Master Grid schedule block for this Offering —
+     * one row per meeting day for a 2x/3x-meeting subject, vs.
+     * schedule() above (hasOne) which only ever surfaces the first.
+     * Use this anywhere the actual weekly schedule needs to be
+     * displayed (Block Schedule, Faculty Schedule); schedule() stays
+     * reserved for existence-only checks (getOverallStatusAttribute(),
+     * room_status) that never needed more than "does at least one
+     * exist?".
+     */
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    /**
      * The Room(s) that currently prefer this Offering, via the
      * room_subject_offering pivot — the inverse of
      * Room::preferredSubjectOfferings(). subject_offering_id is

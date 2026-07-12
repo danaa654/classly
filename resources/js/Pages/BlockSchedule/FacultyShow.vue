@@ -26,9 +26,14 @@ function formatTime(minutes) {
     return formatMinutes(minutes)
 }
 
+function capitalize(day) {
+    return day.charAt(0).toUpperCase() + day.slice(1)
+}
+
 function timeRange(row) {
-    if (!row.day) return 'Unscheduled'
-    return `${row.day} · ${formatTime(row.start_minutes)} – ${formatTime(row.end_minutes)}`
+    if (!row.days?.length) return 'Unscheduled'
+    const dayList = row.days.map(capitalize).join(', ')
+    return `${dayList} · ${formatTime(row.start_minutes)} – ${formatTime(row.end_minutes)}`
 }
 
 /*
@@ -67,7 +72,7 @@ function compactRange(label) {
 
 // Scheduled rows only — the grid has no way to place a subject with no
 // day/time yet (see the note rendered below the grid for those).
-const scheduledAssignments = computed(() => props.assignments.filter((a) => a.day))
+const scheduledAssignments = computed(() => props.assignments.filter((a) => a.days?.length))
 const unscheduledCount = computed(() => props.assignments.length - scheduledAssignments.value.length)
 
 /*
@@ -103,14 +108,22 @@ function dayColumnIndex(dayField) {
 
 const positionedAssignments = computed(() =>
     scheduledAssignments.value
-        .map((a) => {
-            const dayIndex = dayColumnIndex(a.day?.toLowerCase())
+        // A 2x/3x-meeting subject has more than one entry in `days` —
+        // it needs to appear in every one of those day columns, not
+        // just the first, or the weekly grid would silently make it
+        // look like a once-a-week class. `${assignment.id}-${day}`
+        // keeps the :key unique per box now that one assignment can
+        // render more than one.
+        .flatMap((a) => a.days.map((day) => ({ assignment: a, day })))
+        .map(({ assignment, day }) => {
+            const dayIndex = dayColumnIndex(day?.toLowerCase())
             if (dayIndex === -1) return null
 
             return {
-                assignment: a,
+                key: `${assignment.id}-${day}`,
+                assignment,
                 gridColumn: `${dayIndex + 2} / span 1`,
-                gridRow: `${lineForStart(a.start_minutes)} / ${lineForEnd(a.end_minutes)}`,
+                gridRow: `${lineForStart(assignment.start_minutes)} / ${lineForEnd(assignment.end_minutes)}`,
             }
         })
         .filter(Boolean)
@@ -129,7 +142,7 @@ const gridTemplateColumns = computed(
 const dayCounts = computed(() =>
     workingDays.value.map((day) => ({
         ...day,
-        count: scheduledAssignments.value.filter((a) => a.day?.toLowerCase() === day.field).length,
+        count: scheduledAssignments.value.filter((a) => a.days.map((d) => d.toLowerCase()).includes(day.field)).length,
     }))
 )
 </script>
@@ -203,7 +216,7 @@ const dayCounts = computed(() =>
                             </td>
                             <td class="px-5 py-3">
                                 <span
-                                    :class="row.day ? 'text-slate-700' : 'italic text-slate-400'"
+                                    :class="row.days?.length ? 'text-slate-700' : 'italic text-slate-400'"
                                     class="text-sm font-medium"
                                 >
                                     {{ timeRange(row) }}
@@ -296,8 +309,8 @@ const dayCounts = computed(() =>
                             <!-- Scheduled blocks — each rendered exactly ONCE,
                                  spanning every row it actually covers. -->
                             <div
-                                v-for="{ assignment, gridColumn, gridRow } in positionedAssignments"
-                                :key="assignment.id"
+                                v-for="{ key, assignment, gridColumn, gridRow } in positionedAssignments"
+                                :key="key"
                                 class="z-[5] m-px flex flex-col items-center justify-center gap-0 overflow-hidden rounded border border-indigo-300 bg-indigo-100 px-1 py-0.5 text-center"
                                 :style="{ gridColumn, gridRow }"
                             >

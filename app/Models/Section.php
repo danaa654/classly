@@ -60,15 +60,22 @@ class Section extends Model
     /**
      * Check if this section is currently in use — i.e. at least one of
      * its Subject Offerings already has a faculty member assigned via
-     * Faculty Loading. A Section having generated (but still
+     * Faculty Loading, OR already has a committed Master Grid schedule
+     * block (day/time/room). A Section having generated (but still
      * unassigned) Offerings does NOT count as "in use" — those are
      * safe to regenerate/adjust freely; it's an actual Teaching
-     * Assignment that makes deleting the Section unsafe.
+     * Assignment or a committed Schedule row that makes deleting the
+     * Section unsafe. The Schedule check exists as a backstop in case
+     * a schedule block ever ends up committed without (or after
+     * losing) its Teaching Assignment.
      */
     public function isInUse()
     {
         return $this->subjectOfferings()
-            ->whereHas('teachingAssignment')
+            ->where(function ($query) {
+                $query->whereHas('teachingAssignment')
+                    ->orWhereHas('schedule');
+            })
             ->exists();
     }
 }
